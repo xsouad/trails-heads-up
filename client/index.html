@@ -65,7 +65,7 @@
   <div class="room-code-display" id="lobbyCode">----</div>
 
   <div class="card" id="hostSettings" style="display:none;">
-    <p><strong>Spoiler cutoff</strong> &mdash; content up to and including this game will be used:</p>
+    <p><strong>Spoiler cutoff:</strong> content up to and including this game will be used.</p>
     <div class="tag-row" id="cutoffRow"></div>
     <p><strong>Categories</strong></p>
     <div class="category-row" id="categoryRow"></div>
@@ -94,7 +94,7 @@
 <!-- SPECTATING -->
 <div id="screen-spectate" class="screen">
   <h1>Spectating</h1>
-  <p class="subtitle">You can see everyone's item &mdash; just watch and enjoy.</p>
+  <p class="subtitle">You can see everyone's item. Just watch and enjoy.</p>
   <div class="board" id="spectateBoard"></div>
   <div class="spectator-count" id="spectatorCountSpectate"></div>
 </div>
@@ -131,8 +131,8 @@
 
 <!-- persistent bottom bar -->
 <div class="bottom-bar" id="bottomBar" style="display:none;">
-  <button class="danger" id="leaveRoomBtn">Leave Room</button>
-  <button class="secondary" id="endGameBtn">End Game (<span id="endGameVoteCount">0/0</span>)</button>
+  <button class="bar-btn bar-leave" id="leaveRoomBtn">Leave Room</button>
+  <button class="bar-btn bar-endgame" id="endGameBtn">End Game (<span id="endGameVoteCount">0/0</span>)</button>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>

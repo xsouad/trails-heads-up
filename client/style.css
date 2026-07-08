@@ -154,12 +154,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex; gap: 10px; padding: 10px 16px; background: #0d1730;
   box-shadow: 0 -2px 10px rgba(0,0,0,0.4);
 }
-.bottom-bar button {
-  flex: 1; border: none; padding: 10px; border-radius: 10px; font-weight: bold;
-  cursor: pointer; font-size: 0.85rem;
+.bar-btn {
+  flex: 1 1 0; width: 0; border: none; padding: 10px 6px; border-radius: 10px;
+  font-weight: bold; cursor: pointer; font-size: 0.85rem; text-align: center;
 }
-.bottom-bar .danger { background: #eb5757; color: #fff; }
-.bottom-bar .secondary { background: #2f80ed; color: #fff; }
+.bar-leave { background: #eb5757; color: #fff; }
+.bar-endgame { background: #2f80ed; color: #fff; }
 body { padding-bottom: 70px; } /* keep content clear of the fixed bottom bar */
 
 .spectator-count { text-align: center; color: #9fb3d1; font-size: 0.85rem; margin-top: 10px; }

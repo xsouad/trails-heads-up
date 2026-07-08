@@ -79,7 +79,9 @@ io.on('connection', (socket) => {
 
   socket.on('startGame', (_, cb) => {
     const room = findRoomBySocket(socket.id);
-    if (!room || room.hostId !== socket.id) { cb && cb({ ok: false, error: 'Only the host can start.' }); return; }
+    if (!room) { cb && cb({ ok: false, error: "You're not in a room right now. Please rejoin using the room code." }); return; }
+    if (room.hostId !== socket.id) { cb && cb({ ok: false, error: 'Only the host can start the game.' }); return; }
+    if (room.players.size < 2) { cb && cb({ ok: false, error: 'You need at least 2 players to start a game.' }); return; }
     const result = startGame(room);
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     cb && cb({ ok: true });

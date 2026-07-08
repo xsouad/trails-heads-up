@@ -106,18 +106,30 @@ function refreshPublicRooms() {
       const row = document.createElement('div');
       row.className = 'public-room-row';
       const label = document.createElement('span');
-      label.textContent = `${r.hostName}'s room (${r.playerCount}/5 players, ${r.phase}) — ${r.spectatorCount} watching`;
+      label.textContent = `${r.hostName}'s room (${r.playerCount}/5 players, ${r.phase}), ${r.spectatorCount} watching`;
       row.appendChild(label);
-      if (r.phase === 'playing' || r.phase === 'ended') {
-        const btn = document.createElement('button');
-        btn.textContent = 'Watch';
-        btn.addEventListener('click', () => {
+
+      if (r.phase === 'lobby') {
+        const joinBtn = document.createElement('button');
+        joinBtn.textContent = 'Join';
+        joinBtn.addEventListener('click', () => {
+          const name = document.getElementById('nameInput').value.trim() || 'Player';
+          socket.emit('joinRoom', { code: r.code, name, avatar }, (res) => {
+            if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
+            showScreen('screen-lobby');
+          });
+        });
+        row.appendChild(joinBtn);
+      } else if (r.phase === 'playing' || r.phase === 'ended') {
+        const watchBtn = document.createElement('button');
+        watchBtn.textContent = 'Watch';
+        watchBtn.addEventListener('click', () => {
           const name = document.getElementById('nameInput').value.trim() || 'Spectator';
           socket.emit('joinAsSpectator', { code: r.code, name }, (res) => {
             if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
           });
         });
-        row.appendChild(btn);
+        row.appendChild(watchBtn);
       }
       container.appendChild(row);
     });
@@ -350,7 +362,7 @@ socket.on('roomState', (state) => {
   endGameBtn.textContent = state.youVotedEndGame
     ? `Cancel End-Game Vote (${state.endGameVotes}/${state.endGameNeeded})`
     : `End Game (${state.endGameVotes}/${state.endGameNeeded})`;
-  endGameBtn.style.display = state.isSpectator ? 'none' : 'block';
+  endGameBtn.style.display = (!state.isSpectator && state.phase === 'playing') ? 'block' : 'none';
 
   if (state.isSpectator) {
     showScreen('screen-spectate');
