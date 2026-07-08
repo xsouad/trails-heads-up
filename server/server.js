@@ -32,11 +32,25 @@ function notifyRoom(room, text) {
 io.on('connection', (socket) => {
   socket.emit('gameOrder', gameOrder);
 
+  // A socket must never belong to more than one room at a time. Anything that puts a
+  // socket into a room (create/join/spectate) calls this first to clean up any prior
+  // membership -- this is what prevents someone ending up "host of two rooms at once"
+  // or a stale player entry lingering in a room they've since left behind.
+  function leaveAnyCurrentRoom() {
+    const result = leaveRoom(socket.id);
+    if (result.room && result.leftName) {
+      notifyRoom(result.room, result.wasSpectator ? `${result.leftName} stopped spectating.` : `${result.leftName} left the room.`);
+      broadcastRoom(result.room);
+    }
+    Array.from(socket.rooms).forEach(r => { if (r !== socket.id) socket.leave(r); });
+  }
+
   socket.on('listPublicRooms', (_, cb) => {
     cb && cb(listPublicRooms());
   });
 
   socket.on('createRoom', ({ name, avatar, visibility }, cb) => {
+    leaveAnyCurrentRoom();
     const room = createRoom(socket.id, name || 'Player', avatar, visibility);
     socket.join(room.code);
     cb && cb({ ok: true, code: room.code });
@@ -44,6 +58,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('joinRoom', ({ code, name, avatar }, cb) => {
+    leaveAnyCurrentRoom();
     const result = joinRoom((code || '').toUpperCase(), socket.id, name || 'Player', avatar);
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     socket.join(result.room.code);
@@ -53,6 +68,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('joinAsSpectator', ({ code, name }, cb) => {
+    leaveAnyCurrentRoom();
     const result = joinAsSpectator((code || '').toUpperCase(), socket.id, name || 'Spectator');
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     socket.join(result.room.code);
