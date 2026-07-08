@@ -27,6 +27,13 @@ function showNotice(text) {
   setTimeout(() => toast.remove(), 4500);
 }
 socket.on('notice', (n) => showNotice(n.text));
+socket.on('kicked', () => {
+  showNotice('You were removed from the room by the host.');
+  currentRoomState = null;
+  showScreen('screen-home');
+  document.getElementById('bottomBar').style.display = 'none';
+  refreshPublicRooms();
+});
 socket.on('roomClosed', () => {
   showNotice('The room was closed.');
   currentRoomState = null;
@@ -319,6 +326,14 @@ function renderLobbyList(players) {
       badge.className = 'host-badge';
       badge.textContent = 'HOST';
       chip.appendChild(badge);
+    } else if (isHost) {
+      const kickBtn = document.createElement('button');
+      kickBtn.className = 'kick-btn';
+      kickBtn.textContent = 'Kick';
+      kickBtn.addEventListener('click', () => {
+        socket.emit('kickPlayer', { targetId: p.id });
+      });
+      chip.appendChild(kickBtn);
     }
     list.appendChild(chip);
   });

@@ -1,22 +1,26 @@
+setTimeout(() => { console.error('TIMEOUT'); process.exit(1); }, 15000);
 const { io } = require('socket.io-client');
-const c1 = io('http://localhost:3000', { transports: ['websocket'] });
-const c2 = io('http://localhost:3000', { transports: ['websocket'] });
-let s1, s2;
-c1.on('roomState', s => s1 = s);
-c2.on('roomState', s => s2 = s);
+const URL = 'http://localhost:3000';
 const avatar = { base: 1, face: 1, hat: 1 };
-async function wait(ms){return new Promise(r=>setTimeout(r,ms));}
+function mk() { return io(URL, { transports: ['websocket'] }); }
+function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 (async () => {
-  await Promise.all([new Promise(r=>c1.on('connect',r)), new Promise(r=>c2.on('connect',r))]);
+  const solo = mk();
+  await new Promise(r => solo.on('connect', r));
   let code;
-  await new Promise((res,rej)=>c1.emit('createRoom',{name:'A',avatar},r=>r.ok?(code=r.code,res()):rej(r.error)));
-  await new Promise((res,rej)=>c2.emit('joinRoom',{code,name:'B',avatar},r=>r.ok?res():rej(r.error)));
+  await new Promise((res,rej) => solo.emit('createRoom', { name: 'Solo', avatar, visibility: 'public' }, r => r.ok ? (code=r.code, res()) : rej(r.error)));
+  await new Promise(res => solo.emit('startGame', {}, r => { console.log('solo start (expect min-2-players error):', r); res(); }));
+
+  const joiner = mk();
+  await new Promise(r => joiner.on('connect', r));
+  let js;
+  joiner.on('roomState', s => js = s);
+  await new Promise(res => joiner.emit('listPublicRooms', {}, list => { console.log('public list phase:', list.map(r=>r.phase)); res(); }));
+  await new Promise((res,rej) => joiner.emit('joinRoom', { code, name: 'Joiner', avatar }, r => r.ok ? res() : rej(r.error)));
   await wait(150);
-  c1.emit('updateSettings',{cutoffTag:'FC',categories:['characters','events']});
-  await wait(150);
-  await new Promise((res)=>c1.emit('startGame',{},r=>{console.log('startGame with FC cutoff:',r); res();}));
-  await wait(150);
-  console.log('items:', s1.players.map(p=>p.item && p.item.name + ' ['+p.item.tag+']'));
+  await new Promise(res => solo.emit('startGame', {}, r => { console.log('start with 2 players:', r); res(); }));
+
   console.log('DONE');
   process.exit(0);
-})().catch(e=>{console.error('FAIL',e);process.exit(1);});
+})().catch(e => { console.error('FAIL', e); process.exit(1); });

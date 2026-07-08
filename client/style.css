@@ -167,3 +167,8 @@ body { padding-bottom: 70px; } /* keep content clear of the fixed bottom bar */
 /* ---- rematch checkmarks ---- */
 .player-chip.rematch-yes .mini-avatar { box-shadow: 0 0 0 3px #4caf50; border-radius: 10px; }
 .player-chip .rematch-tick { color: #4caf50; font-weight: bold; font-size: 0.8rem; }
+
+.kick-btn {
+  margin-top: 4px; background: #eb5757; color: #fff; border: none;
+  padding: 3px 8px; border-radius: 10px; font-size: 0.7rem; cursor: pointer;
+}

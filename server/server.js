@@ -125,6 +125,21 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('kickPlayer', ({ targetId }) => {
+    const room = findRoomBySocket(socket.id);
+    if (!room || room.hostId !== socket.id) return;
+    if (!targetId || targetId === socket.id || !room.players.has(targetId)) return;
+    const kickedName = room.players.get(targetId).name;
+    io.to(targetId).emit('kicked');
+    const targetSocket = io.sockets.sockets.get(targetId);
+    if (targetSocket) targetSocket.leave(room.code);
+    const result = leaveRoom(targetId);
+    if (result.room) {
+      notifyRoom(result.room, `${kickedName} was removed from the room by the host.`);
+      broadcastRoom(result.room);
+    }
+  });
+
   socket.on('leaveRoom', () => {
     handleLeave(socket, true);
   });
