@@ -9,6 +9,8 @@ const {
   requestRematch, respondRematch, serializeRoomFor
 } = require('./rooms');
 
+function log(...args) { console.log(new Date().toISOString(), ...args); }
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
@@ -16,6 +18,7 @@ const io = new Server(server);
 app.use(express.static(path.join(__dirname, '../client')));
 
 function broadcastRoom(room) {
+  log('BROADCAST', room.code, 'players:', room.players.size, 'spectators:', room.spectators.size, 'ids:', Array.from(room.players.keys()));
   room.players.forEach((player, socketId) => {
     io.to(socketId).emit('roomState', serializeRoomFor(room, socketId));
   });
@@ -30,6 +33,7 @@ function notifyRoom(room, text) {
 }
 
 io.on('connection', (socket) => {
+  log('CONNECT', socket.id);
   socket.emit('gameOrder', gameOrder);
 
   // A socket must never belong to more than one room at a time. Anything that puts a
@@ -39,6 +43,7 @@ io.on('connection', (socket) => {
   function leaveAnyCurrentRoom() {
     const result = leaveRoom(socket.id);
     if (result.room && result.leftName) {
+      log('AUTO-LEFT prior room before join/create', socket.id, 'room:', result.room.code, 'remaining players:', result.room.players.size);
       notifyRoom(result.room, result.wasSpectator ? `${result.leftName} stopped spectating.` : `${result.leftName} left the room.`);
       broadcastRoom(result.room);
     }
@@ -53,6 +58,7 @@ io.on('connection', (socket) => {
     leaveAnyCurrentRoom();
     const room = createRoom(socket.id, name || 'Player', avatar, visibility);
     socket.join(room.code);
+    log('CREATE ROOM', room.code, 'host:', socket.id, 'name:', name);
     cb && cb({ ok: true, code: room.code });
     broadcastRoom(room);
   });
@@ -60,8 +66,9 @@ io.on('connection', (socket) => {
   socket.on('joinRoom', ({ code, name, avatar }, cb) => {
     leaveAnyCurrentRoom();
     const result = joinRoom((code || '').toUpperCase(), socket.id, name || 'Player', avatar);
-    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    if (result.error) { log('JOIN FAILED', socket.id, 'code:', code, 'error:', result.error); cb && cb({ ok: false, error: result.error }); return; }
     socket.join(result.room.code);
+    log('JOIN OK', socket.id, 'name:', name, 'room:', result.room.code, 'player count now:', result.room.players.size, 'ids:', Array.from(result.room.players.keys()));
     cb && cb({ ok: true, code: result.room.code });
     broadcastRoom(result.room);
     notifyRoom(result.room, `${name || 'Player'} joined the room.`);
@@ -160,7 +167,8 @@ io.on('connection', (socket) => {
     handleLeave(socket, true);
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    log('DISCONNECT', socket.id, 'reason:', reason);
     handleLeave(socket, false);
   });
 
