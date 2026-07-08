@@ -377,7 +377,6 @@ socket.on('roomState', (state) => {
 
   const bottomBar = document.getElementById('bottomBar');
   bottomBar.style.display = 'flex';
-  document.getElementById('endGameVoteCount').textContent = `${state.endGameVotes}/${state.endGameNeeded}`;
   const endGameBtn = document.getElementById('endGameBtn');
   endGameBtn.textContent = state.youVotedEndGame
     ? `Cancel End-Game Vote (${state.endGameVotes}/${state.endGameNeeded})`
