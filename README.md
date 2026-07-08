@@ -1,4 +1,4 @@
-# Trails Heads Up — initial working version
+# Trails Heads Up - it's not working yet (probably)
 
 A real-time multiplayer "Heads Up!" style party game themed around the Legend of Heroes:
 Trails series. This is a working Node.js + Socket.io app (not a static HTML mockup) —
