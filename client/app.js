@@ -1,0 +1,260 @@
+const socket = io();
+
+const LAYER_COUNTS = { base: 2, face: 2, hat: 3 };
+let avatar = { base: 1, face: 1, hat: 1 };
+let gameOrder = [];
+let mySocketId = null;
+let currentRoomState = null;
+let isHost = false;
+let selectedCutoff = 'KAI';
+let selectedCategories = new Set(['characters', 'events']);
+
+// ---------- screen switching ----------
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ---------- avatar builder ----------
+function renderAvatarStage(container, avatarObj, size) {
+  container.innerHTML = '';
+  ['base', 'face', 'hat'].forEach(layer => {
+    const img = document.createElement('img');
+    img.src = `assets/avatar/${layer}/${layer}_${avatarObj[layer]}.png`;
+    container.appendChild(img);
+  });
+}
+
+function refreshAvatarStage() {
+  renderAvatarStage(document.getElementById('avatarStage'), avatar);
+}
+
+document.querySelectorAll('.arrow-row button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const layer = btn.dataset.layer;
+    const dir = parseInt(btn.dataset.dir, 10);
+    const count = LAYER_COUNTS[layer];
+    avatar[layer] = ((avatar[layer] - 1 + dir + count) % count) + 1;
+    refreshAvatarStage();
+  });
+});
+
+document.getElementById('diceBtn').addEventListener('click', () => {
+  avatar = {
+    base: 1 + Math.floor(Math.random() * LAYER_COUNTS.base),
+    face: 1 + Math.floor(Math.random() * LAYER_COUNTS.face),
+    hat: 1 + Math.floor(Math.random() * LAYER_COUNTS.hat)
+  };
+  refreshAvatarStage();
+});
+
+refreshAvatarStage();
+
+// ---------- home screen: create / join ----------
+document.getElementById('createRoomBtn').addEventListener('click', () => {
+  const name = document.getElementById('nameInput').value.trim() || 'Player';
+  socket.emit('createRoom', { name, avatar }, (res) => {
+    if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
+    showScreen('screen-lobby');
+  });
+});
+
+document.getElementById('joinRoomBtn').addEventListener('click', () => {
+  const name = document.getElementById('nameInput').value.trim() || 'Player';
+  const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+  if (!code) { document.getElementById('homeError').textContent = 'Enter a room code.'; return; }
+  socket.emit('joinRoom', { code, name, avatar }, (res) => {
+    if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
+    showScreen('screen-lobby');
+  });
+});
+
+// ---------- socket setup ----------
+socket.on('connect', () => { mySocketId = socket.id; });
+
+socket.on('gameOrder', (order) => {
+  gameOrder = order;
+  const cutoffRow = document.getElementById('cutoffRow');
+  cutoffRow.innerHTML = '';
+  order.forEach(g => {
+    const chip = document.createElement('div');
+    chip.className = 'tag-chip' + (g.tag === selectedCutoff ? ' selected' : '');
+    chip.textContent = g.tag;
+    chip.title = g.title;
+    chip.addEventListener('click', () => {
+      selectedCutoff = g.tag;
+      socket.emit('updateSettings', { cutoffTag: selectedCutoff });
+      [...cutoffRow.children].forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+    });
+    cutoffRow.appendChild(chip);
+  });
+});
+
+const CATEGORY_DEFS = [
+  { key: 'characters', label: 'Characters', enabled: true },
+  { key: 'events', label: 'Events', enabled: true },
+  { key: 'locations', label: 'Locations (coming soon)', enabled: false }
+];
+(function renderCategoryChips() {
+  const row = document.getElementById('categoryRow');
+  row.innerHTML = '';
+  CATEGORY_DEFS.forEach(cat => {
+    const chip = document.createElement('div');
+    chip.className = 'category-chip' + (selectedCategories.has(cat.key) ? ' selected' : '') + (cat.enabled ? '' : ' disabled');
+    chip.textContent = cat.label;
+    if (cat.enabled) {
+      chip.addEventListener('click', () => {
+        if (selectedCategories.has(cat.key)) selectedCategories.delete(cat.key);
+        else selectedCategories.add(cat.key);
+        socket.emit('updateSettings', { categories: Array.from(selectedCategories) });
+        chip.classList.toggle('selected');
+      });
+    }
+    row.appendChild(chip);
+  });
+})();
+
+document.getElementById('startGameBtn').addEventListener('click', () => {
+  socket.emit('startGame', {}, (res) => {
+    if (!res.ok) document.getElementById('lobbyError').textContent = res.error;
+    else document.getElementById('lobbyError').textContent = '';
+  });
+});
+
+document.getElementById('restartBtn').addEventListener('click', () => {
+  socket.emit('restartGame');
+});
+
+document.getElementById('revealBtn').addEventListener('click', (e) => {
+  socket.emit('reveal');
+  e.target.disabled = true;
+  e.target.textContent = 'Waiting on others…';
+});
+
+// ---------- item card rendering (image w/ text fallback + caption) ----------
+function buildItemCardContent(item) {
+  const wrap = document.createElement('div');
+  if (item.image) {
+    const img = document.createElement('img');
+    img.src = `assets/items/${item.type === 'character' ? 'characters' : 'events'}/${item.image}`;
+    img.onerror = () => { img.remove(); };
+    wrap.appendChild(img);
+  }
+  const caption = document.createElement('div');
+  caption.textContent = item.name;
+  wrap.appendChild(caption);
+  return wrap;
+}
+
+function openZoom(item) {
+  const card = document.getElementById('zoomCard');
+  card.innerHTML = '';
+  if (item.image) {
+    const img = document.createElement('img');
+    img.src = `assets/items/${item.type === 'character' ? 'characters' : 'events'}/${item.image}`;
+    img.onerror = () => img.remove();
+    card.appendChild(img);
+  }
+  const text = document.createElement('div');
+  text.style.fontSize = '1.1rem';
+  text.style.fontWeight = 'bold';
+  text.textContent = item.name;
+  card.appendChild(text);
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'close-btn';
+  closeBtn.textContent = 'Close';
+  closeBtn.addEventListener('click', () => document.getElementById('zoomOverlay').classList.remove('active'));
+  card.appendChild(closeBtn);
+  document.getElementById('zoomOverlay').classList.add('active');
+}
+
+// ---------- board rendering (shared by playing + ended) ----------
+function renderBoard(container, players) {
+  container.innerHTML = '';
+  players.forEach(p => {
+    const cell = document.createElement('div');
+    cell.className = 'board-player';
+
+    const bubble = document.createElement('div');
+    if (p.item) {
+      bubble.className = 'item-bubble';
+      bubble.appendChild(buildItemCardContent(p.item));
+      bubble.addEventListener('click', () => openZoom(p.item));
+    } else {
+      bubble.className = 'item-bubble self-hidden';
+      bubble.textContent = p.isSelf ? "It's a secret… to you at least." : 'Hidden';
+    }
+
+    const avatarDiv = document.createElement('div');
+    avatarDiv.className = 'board-avatar';
+    renderAvatarStage(avatarDiv, p.avatar);
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'board-name';
+    nameEl.textContent = p.name + (p.revealed ? ' ✅' : '');
+
+    cell.appendChild(bubble);
+    cell.appendChild(avatarDiv);
+    cell.appendChild(nameEl);
+    container.appendChild(cell);
+  });
+}
+
+// ---------- lobby player list ----------
+function renderLobbyList(players) {
+  const list = document.getElementById('lobbyPlayerList');
+  list.innerHTML = '';
+  document.getElementById('playerCount').textContent = players.length;
+  players.forEach(p => {
+    const chip = document.createElement('div');
+    chip.className = 'player-chip';
+    const mini = document.createElement('div');
+    mini.className = 'mini-avatar';
+    renderAvatarStage(mini, p.avatar);
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = p.name;
+    chip.appendChild(mini);
+    chip.appendChild(name);
+    if (p.id === currentRoomState.hostId) {
+      const badge = document.createElement('div');
+      badge.className = 'host-badge';
+      badge.textContent = 'HOST';
+      chip.appendChild(badge);
+    }
+    list.appendChild(chip);
+  });
+}
+
+// ---------- main state handler ----------
+socket.on('roomState', (state) => {
+  currentRoomState = state;
+  isHost = state.hostId === mySocketId;
+  document.getElementById('lobbyCode').textContent = state.code;
+
+  if (state.phase === 'lobby') {
+    showScreen('screen-lobby');
+    document.getElementById('hostSettings').style.display = isHost ? 'block' : 'none';
+    document.getElementById('guestWaiting').style.display = isHost ? 'none' : 'block';
+    renderLobbyList(state.players);
+  } else if (state.phase === 'playing') {
+    showScreen('screen-game');
+    renderBoard(document.getElementById('gameBoard'), state.players);
+    document.getElementById('revealCounter').textContent = `${state.revealedCount}/${state.totalPlayers} ready to reveal`;
+    const me = state.players.find(p => p.id === mySocketId);
+    const revealBtn = document.getElementById('revealBtn');
+    if (me && me.revealed) {
+      revealBtn.disabled = true;
+      revealBtn.textContent = 'Waiting on others…';
+    } else {
+      revealBtn.disabled = false;
+      revealBtn.textContent = "I'm Ready to Reveal";
+    }
+  } else if (state.phase === 'ended') {
+    showScreen('screen-ended');
+    renderBoard(document.getElementById('endedBoard'), state.players);
+    document.getElementById('restartBtn').style.display = isHost ? 'block' : 'none';
+    document.getElementById('endedWaiting').style.display = isHost ? 'none' : 'block';
+  }
+});

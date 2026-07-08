@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trails Heads Up</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- HOME: name + avatar customization + create/join -->
+<div id="screen-home" class="screen active">
+  <h1>Trails Heads Up</h1>
+  <p class="subtitle">Guess what's above your head before your friends give it away.</p>
+
+  <div class="card">
+    <input type="text" id="nameInput" placeholder="Your name" maxlength="20">
+
+    <div class="avatar-builder">
+      <div class="avatar-stage" id="avatarStage"></div>
+
+      <div class="arrow-row">
+        <button data-layer="base" data-dir="-1">&lt;</button>
+        <span class="layer-label">Skin</span>
+        <button data-layer="base" data-dir="1">&gt;</button>
+      </div>
+      <div class="arrow-row">
+        <button data-layer="face" data-dir="-1">&lt;</button>
+        <span class="layer-label">Face</span>
+        <button data-layer="face" data-dir="1">&gt;</button>
+      </div>
+      <div class="arrow-row">
+        <button data-layer="hat" data-dir="-1">&lt;</button>
+        <span class="layer-label">Hat</span>
+        <button data-layer="hat" data-dir="1">&gt;</button>
+      </div>
+      <button class="dice-btn" id="diceBtn">Randomize</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <button class="primary" id="createRoomBtn">Create Private Room</button>
+    <input type="text" id="joinCodeInput" placeholder="Room code" maxlength="4" style="text-transform:uppercase; margin-top:14px;">
+    <button class="secondary" id="joinRoomBtn">Join Room</button>
+    <div class="error-msg" id="homeError"></div>
+  </div>
+</div>
+
+<!-- LOBBY -->
+<div id="screen-lobby" class="screen">
+  <h1>Lobby</h1>
+  <div class="room-code-display" id="lobbyCode">----</div>
+
+  <div class="card" id="hostSettings" style="display:none;">
+    <p><strong>Spoiler cutoff</strong> &mdash; content up to and including this game will be used:</p>
+    <div class="tag-row" id="cutoffRow"></div>
+    <p><strong>Categories</strong></p>
+    <div class="category-row" id="categoryRow"></div>
+    <button class="primary" id="startGameBtn">Start Game</button>
+    <div class="error-msg" id="lobbyError"></div>
+  </div>
+  <div class="card" id="guestWaiting" style="display:none;">
+    <p style="text-align:center;">Waiting for the host to start the game&hellip;</p>
+  </div>
+
+  <div class="card">
+    <p><strong>Players (<span id="playerCount">0</span>/5)</strong></p>
+    <div class="player-list" id="lobbyPlayerList"></div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="screen-game" class="screen">
+  <h1>Game On</h1>
+  <div class="reveal-counter" id="revealCounter"></div>
+  <div class="board" id="gameBoard"></div>
+  <button class="primary" id="revealBtn">I'm Ready to Reveal</button>
+</div>
+
+<!-- ENDED -->
+<div id="screen-ended" class="screen">
+  <h1>Round Over!</h1>
+  <p class="subtitle">Here's what everyone had:</p>
+  <div class="board" id="endedBoard"></div>
+  <button class="secondary" id="restartBtn" style="display:none;">Play Again</button>
+  <p id="endedWaiting" style="display:none; text-align:center;">Waiting for the host to restart&hellip;</p>
+</div>
+
+<div class="zoom-overlay" id="zoomOverlay">
+  <div class="zoom-card" id="zoomCard"></div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

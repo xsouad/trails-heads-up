@@ -1,0 +1,344 @@
+[
+  {
+    "text": "100 days war",
+    "tag": "SC",
+    "order": 2,
+    "image": "100_days_war.png"
+  },
+  {
+    "text": "Estelle & Joshua's Bracer certification exam",
+    "tag": "FC",
+    "order": 1,
+    "image": "estelle_joshua.png"
+  },
+  {
+    "text": "Weissman confronts Joshua",
+    "tag": "FC",
+    "order": 1,
+    "image": "weissman_confronts.png"
+  },
+  {
+    "text": "Joshua Kisses Estelle",
+    "tag": "FC",
+    "order": 1,
+    "image": "joshua_kisses.png"
+  },
+  {
+    "text": "Colonel Richard's coup d'etat ",
+    "tag": "SC",
+    "order": 2,
+    "image": "colonel_richard_coup.png"
+  },
+  {
+    "text": "The Hamel Massacre ",
+    "tag": "SC",
+    "order": 2,
+    "image": "hamel_massacre.png"
+  },
+  {
+    "text": "Destruction of Aureole",
+    "tag": "SC",
+    "order": 2,
+    "image": "destruction_aureole.png"
+  },
+  {
+    "text": "Loewe's death",
+    "tag": "SC",
+    "order": 2,
+    "image": "loewe_death.png"
+  },
+  {
+    "text": "Kevin turns Weissman into salt",
+    "tag": "SC",
+    "order": 2,
+    "image": "kevin_weissman_salt.png"
+  },
+  {
+    "text": "Estelle & Joshua's moment on the beach",
+    "tag": "SC",
+    "order": 2,
+    "image": "estelle_joshua.png"
+  },
+  {
+    "text": "Estelle & Joshua fall to their \"Deaths\"",
+    "tag": "SC",
+    "order": 2,
+    "image": "estelle_joshua_fall.png"
+  },
+  {
+    "text": "Rufina feeds kevin chocolate",
+    "tag": "3RD",
+    "order": 3,
+    "image": "rufina_feeds_kevin.png"
+  },
+  {
+    "text": "The party is trapped inside the dream-world Phantasma",
+    "tag": "3RD",
+    "order": 3,
+    "image": "party_trapped_inside.png"
+  },
+  {
+    "text": "Kevin kills Rufina",
+    "tag": "3RD",
+    "order": 3,
+    "image": "kevin_kills_rufina.png"
+  },
+  {
+    "text": "Estelle brings Joshua a Bug",
+    "tag": "3RD",
+    "order": 3,
+    "image": "estelle_brings.png"
+  },
+  {
+    "text": "Star Door 15",
+    "tag": "3RD",
+    "order": 3,
+    "image": "star_door_15.png"
+  },
+  {
+    "text": "Gilbert gets crucified",
+    "tag": "3RD",
+    "order": 3,
+    "image": "gilbert_crucified.png"
+  },
+  {
+    "text": "Lloyd put sunscreen on the ladies",
+    "tag": "ZERO",
+    "order": 4,
+    "image": "lloyd_sunscreen.png"
+  },
+  {
+    "text": "Finding KeA hidden inside a case at the Schwarze Auction",
+    "tag": "ZERO",
+    "order": 4,
+    "image": "finding_kea_hidden.png"
+  },
+  {
+    "text": "Joshua & Estelle Save us at the bus",
+    "tag": "ZERO",
+    "order": 4,
+    "image": "joshua_estelle_bus.png"
+  },
+  {
+    "text": "\"Caught you.\"",
+    "tag": "ZERO",
+    "order": 4,
+    "image": "caught_you.png"
+  },
+  {
+    "text": "The Azure Tree manifests over Crossbell",
+    "tag": "AO",
+    "order": 5,
+    "image": "azure_tree_manifests.png"
+  },
+  {
+    "text": "Crossbell is annexed by Erebonia",
+    "tag": "AO",
+    "order": 5,
+    "image": "crossbell_annexed.png"
+  },
+  {
+    "text": "KeA becomes god",
+    "tag": "AO",
+    "order": 5,
+    "image": "kea_god.png"
+  },
+  {
+    "text": "Lloyd saves KeA",
+    "tag": "AO",
+    "order": 6,
+    "image": "lloyd_kea.png"
+  },
+  {
+    "text": "ILF execution",
+    "tag": "CS1",
+    "order": null,
+    "image": "ilf_execution.png"
+  },
+  {
+    "text": "50 Mira Trick",
+    "tag": "CS1",
+    "order": 6,
+    "image": "50_mira_trick.png"
+  },
+  {
+    "text": "The awakening of Valimar",
+    "tag": "CS1",
+    "order": 6,
+    "image": "awakening_valimar.png"
+  },
+  {
+    "text": "Chancellor Osborne's assassination attempt by \"C\"",
+    "tag": "CS1",
+    "order": 6,
+    "image": "chancellor_osborne.png"
+  },
+  {
+    "text": "Crow Armbrust is unmasked as the Imperial Liberation Front's leader",
+    "tag": "CS1",
+    "order": 6,
+    "image": "crow_armbrust.png"
+  },
+  {
+    "text": "Rean falls on Alisa",
+    "tag": "CS1",
+    "order": null,
+    "image": "rean_falls_alisa.png"
+  },
+  {
+    "text": "Crow's death",
+    "tag": "CS2",
+    "order": 7,
+    "image": "crow_death.png"
+  },
+  {
+    "text": "Crow's infamous fish burger lunch with Rean",
+    "tag": "CS2",
+    "order": 7,
+    "image": "crow_infamous_fish.png"
+  },
+  {
+    "text": "\"Rean I am your father.\"",
+    "tag": "CS2",
+    "order": 7,
+    "image": "rean_i_am_father.png"
+  },
+  {
+    "text": "Rean cries to Towa",
+    "tag": "CS2",
+    "order": null,
+    "image": "rean_cries_towa.png"
+  },
+  {
+    "text": "Rean puts on glasses",
+    "tag": "CS3",
+    "order": 8,
+    "image": "rean_puts_glasses.png"
+  },
+  {
+    "text": "The Great Twilight phenomenon spreads into Erebonia",
+    "tag": "CS3",
+    "order": 8,
+    "image": "great_twilight.png"
+  },
+  {
+    "text": "Paying respects to Loewe's grave",
+    "tag": "CS3",
+    "order": 8,
+    "image": "paying_respects.png"
+  },
+  {
+    "text": "The new C is revealed",
+    "tag": "CS3",
+    "order": 8,
+    "image": "new_c_revealed.png"
+  },
+  {
+    "text": "Rean Jumpscare",
+    "tag": "CS3",
+    "order": 8,
+    "image": "rean_jumpscare.png"
+  },
+  {
+    "text": "\"Give it back\"",
+    "tag": "CS3",
+    "order": 8,
+    "image": "back.png"
+  },
+  {
+    "text": "Millium's Death",
+    "tag": "CS3",
+    "order": 8,
+    "image": "millium_death.png"
+  },
+  {
+    "text": "Rean goes berserk ",
+    "tag": "CS3",
+    "order": 8,
+    "image": "rean_berserk.png"
+  },
+  {
+    "text": "Angelica gets \"killed.\"",
+    "tag": "CS3",
+    "order": null,
+    "image": "angelica_killed.png"
+  },
+  {
+    "text": "Rufus kills Arianrhod",
+    "tag": "CS4",
+    "order": 9,
+    "image": "rufus_kills.png"
+  },
+  {
+    "text": "The cave.",
+    "tag": "CS4",
+    "order": null,
+    "image": "cave.png"
+  },
+  {
+    "text": "Crossbell secures its Day of Reindependence",
+    "tag": "REV",
+    "order": 11,
+    "image": "crossbell_secures.png"
+  },
+  {
+    "text": "\"The crime of not knowing how damn loved you really are\"",
+    "tag": "REV",
+    "order": 11,
+    "image": "crime_not_knowing.png"
+  },
+  {
+    "text": "Van turns to the Grandel",
+    "tag": "DB1",
+    "order": 12,
+    "image": "van_grandel.png"
+  },
+  {
+    "text": "Creil's Destruction",
+    "tag": "DB1",
+    "order": 12,
+    "image": "creil_destruction.png"
+  },
+  {
+    "text": "The explosion at Aramis Academy kills several students",
+    "tag": "DB2",
+    "order": 13,
+    "image": "explosion_aramis.png"
+  },
+  {
+    "text": "Ellroy mass poisoning at Nemeth Island",
+    "tag": "DB2",
+    "order": 13,
+    "image": "ellroy_mass.png"
+  },
+  {
+    "text": "A coup d'etat against Calvard unfolds (ship)",
+    "tag": "DB2",
+    "order": null,
+    "image": "coup_detat_against.png"
+  },
+  {
+    "text": "Towa gets shot and \"dies\"",
+    "tag": "DB2",
+    "order": null,
+    "image": "towa_shot_dies.png"
+  },
+  {
+    "text": "Quatre turns into an angel",
+    "tag": "DB2",
+    "order": null,
+    "image": "quatre_angel.png"
+  },
+  {
+    "text": "Project Startaker's orbal rocket launch",
+    "tag": "KAI",
+    "order": null,
+    "image": "project_startaker.png"
+  },
+  {
+    "text": "Agnes sacrifices herself",
+    "tag": "KAI",
+    "order": null,
+    "image": "agnes_sacrifices.png"
+  }
+]

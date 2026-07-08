@@ -1,0 +1,499 @@
+[
+  {
+    "name": "Estelle Bright",
+    "tag": "FC",
+    "order": 1,
+    "alsoAppearsIn": "SC, 3RD, mentioned later arcs",
+    "image": "estelle_bright.png"
+  },
+  {
+    "name": "Joshua Bright",
+    "tag": "FC",
+    "order": 1,
+    "alsoAppearsIn": "SC, 3RD",
+    "image": "joshua_bright.png"
+  },
+  {
+    "name": "Julia Schwarz",
+    "tag": "SC",
+    "order": 2,
+    "alsoAppearsIn": "SC, 3RD, AO",
+    "image": "julia_schwarz.png"
+  },
+  {
+    "name": "Cassius Bright",
+    "tag": "FC",
+    "order": 1,
+    "alsoAppearsIn": "SC, 3RD, CS4",
+    "image": "cassius_bright.png"
+  },
+  {
+    "name": "Scherazard \"Schera\" Harvey",
+    "tag": "FC",
+    "order": 1,
+    "alsoAppearsIn": "SC, 3RD, CS4",
+    "image": "scherazard_schera.png"
+  },
+  {
+    "name": "Olivier Lenheim (Olivert)",
+    "tag": "FC",
+    "order": 1,
+    "alsoAppearsIn": "SC, 3RD, CS series",
+    "image": "olivier_lenheim.png"
+  },
+  {
+    "name": "Kloe Rinz ( Klaudia)",
+    "tag": "FC",
+    "order": 1,
+    "alsoAppearsIn": "SC, 3RD, CS4",
+    "image": "kloe_rinz_klaudia.png"
+  },
+  {
+    "name": "Agate Crosner",
+    "tag": "FC",
+    "order": 1,
+    "alsoAppearsIn": "SC, 3RD, CS3, CS4, REV",
+    "image": "agate_crosner.png"
+  },
+  {
+    "name": "Tita Russell",
+    "tag": "FC",
+    "order": 1,
+    "alsoAppearsIn": "SC, 3RD, CS3, CS4, REV",
+    "image": "tita_russell.png"
+  },
+  {
+    "name": "Zin Vathek",
+    "tag": "FC",
+    "order": 1,
+    "alsoAppearsIn": "SC, 3RD, DB2",
+    "image": "zin_vathek.png"
+  },
+  {
+    "name": "Kevin Graham",
+    "tag": "3RD",
+    "order": 3,
+    "alsoAppearsIn": "3RD, AO, KAI",
+    "image": "kevin_graham.png"
+  },
+  {
+    "name": "Weissman",
+    "tag": "SC",
+    "order": 2,
+    "alsoAppearsIn": "mentioned later arcs",
+    "image": "weissman.png"
+  },
+  {
+    "name": "Walter the Direwolf",
+    "tag": "SC",
+    "order": 2,
+    "alsoAppearsIn": "DB1, DB2, KAI",
+    "image": "walter_direwolf.png"
+  },
+  {
+    "name": "Phantom Thief B",
+    "tag": "SC",
+    "order": 2,
+    "alsoAppearsIn": "CS1, CS2, CS4",
+    "image": "phantom_thief_b.png"
+  },
+  {
+    "name": "Renne",
+    "tag": "SC",
+    "order": 2,
+    "alsoAppearsIn": "3RD, ZERO, AZURE, CS4, REV, DB1, DB2,KAI",
+    "image": "renne.png"
+  },
+  {
+    "name": "Ries Argent",
+    "tag": "3RD",
+    "order": 3,
+    "alsoAppearsIn": "AO",
+    "image": "ries_argent.png"
+  },
+  {
+    "name": "Rixia Mao",
+    "tag": "3RD",
+    "order": 3,
+    "alsoAppearsIn": "AO, CS2, CS4, REV",
+    "image": "rixia_mao.png"
+  },
+  {
+    "name": "Lloyd Bannings",
+    "tag": "ZERO",
+    "order": 4,
+    "alsoAppearsIn": "AO, CS2, CS4, REV",
+    "image": "lloyd_bannings.png"
+  },
+  {
+    "name": "Elie MacDowell",
+    "tag": "ZERO",
+    "order": 4,
+    "alsoAppearsIn": "CS4, REV",
+    "image": "elie_macdowell.png"
+  },
+  {
+    "name": "Randy Orlando",
+    "tag": "ZERO",
+    "order": 4,
+    "alsoAppearsIn": "CS3, CS4, REV",
+    "image": "randy_orlando.png"
+  },
+  {
+    "name": "Tio Plato",
+    "tag": "ZERO",
+    "order": 4,
+    "alsoAppearsIn": "CS3, CS4, REV",
+    "image": "tio_plato.png"
+  },
+  {
+    "name": "Wazy Hemisphere",
+    "tag": "ZERO",
+    "order": 4,
+    "alsoAppearsIn": "AO, REV",
+    "image": "wazy_hemisphere.png"
+  },
+  {
+    "name": "Noel Seeker",
+    "tag": "ZERO",
+    "order": 4,
+    "alsoAppearsIn": "AO, REV",
+    "image": "noel_seeker.png"
+  },
+  {
+    "name": "Sergei Lou",
+    "tag": "ZERO",
+    "order": 4,
+    "alsoAppearsIn": "AO, REV",
+    "image": "sergei_lou.png"
+  },
+  {
+    "name": "Arios MacLaine",
+    "tag": "ZERO",
+    "order": 4,
+    "alsoAppearsIn": "AO, CS3, REV",
+    "image": "arios_maclaine.png"
+  },
+  {
+    "name": "KeA",
+    "tag": "ZERO",
+    "order": 4,
+    "alsoAppearsIn": "AO, CS4, REV",
+    "image": "kea.png"
+  },
+  {
+    "name": "Duvalie",
+    "tag": "CS2",
+    "order": 7,
+    "alsoAppearsIn": "CS3, CS4",
+    "image": "duvalie.png"
+  },
+  {
+    "name": "Rean Schwarzer",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV, KAI",
+    "image": "rean_schwarzer.png"
+  },
+  {
+    "name": "Alisa Reinford",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "alisa_reinford.png"
+  },
+  {
+    "name": "Elliot Craig",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "elliot_craig.png"
+  },
+  {
+    "name": "Laura S. Arseid",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "laura_s_arseid.png"
+  },
+  {
+    "name": "Machias Regnitz",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "machias_regnitz.png"
+  },
+  {
+    "name": "Emma Millstein",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "emma_millstein.png"
+  },
+  {
+    "name": "Fie Claussell",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "fie_claussell.png"
+  },
+  {
+    "name": "Gaius Worzel",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "gaius_worzel.png"
+  },
+  {
+    "name": "Jusis Albarea",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "jusis_albarea.png"
+  },
+  {
+    "name": "Millium Orion",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "millium_orion.png"
+  },
+  {
+    "name": "Sara Valestein",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4",
+    "image": "sara_valestein.png"
+  },
+  {
+    "name": "Vita Clotilde",
+    "tag": "CS2",
+    "order": 7,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "vita_clotilde.png"
+  },
+  {
+    "name": "Angelica Rogner",
+    "tag": "CS2",
+    "order": 7,
+    "alsoAppearsIn": "CS2, CS3, CS4",
+    "image": "angelica_rogner.png"
+  },
+  {
+    "name": "Crow Armbrust",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV, KAI",
+    "image": "crow_armbrust.png"
+  },
+  {
+    "name": "Cedric Reise Arnor",
+    "tag": "CS2",
+    "order": 7,
+    "alsoAppearsIn": "CS3, CS4",
+    "image": "cedric_reise_arnor.png"
+  },
+  {
+    "name": "Giliath Osborne",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4",
+    "image": "giliath_osborne.png"
+  },
+  {
+    "name": "Rufus Albarea",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, KAI",
+    "image": "rufus_albarea.png"
+  },
+  {
+    "name": "George Nome",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "george_nome.png"
+  },
+  {
+    "name": "Claire Rieveldt",
+    "tag": "CS3",
+    "order": 8,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "claire_rieveldt.png"
+  },
+  {
+    "name": "Sharon Kreuger",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "sharon_kreuger.png"
+  },
+  {
+    "name": "Elise Schwarzer",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "elise_schwarzer.png"
+  },
+  {
+    "name": "Ordine",
+    "tag": "REV",
+    "order": 10,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "ordine.png"
+  },
+  {
+    "name": "Valimar",
+    "tag": "CS1",
+    "order": 6,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "valimar.png"
+  },
+  {
+    "name": "Aurelia Le Guin",
+    "tag": "REV",
+    "order": 10,
+    "alsoAppearsIn": "CS3, CS4, REV",
+    "image": "aurelia_le_guin.png"
+  },
+  {
+    "name": "Towa Herschel",
+    "tag": "CS3",
+    "order": 8,
+    "alsoAppearsIn": "CS2, CS3, CS4, REV",
+    "image": "towa_herschel.png"
+  },
+  {
+    "name": "Musse Egret",
+    "tag": "CS3",
+    "order": 8,
+    "alsoAppearsIn": "CS4, REV",
+    "image": "musse_egret.png"
+  },
+  {
+    "name": "Kurt Vander",
+    "tag": "CS3",
+    "order": 8,
+    "alsoAppearsIn": "CS4, REV",
+    "image": "kurt_vander.png"
+  },
+  {
+    "name": "Altina Orion",
+    "tag": "CS3",
+    "order": 8,
+    "alsoAppearsIn": "CS4, REV, KAI",
+    "image": "altina_orion.png"
+  },
+  {
+    "name": "Ash Carbide",
+    "tag": "CS4",
+    "order": 9,
+    "alsoAppearsIn": "CS4, REV",
+    "image": "ash_carbide.png"
+  },
+  {
+    "name": "Lapis Rosenberg",
+    "tag": "REV",
+    "order": 10,
+    "alsoAppearsIn": "KAI",
+    "image": "lapis_rosenberg.png"
+  },
+  {
+    "name": "C - RUFUS",
+    "tag": "REV",
+    "order": 10,
+    "alsoAppearsIn": "-",
+    "image": "c_rufus.png"
+  },
+  {
+    "name": "Van Arkride",
+    "tag": "DB1",
+    "order": 11,
+    "alsoAppearsIn": "DB2, KAI",
+    "image": "van_arkride.png"
+  },
+  {
+    "name": "Agnes Claudel",
+    "tag": "DB1",
+    "order": 11,
+    "alsoAppearsIn": "DB2",
+    "image": "agnes_claudel.png"
+  },
+  {
+    "name": "Feri Al-Fayed",
+    "tag": "DB1",
+    "order": 11,
+    "alsoAppearsIn": "DB2",
+    "image": "feri_al_fayed.png"
+  },
+  {
+    "name": "Aaron Wei",
+    "tag": "DB1",
+    "order": 11,
+    "alsoAppearsIn": "DB2",
+    "image": "aaron_wei.png"
+  },
+  {
+    "name": "Quatre Salomon",
+    "tag": "DB1",
+    "order": 11,
+    "alsoAppearsIn": "DB2",
+    "image": "quatre_salomon.png"
+  },
+  {
+    "name": "Bergard",
+    "tag": "DB1",
+    "order": 11,
+    "alsoAppearsIn": "DB2",
+    "image": "bergard.png"
+  },
+  {
+    "name": "Judith Lanster",
+    "tag": "DB1",
+    "order": 11,
+    "alsoAppearsIn": "DB2",
+    "image": "judith_lanster.png"
+  },
+  {
+    "name": "Risette",
+    "tag": "DB1",
+    "order": 11,
+    "alsoAppearsIn": "DB2",
+    "image": "risette.png"
+  },
+  {
+    "name": "Nadia Rayne",
+    "tag": "REV",
+    "order": 10,
+    "alsoAppearsIn": "DB2",
+    "image": "nadia_rayne.png"
+  },
+  {
+    "name": "Swin Abel",
+    "tag": "REV",
+    "order": 10,
+    "alsoAppearsIn": "DB2",
+    "image": "swin_abel.png"
+  },
+  {
+    "name": "Elaine Auclair",
+    "tag": "DB2",
+    "order": 12,
+    "alsoAppearsIn": "-",
+    "image": "elaine_auclair.png"
+  },
+  {
+    "name": "Ixia \"Ixs\" the Glinting Bullet",
+    "tag": "DB2",
+    "order": 12,
+    "alsoAppearsIn": "-",
+    "image": "ixia_ixs_glinting.png"
+  },
+  {
+    "name": "Jorda the Shadow Eater",
+    "tag": "DB2",
+    "order": 12,
+    "alsoAppearsIn": "-",
+    "image": "jorda_shadow_eater.png"
+  }
+]

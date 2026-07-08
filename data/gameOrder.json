@@ -1,0 +1,80 @@
+[
+  {
+    "order": 1,
+    "tag": "FC",
+    "title": "Trails in the Sky FC",
+    "year": 2004
+  },
+  {
+    "order": 2,
+    "tag": "SC",
+    "title": "Trails in the Sky SC",
+    "year": 2006
+  },
+  {
+    "order": 3,
+    "tag": "3RD",
+    "title": "Trails in the Sky the 3rd",
+    "year": 2007
+  },
+  {
+    "order": 4,
+    "tag": "ZERO",
+    "title": "Trails from Zero",
+    "year": 2010
+  },
+  {
+    "order": 5,
+    "tag": "AO",
+    "title": "Trails to Azure",
+    "year": 2011
+  },
+  {
+    "order": 6,
+    "tag": "CS1",
+    "title": "Trails of Cold Steel",
+    "year": 2013
+  },
+  {
+    "order": 7,
+    "tag": "CS2",
+    "title": "Trails of Cold Steel II",
+    "year": 2014
+  },
+  {
+    "order": 8,
+    "tag": "CS3",
+    "title": "Trails of Cold Steel III",
+    "year": 2017
+  },
+  {
+    "order": 9,
+    "tag": "CS4",
+    "title": "Trails of Cold Steel IV",
+    "year": 2018
+  },
+  {
+    "order": 10,
+    "tag": "REV",
+    "title": "Trails into Reverie",
+    "year": 2020
+  },
+  {
+    "order": 11,
+    "tag": "DB1",
+    "title": "Trails through Daybreak",
+    "year": 2022
+  },
+  {
+    "order": 12,
+    "tag": "DB2",
+    "title": "Trails through Daybreak II",
+    "year": 2023
+  },
+  {
+    "order": 13,
+    "tag": "KAI",
+    "title": "Kai no Kiseki / Trails Beyond the Horizon",
+    "year": 2024
+  }
+]
