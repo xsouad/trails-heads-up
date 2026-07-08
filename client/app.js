@@ -6,8 +6,10 @@ let gameOrder = [];
 let mySocketId = null;
 let currentRoomState = null;
 let isHost = false;
+let selectedVisibility = 'private';
 let selectedCutoff = 'KAI';
 let selectedCategories = new Set(['characters', 'events']);
+let pendingSpectate = null; // room code we're trying to spectate
 
 // ---------- screen switching ----------
 function showScreen(id) {
@@ -15,8 +17,25 @@ function showScreen(id) {
   document.getElementById(id).classList.add('active');
 }
 
+// ---------- notices/toasts ----------
+function showNotice(text) {
+  const bar = document.getElementById('noticeBar');
+  const toast = document.createElement('div');
+  toast.className = 'notice-toast';
+  toast.textContent = text;
+  bar.appendChild(toast);
+  setTimeout(() => toast.remove(), 4500);
+}
+socket.on('notice', (n) => showNotice(n.text));
+socket.on('roomClosed', () => {
+  showNotice('The room was closed.');
+  currentRoomState = null;
+  showScreen('screen-home');
+  document.getElementById('bottomBar').style.display = 'none';
+});
+
 // ---------- avatar builder ----------
-function renderAvatarStage(container, avatarObj, size) {
+function renderAvatarStage(container, avatarObj) {
   container.innerHTML = '';
   ['base', 'face', 'hat'].forEach(layer => {
     const img = document.createElement('img');
@@ -24,11 +43,9 @@ function renderAvatarStage(container, avatarObj, size) {
     container.appendChild(img);
   });
 }
-
 function refreshAvatarStage() {
   renderAvatarStage(document.getElementById('avatarStage'), avatar);
 }
-
 document.querySelectorAll('.arrow-row button').forEach(btn => {
   btn.addEventListener('click', () => {
     const layer = btn.dataset.layer;
@@ -38,7 +55,6 @@ document.querySelectorAll('.arrow-row button').forEach(btn => {
     refreshAvatarStage();
   });
 });
-
 document.getElementById('diceBtn').addEventListener('click', () => {
   avatar = {
     base: 1 + Math.floor(Math.random() * LAYER_COUNTS.base),
@@ -47,13 +63,21 @@ document.getElementById('diceBtn').addEventListener('click', () => {
   };
   refreshAvatarStage();
 });
-
 refreshAvatarStage();
 
-// ---------- home screen: create / join ----------
+// ---------- visibility toggle ----------
+document.querySelectorAll('#visibilityRow .category-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#visibilityRow .category-chip').forEach(c => c.classList.remove('selected'));
+    chip.classList.add('selected');
+    selectedVisibility = chip.dataset.visibility;
+  });
+});
+
+// ---------- home: create / join ----------
 document.getElementById('createRoomBtn').addEventListener('click', () => {
   const name = document.getElementById('nameInput').value.trim() || 'Player';
-  socket.emit('createRoom', { name, avatar }, (res) => {
+  socket.emit('createRoom', { name, avatar, visibility: selectedVisibility }, (res) => {
     if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
     showScreen('screen-lobby');
   });
@@ -69,8 +93,43 @@ document.getElementById('joinRoomBtn').addEventListener('click', () => {
   });
 });
 
-// ---------- socket setup ----------
-socket.on('connect', () => { mySocketId = socket.id; });
+// ---------- public room browser ----------
+function refreshPublicRooms() {
+  socket.emit('listPublicRooms', {}, (list) => {
+    const container = document.getElementById('publicRoomList');
+    container.innerHTML = '';
+    if (!list.length) {
+      container.innerHTML = '<div class="public-room-empty">No public games right now.</div>';
+      return;
+    }
+    list.forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'public-room-row';
+      const label = document.createElement('span');
+      label.textContent = `${r.hostName}'s room (${r.playerCount}/5 players, ${r.phase}) — ${r.spectatorCount} watching`;
+      row.appendChild(label);
+      if (r.phase === 'playing' || r.phase === 'ended') {
+        const btn = document.createElement('button');
+        btn.textContent = 'Watch';
+        btn.addEventListener('click', () => {
+          const name = document.getElementById('nameInput').value.trim() || 'Spectator';
+          socket.emit('joinAsSpectator', { code: r.code, name }, (res) => {
+            if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
+          });
+        });
+        row.appendChild(btn);
+      }
+      container.appendChild(row);
+    });
+  });
+}
+document.getElementById('refreshPublicBtn').addEventListener('click', refreshPublicRooms);
+
+// ---------- lobby settings ----------
+socket.on('connect', () => {
+  mySocketId = socket.id;
+  refreshPublicRooms();
+});
 
 socket.on('gameOrder', (order) => {
   gameOrder = order;
@@ -117,17 +176,43 @@ const CATEGORY_DEFS = [
 
 document.getElementById('startGameBtn').addEventListener('click', () => {
   socket.emit('startGame', {}, (res) => {
-    if (!res.ok) document.getElementById('lobbyError').textContent = res.error;
-    else document.getElementById('lobbyError').textContent = '';
+    document.getElementById('lobbyError').textContent = res.ok ? '' : res.error;
   });
-});
-
-document.getElementById('restartBtn').addEventListener('click', () => {
-  socket.emit('restartGame');
 });
 
 document.getElementById('revealBtn').addEventListener('click', (e) => {
   socket.emit('reveal');
+  e.target.disabled = true;
+  e.target.textContent = 'Waiting on others…';
+});
+
+// ---------- leave room (with confirmation) ----------
+document.getElementById('leaveRoomBtn').addEventListener('click', () => {
+  document.getElementById('leaveConfirmOverlay').classList.add('active');
+});
+document.getElementById('cancelLeaveBtn').addEventListener('click', () => {
+  document.getElementById('leaveConfirmOverlay').classList.remove('active');
+});
+document.getElementById('confirmLeaveBtn').addEventListener('click', () => {
+  socket.emit('leaveRoom');
+  document.getElementById('leaveConfirmOverlay').classList.remove('active');
+  currentRoomState = null;
+  document.getElementById('bottomBar').style.display = 'none';
+  showScreen('screen-home');
+  refreshPublicRooms();
+});
+
+// ---------- end game vote ----------
+document.getElementById('endGameBtn').addEventListener('click', () => {
+  socket.emit('voteEndGame');
+});
+
+// ---------- rematch ----------
+document.getElementById('askRematchBtn').addEventListener('click', () => {
+  socket.emit('requestRematch');
+});
+document.getElementById('acceptRematchBtn').addEventListener('click', (e) => {
+  socket.emit('respondRematch');
   e.target.disabled = true;
   e.target.textContent = 'Waiting on others…';
 });
@@ -169,7 +254,7 @@ function openZoom(item) {
   document.getElementById('zoomOverlay').classList.add('active');
 }
 
-// ---------- board rendering (shared by playing + ended) ----------
+// ---------- board rendering (shared by playing / ended / spectating) ----------
 function renderBoard(container, players) {
   container.innerHTML = '';
   players.forEach(p => {
@@ -227,11 +312,52 @@ function renderLobbyList(players) {
   });
 }
 
+// ---------- rematch avatar row with checkmarks ----------
+function renderRematchList(players, rematchYes) {
+  const list = document.getElementById('rematchAvatarList');
+  list.innerHTML = '';
+  players.forEach(p => {
+    const chip = document.createElement('div');
+    chip.className = 'player-chip' + (rematchYes.includes(p.id) ? ' rematch-yes' : '');
+    const mini = document.createElement('div');
+    mini.className = 'mini-avatar';
+    renderAvatarStage(mini, p.avatar);
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = p.name;
+    chip.appendChild(mini);
+    chip.appendChild(name);
+    if (rematchYes.includes(p.id)) {
+      const tick = document.createElement('div');
+      tick.className = 'rematch-tick';
+      tick.textContent = '✓ yes';
+      chip.appendChild(tick);
+    }
+    list.appendChild(chip);
+  });
+}
+
 // ---------- main state handler ----------
 socket.on('roomState', (state) => {
   currentRoomState = state;
   isHost = state.hostId === mySocketId;
   document.getElementById('lobbyCode').textContent = state.code;
+
+  const bottomBar = document.getElementById('bottomBar');
+  bottomBar.style.display = 'flex';
+  document.getElementById('endGameVoteCount').textContent = `${state.endGameVotes}/${state.endGameNeeded}`;
+  const endGameBtn = document.getElementById('endGameBtn');
+  endGameBtn.textContent = state.youVotedEndGame
+    ? `Cancel End-Game Vote (${state.endGameVotes}/${state.endGameNeeded})`
+    : `End Game (${state.endGameVotes}/${state.endGameNeeded})`;
+  endGameBtn.style.display = state.isSpectator ? 'none' : 'block';
+
+  if (state.isSpectator) {
+    showScreen('screen-spectate');
+    renderBoard(document.getElementById('spectateBoard'), state.players);
+    document.getElementById('spectatorCountSpectate').textContent = `${state.spectatorCount} spectator(s) watching`;
+    return;
+  }
 
   if (state.phase === 'lobby') {
     showScreen('screen-lobby');
@@ -242,6 +368,7 @@ socket.on('roomState', (state) => {
     showScreen('screen-game');
     renderBoard(document.getElementById('gameBoard'), state.players);
     document.getElementById('revealCounter').textContent = `${state.revealedCount}/${state.totalPlayers} ready to reveal`;
+    document.getElementById('spectatorCountGame').textContent = state.spectatorCount ? `${state.spectatorCount} spectator(s) watching` : '';
     const me = state.players.find(p => p.id === mySocketId);
     const revealBtn = document.getElementById('revealBtn');
     if (me && me.revealed) {
@@ -254,7 +381,25 @@ socket.on('roomState', (state) => {
   } else if (state.phase === 'ended') {
     showScreen('screen-ended');
     renderBoard(document.getElementById('endedBoard'), state.players);
-    document.getElementById('restartBtn').style.display = isHost ? 'block' : 'none';
-    document.getElementById('endedWaiting').style.display = isHost ? 'none' : 'block';
+
+    const askBtn = document.getElementById('askRematchBtn');
+    const waitingMsg = document.getElementById('rematchWaitingHost');
+    const voteCard = document.getElementById('rematchVoteCard');
+    const acceptBtn = document.getElementById('acceptRematchBtn');
+
+    if (!state.rematchRequested) {
+      voteCard.style.display = 'none';
+      askBtn.style.display = isHost ? 'block' : 'none';
+      waitingMsg.style.display = isHost ? 'none' : 'block';
+    } else {
+      askBtn.style.display = 'none';
+      waitingMsg.style.display = 'none';
+      voteCard.style.display = 'block';
+      renderRematchList(state.players, state.rematchYes);
+      const me = state.players.find(p => p.id === mySocketId);
+      const alreadyIn = state.rematchYes.includes(mySocketId);
+      acceptBtn.disabled = alreadyIn;
+      acceptBtn.textContent = alreadyIn ? 'Waiting on others…' : "Yes, I'm in!";
+    }
   }
 });

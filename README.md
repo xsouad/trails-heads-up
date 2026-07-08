@@ -1,9 +1,28 @@
-# Trails Heads Up - it's not working yet (probably)
+# Trails Heads Up — initial working version
 
 A real-time multiplayer "Heads Up!" style party game themed around the Legend of Heroes:
 Trails series. This is a working Node.js + Socket.io app (not a static HTML mockup) —
 it needs to be run with Node to actually work, since it depends on a live server for
 rooms, player sync, and privacy (hiding your own item from you).
+
+## New in this update
+
+- **Leave Room button** (always visible at the bottom) with a confirmation dialog.
+  Leaving or disconnecting (closed tab, refresh, crash) now broadcasts a toast notice
+  ("X left the room") to everyone else instead of the game looking stuck.
+- **End Game vote**: any player can click "End Game" in the bottom bar to cast a vote;
+  once more than half of current players have voted (e.g. 2 of 3, 3 of 5), the room
+  closes for everyone immediately.
+- **Public/private rooms**: choose visibility when creating a room. Public rooms show
+  up in a browsable list on the home screen with a live player/spectator count.
+- **Spectator mode**: anyone can join a public room in progress as a spectator (via the
+  "Watch" button in the public room list) without needing to be one of the 2-5 players.
+  Spectators see every player's item with no privacy restriction, and a spectator count
+  is shown to the active players during the round.
+- **Rematch consensus screen**: at the end of a round, the host can click "Ask for
+  Rematch." Everyone sees a banner and an avatar row with a checkmark next to whoever's
+  said yes so far; once every remaining player has agreed, a new round starts
+  automatically with the same settings.
 
 ## What's implemented (initial version)
 

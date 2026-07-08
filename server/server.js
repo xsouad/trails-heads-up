@@ -4,8 +4,9 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { gameOrder } = require('./gameData');
 const {
-  createRoom, joinRoom, leaveRoom, findRoomBySocket,
-  startGame, revealPlayer, restartRoom, serializeRoomFor
+  createRoom, joinRoom, joinAsSpectator, listPublicRooms, leaveRoom,
+  findRoomBySocket, isSpectator, startGame, revealPlayer, voteEndGame,
+  requestRematch, respondRematch, serializeRoomFor
 } = require('./rooms');
 
 const app = express();
@@ -18,13 +19,25 @@ function broadcastRoom(room) {
   room.players.forEach((player, socketId) => {
     io.to(socketId).emit('roomState', serializeRoomFor(room, socketId));
   });
+  room.spectators.forEach((spec, socketId) => {
+    io.to(socketId).emit('roomState', serializeRoomFor(room, socketId));
+  });
+}
+
+function notifyRoom(room, text) {
+  room.players.forEach((p, socketId) => io.to(socketId).emit('notice', { text }));
+  room.spectators.forEach((s, socketId) => io.to(socketId).emit('notice', { text }));
 }
 
 io.on('connection', (socket) => {
   socket.emit('gameOrder', gameOrder);
 
-  socket.on('createRoom', ({ name, avatar }, cb) => {
-    const room = createRoom(socket.id, name || 'Player', avatar);
+  socket.on('listPublicRooms', (_, cb) => {
+    cb && cb(listPublicRooms());
+  });
+
+  socket.on('createRoom', ({ name, avatar, visibility }, cb) => {
+    const room = createRoom(socket.id, name || 'Player', avatar, visibility);
     socket.join(room.code);
     cb && cb({ ok: true, code: room.code });
     broadcastRoom(room);
@@ -36,11 +49,21 @@ io.on('connection', (socket) => {
     socket.join(result.room.code);
     cb && cb({ ok: true, code: result.room.code });
     broadcastRoom(result.room);
+    notifyRoom(result.room, `${name || 'Player'} joined the room.`);
+  });
+
+  socket.on('joinAsSpectator', ({ code, name }, cb) => {
+    const result = joinAsSpectator((code || '').toUpperCase(), socket.id, name || 'Spectator');
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    socket.join(result.room.code);
+    cb && cb({ ok: true, code: result.room.code });
+    broadcastRoom(result.room);
+    notifyRoom(result.room, `${name || 'Spectator'} started spectating.`);
   });
 
   socket.on('updateAvatar', ({ avatar }) => {
     const room = findRoomBySocket(socket.id);
-    if (!room) return;
+    if (!room || isSpectator(room, socket.id)) return;
     const player = room.players.get(socket.id);
     if (player) player.avatar = avatar;
     broadcastRoom(room);
@@ -65,22 +88,56 @@ io.on('connection', (socket) => {
 
   socket.on('reveal', () => {
     const room = findRoomBySocket(socket.id);
-    if (!room || room.phase !== 'playing') return;
+    if (!room || room.phase !== 'playing' || isSpectator(room, socket.id)) return;
     revealPlayer(room, socket.id);
     broadcastRoom(room);
   });
 
-  socket.on('restartGame', () => {
+  socket.on('requestRematch', () => {
     const room = findRoomBySocket(socket.id);
-    if (!room || room.hostId !== socket.id) return;
-    restartRoom(room);
+    if (!room || room.hostId !== socket.id || room.phase !== 'ended') return;
+    requestRematch(room);
     broadcastRoom(room);
   });
 
-  socket.on('disconnect', () => {
-    const { room } = leaveRoom(socket.id);
-    if (room) broadcastRoom(room);
+  socket.on('respondRematch', () => {
+    const room = findRoomBySocket(socket.id);
+    if (!room || isSpectator(room, socket.id)) return;
+    const result = respondRematch(room, socket.id);
+    broadcastRoom(room);
+    if (result && result.started && result.error) {
+      io.to(socket.id).emit('notice', { text: `Couldn't start rematch: ${result.error}` });
+    }
   });
+
+  socket.on('voteEndGame', () => {
+    const room = findRoomBySocket(socket.id);
+    if (!room || isSpectator(room, socket.id)) return;
+    const result = voteEndGame(room, socket.id);
+    if (result.ended) {
+      notifyRoom(room, 'The room has been closed -- enough players voted to end the game.');
+      room.players.forEach((p, sid) => io.to(sid).emit('roomClosed'));
+      room.spectators.forEach((s, sid) => io.to(sid).emit('roomClosed'));
+    } else {
+      broadcastRoom(room);
+    }
+  });
+
+  socket.on('leaveRoom', () => {
+    handleLeave(socket, true);
+  });
+
+  socket.on('disconnect', () => {
+    handleLeave(socket, false);
+  });
+
+  function handleLeave(socket, explicit) {
+    const { room, leftName, wasSpectator } = leaveRoom(socket.id);
+    if (room && leftName) {
+      notifyRoom(room, wasSpectator ? `${leftName} stopped spectating.` : `${leftName} left the room.`);
+      broadcastRoom(room);
+    }
+  }
 });
 
 const PORT = process.env.PORT || 3000;

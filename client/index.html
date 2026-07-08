@@ -8,6 +8,8 @@
 </head>
 <body>
 
+<div id="noticeBar"></div>
+
 <!-- HOME: name + avatar customization + create/join -->
 <div id="screen-home" class="screen active">
   <h1>Trails Heads Up</h1>
@@ -39,10 +41,21 @@
   </div>
 
   <div class="card">
-    <button class="primary" id="createRoomBtn">Create Private Room</button>
+    <p><strong>Room visibility</strong></p>
+    <div class="category-row" id="visibilityRow">
+      <div class="category-chip selected" data-visibility="private">Private</div>
+      <div class="category-chip" data-visibility="public">Public</div>
+    </div>
+    <button class="primary" id="createRoomBtn">Create Room</button>
     <input type="text" id="joinCodeInput" placeholder="Room code" maxlength="4" style="text-transform:uppercase; margin-top:14px;">
     <button class="secondary" id="joinRoomBtn">Join Room</button>
     <div class="error-msg" id="homeError"></div>
+  </div>
+
+  <div class="card">
+    <p><strong>Public games</strong></p>
+    <button class="secondary" id="refreshPublicBtn" style="margin-top:0;">Refresh List</button>
+    <div id="publicRoomList" class="public-room-list"></div>
   </div>
 </div>
 
@@ -75,6 +88,15 @@
   <div class="reveal-counter" id="revealCounter"></div>
   <div class="board" id="gameBoard"></div>
   <button class="primary" id="revealBtn">I'm Ready to Reveal</button>
+  <div class="spectator-count" id="spectatorCountGame"></div>
+</div>
+
+<!-- SPECTATING -->
+<div id="screen-spectate" class="screen">
+  <h1>Spectating</h1>
+  <p class="subtitle">You can see everyone's item &mdash; just watch and enjoy.</p>
+  <div class="board" id="spectateBoard"></div>
+  <div class="spectator-count" id="spectatorCountSpectate"></div>
 </div>
 
 <!-- ENDED -->
@@ -82,12 +104,35 @@
   <h1>Round Over!</h1>
   <p class="subtitle">Here's what everyone had:</p>
   <div class="board" id="endedBoard"></div>
-  <button class="secondary" id="restartBtn" style="display:none;">Play Again</button>
-  <p id="endedWaiting" style="display:none; text-align:center;">Waiting for the host to restart&hellip;</p>
+
+  <div class="card" id="rematchIdleCard">
+    <button class="secondary" id="askRematchBtn" style="display:none;">Ask for Rematch</button>
+    <p id="rematchWaitingHost" style="display:none; text-align:center;">Waiting for the host to decide what's next&hellip;</p>
+  </div>
+
+  <div class="card" id="rematchVoteCard" style="display:none;">
+    <p style="text-align:center;"><strong>Host is asking for a rematch!</strong></p>
+    <div class="player-list" id="rematchAvatarList"></div>
+    <button class="primary" id="acceptRematchBtn">Yes, I'm in!</button>
+  </div>
 </div>
 
 <div class="zoom-overlay" id="zoomOverlay">
   <div class="zoom-card" id="zoomCard"></div>
+</div>
+
+<div class="zoom-overlay" id="leaveConfirmOverlay">
+  <div class="zoom-card">
+    <p>If you leave the room you won't be able to return until the game is over, are you sure?</p>
+    <button class="danger" id="confirmLeaveBtn" style="width:100%; border:none; padding:12px; border-radius:20px; margin-top:10px; cursor:pointer;">Yes, leave</button>
+    <button class="close-btn" id="cancelLeaveBtn" style="width:100%; margin-top:8px;">Cancel</button>
+  </div>
+</div>
+
+<!-- persistent bottom bar -->
+<div class="bottom-bar" id="bottomBar" style="display:none;">
+  <button class="danger" id="leaveRoomBtn">Leave Room</button>
+  <button class="secondary" id="endGameBtn">End Game (<span id="endGameVoteCount">0/0</span>)</button>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
