@@ -146,8 +146,12 @@ document.getElementById('refreshPublicBtn').addEventListener('click', refreshPub
 
 // ---------- lobby settings ----------
 socket.on('connect', () => {
+  console.log('[socket connect]', socket.id, 'was previously:', mySocketId);
   mySocketId = socket.id;
   refreshPublicRooms();
+});
+socket.on('disconnect', (reason) => {
+  console.log('[socket disconnect]', socket.id, 'reason:', reason);
 });
 
 socket.on('gameOrder', (order) => {
@@ -366,6 +370,7 @@ function renderRematchList(players, rematchYes) {
 
 // ---------- main state handler ----------
 socket.on('roomState', (state) => {
+  console.log('[roomState received]', 'phase:', state.phase, 'players:', state.players.length, state.players.map(p => p.name), 'mySocketId:', mySocketId, 'socket.id now:', socket.id, 'connected:', socket.connected);
   currentRoomState = state;
   isHost = state.hostId === mySocketId;
   document.getElementById('lobbyCode').textContent = state.code;
