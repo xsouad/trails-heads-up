@@ -13,7 +13,13 @@ function log(...args) { console.log(new Date().toISOString(), ...args); }
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+// Detect dropped connections (closed tab, refresh, network drop) quickly rather than
+// waiting on Socket.IO's default ~45s ping window, so "X left the room" shows up
+// promptly instead of leaving a stale player in the list.
+const io = new Server(server, {
+  pingInterval: 8000,
+  pingTimeout: 5000
+});
 
 app.use(express.static(path.join(__dirname, '../client')));
 
@@ -97,6 +103,7 @@ io.on('connection', (socket) => {
     if (!room || room.hostId !== socket.id) return;
     if (cutoffTag) room.settings.cutoffTag = cutoffTag;
     if (categories) room.settings.categories = categories;
+    log('UPDATE SETTINGS', room.code, 'now:', JSON.stringify(room.settings));
     broadcastRoom(room);
   });
 
@@ -105,8 +112,11 @@ io.on('connection', (socket) => {
     if (!room) { cb && cb({ ok: false, error: "You're not in a room right now. Please rejoin using the room code." }); return; }
     if (room.hostId !== socket.id) { cb && cb({ ok: false, error: 'Only the host can start the game.' }); return; }
     if (room.players.size < 2) { cb && cb({ ok: false, error: 'You need at least 2 players to start a game.' }); return; }
+    log('START GAME requested', room.code, 'settings at start time:', JSON.stringify(room.settings));
     const result = startGame(room);
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    const assigned = Array.from(room.players.values()).map(p => ({ name: p.item && p.item.name, type: p.item && p.item.type, tag: p.item && p.item.tag }));
+    log('START GAME assigned items', room.code, JSON.stringify(assigned));
     cb && cb({ ok: true });
     broadcastRoom(room);
   });

@@ -1,5 +1,13 @@
 const socket = io();
 
+// Proactively tell the server we're leaving the moment the page starts to unload
+// (refresh, close tab, navigate away) instead of waiting for the connection to time
+// out. This is what makes "X left the room" show up promptly for a refresh instead of
+// leaving a stale player sitting in the list for tens of seconds.
+window.addEventListener('pagehide', () => {
+  if (socket.connected) socket.emit('leaveRoom');
+});
+
 const LAYER_COUNTS = { base: 2, face: 2, hat: 3 };
 let avatar = { base: 1, face: 1, hat: 1 };
 let gameOrder = [];

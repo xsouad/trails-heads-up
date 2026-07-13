@@ -17,7 +17,14 @@ function orderForTag(tag) {
 }
 
 function buildPool(cutoffTag, categories) {
-  const cutoffOrder = orderByTag[cutoffTag] || gameOrder.length;
+  // Fail SAFE, not open: if cutoffTag is ever missing/unrecognized, restrict to the
+  // very first game (order 1) rather than defaulting to "allow everything," which
+  // would silently defeat the entire point of the spoiler cutoff.
+  const hasTag = Object.prototype.hasOwnProperty.call(orderByTag, cutoffTag);
+  if (!hasTag) {
+    console.warn('buildPool called with unrecognized cutoffTag:', cutoffTag, '-- defaulting to most restrictive (FC only)');
+  }
+  const cutoffOrder = hasTag ? orderByTag[cutoffTag] : 1;
   const pool = [];
   if (categories.includes('characters')) {
     characters.forEach(c => {
