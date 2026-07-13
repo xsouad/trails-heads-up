@@ -293,6 +293,7 @@ document.getElementById('acceptRematchBtn').addEventListener('click', (e) => {
 // ---------- item card rendering (image w/ text fallback + caption) ----------
 function buildItemCardContent(item) {
   const wrap = document.createElement('div');
+  wrap.className = 'item-card-content';
   if (item.image) {
     const img = document.createElement('img');
     img.src = `assets/items/${item.type === 'character' ? 'characters' : 'events'}/${item.image}`;
@@ -352,9 +353,13 @@ function renderBoard(container, players) {
     nameEl.className = 'board-name';
     nameEl.textContent = p.name + (p.revealed ? ' ✅' : '');
 
+    const nameWrap = document.createElement('div');
+    nameWrap.className = 'board-name-wrap';
+    nameWrap.appendChild(avatarDiv);
+    nameWrap.appendChild(nameEl);
+
     cell.appendChild(bubble);
-    cell.appendChild(avatarDiv);
-    cell.appendChild(nameEl);
+    cell.appendChild(nameWrap);
     container.appendChild(cell);
   });
 }
