@@ -85,12 +85,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .board-avatar img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; image-rendering: pixelated; }
 .item-bubble {
   cursor: pointer; background: #fff; color: #14213d; border-radius: 10px;
-  padding: 6px 8px; margin-bottom: 6px; width: 140px; text-align: center;
+  padding: 6px 8px; margin-bottom: 6px; width: 140px; height: 170px; text-align: center;
   font-size: 0.75rem; font-weight: 600; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-  min-height: 48px; display: flex; flex-direction: column; align-items: center;
-  justify-content: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  overflow: hidden;
 }
-.item-bubble img { width: 100%; border-radius: 6px; image-rendering: auto; display: block; margin-bottom: 4px; }
+.item-bubble img {
+  max-width: 100%; max-height: 115px; width: auto; height: auto; object-fit: contain;
+  border-radius: 6px; display: block; margin-bottom: 4px;
+}
 .item-bubble.self-hidden { background: #333f5e; color: #7f8db3; font-style: italic; }
 .board-name { margin-top: 6px; font-size: 0.85rem; font-weight: 600; }
 
@@ -104,7 +107,20 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .board-avatar { width: 44px; height: 44px; flex-shrink: 0; }
   .board-name-wrap { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
   .board-name { margin-top: 2px; }
-  .item-bubble { margin-bottom: 0; margin-left: 6px; max-width: none; flex: 1; }
+  .item-bubble {
+    margin-bottom: 0; margin-left: 6px; flex: 1;
+    width: auto; height: 56px; max-height: 56px; padding: 4px 8px;
+    flex-direction: row; justify-content: flex-start; text-align: left; gap: 8px;
+  }
+  .item-bubble img {
+    max-width: 48px; max-height: 48px; width: 48px; height: 48px;
+    object-fit: cover; margin-bottom: 0; flex-shrink: 0;
+  }
+}
+
+.game-timer {
+  text-align: center; font-size: 1.3rem; font-weight: bold; letter-spacing: 1px;
+  font-family: 'Courier New', monospace; color: #ffd166; margin-bottom: 8px;
 }
 
 .reveal-counter { text-align: center; font-size: 1.1rem; margin: 12px 0; }
@@ -169,4 +185,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .kick-btn {
   margin-top: 4px; background: #eb5757; color: #fff; border: none;
   padding: 3px 8px; border-radius: 10px; font-size: 0.7rem; cursor: pointer;
+}
+
+.game-timer {
+  text-align: center; font-size: 1.6rem; font-weight: bold; letter-spacing: 2px;
+  color: #ffb703; margin-bottom: 4px; font-variant-numeric: tabular-nums;
 }

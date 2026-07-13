@@ -18,6 +18,34 @@ let selectedVisibility = 'private';
 let selectedCutoff = 'KAI';
 let selectedCategories = new Set(['characters', 'events']);
 let pendingSpectate = null; // room code we're trying to spectate
+let timerInterval = null;
+let timerStartedAt = null;
+
+function formatElapsed(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function startGameTimer(startedAt, elementId) {
+  if (timerInterval && timerStartedAt === startedAt) {
+    // already running for this round, just make sure the right element is being updated
+  }
+  clearInterval(timerInterval);
+  timerStartedAt = startedAt;
+  const el = document.getElementById(elementId);
+  function tick() {
+    if (el) el.textContent = '\u23F1 ' + formatElapsed(Date.now() - startedAt);
+  }
+  tick();
+  timerInterval = setInterval(tick, 1000);
+}
+
+function stopGameTimer() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+}
 
 // ---------- screen switching ----------
 function showScreen(id) {
@@ -38,6 +66,7 @@ socket.on('notice', (n) => showNotice(n.text));
 socket.on('kicked', () => {
   showNotice('You were removed from the room by the host.');
   currentRoomState = null;
+  stopGameTimer();
   showScreen('screen-home');
   document.getElementById('bottomBar').style.display = 'none';
   refreshPublicRooms();
@@ -45,6 +74,7 @@ socket.on('kicked', () => {
 socket.on('roomClosed', () => {
   showNotice('The room was closed.');
   currentRoomState = null;
+  stopGameTimer();
   showScreen('screen-home');
   document.getElementById('bottomBar').style.display = 'none';
 });
@@ -152,6 +182,17 @@ function refreshPublicRooms() {
 }
 document.getElementById('refreshPublicBtn').addEventListener('click', refreshPublicRooms);
 
+// Clicking the dimmed backdrop (not the card itself) closes a popup, same as the
+// explicit close/cancel buttons.
+function wireClickAwayToClose(overlayId, onClose) {
+  const overlay = document.getElementById(overlayId);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) onClose();
+  });
+}
+wireClickAwayToClose('zoomOverlay', () => document.getElementById('zoomOverlay').classList.remove('active'));
+wireClickAwayToClose('leaveConfirmOverlay', () => document.getElementById('leaveConfirmOverlay').classList.remove('active'));
+
 // ---------- lobby settings ----------
 socket.on('connect', () => {
   console.log('[socket connect]', socket.id, 'was previously:', mySocketId);
@@ -228,6 +269,7 @@ document.getElementById('confirmLeaveBtn').addEventListener('click', () => {
   socket.emit('leaveRoom');
   document.getElementById('leaveConfirmOverlay').classList.remove('active');
   currentRoomState = null;
+  stopGameTimer();
   document.getElementById('bottomBar').style.display = 'none';
   showScreen('screen-home');
   refreshPublicRooms();
@@ -405,6 +447,7 @@ socket.on('roomState', (state) => {
     renderLobbyList(state.players);
   } else if (state.phase === 'playing') {
     showScreen('screen-game');
+    if (state.startedAt) startGameTimer(state.startedAt, 'gameTimer');
     renderBoard(document.getElementById('gameBoard'), state.players);
     document.getElementById('revealCounter').textContent = `${state.revealedCount}/${state.totalPlayers} ready to reveal`;
     document.getElementById('spectatorCountGame').textContent = state.spectatorCount ? `${state.spectatorCount} spectator(s) watching` : '';
@@ -419,6 +462,11 @@ socket.on('roomState', (state) => {
     }
   } else if (state.phase === 'ended') {
     showScreen('screen-ended');
+    stopGameTimer();
+    if (state.startedAt) {
+      const el = document.getElementById('endedTimer');
+      if (el) el.textContent = 'Round took ' + formatElapsed(Date.now() - state.startedAt);
+    }
     renderBoard(document.getElementById('endedBoard'), state.players);
 
     const askBtn = document.getElementById('askRematchBtn');

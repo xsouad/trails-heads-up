@@ -124,6 +124,7 @@ function startGame(room) {
     player.revealed = false;
   });
   room.phase = 'playing';
+  room.startedAt = Date.now();
   room.endGameVotes.clear();
   room.rematchRequested = false;
   room.rematchResponses.clear();
@@ -197,6 +198,7 @@ function serializeRoomFor(room, recipientId) {
     code: room.code,
     hostId: room.hostId,
     phase: room.phase,
+    startedAt: room.startedAt || null,
     visibility: room.visibility,
     settings: room.settings,
     isSpectator: spectating,
