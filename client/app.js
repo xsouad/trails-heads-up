@@ -8,8 +8,50 @@ window.addEventListener('pagehide', () => {
   if (socket.connected) socket.emit('leaveRoom');
 });
 
+// ---------- persistence: name, avatar, client identity, current room ----------
+// Lets a player keep their name/avatar and get silently reunited with their
+// room after leaving and coming back (or a mobile browser backgrounding them),
+// instead of showing up as a stranger with a default avatar every time.
+const STORAGE_KEYS = {
+  clientId: 'trailsHeadsUp_clientId',
+  name: 'trailsHeadsUp_name',
+  avatar: 'trailsHeadsUp_avatar',
+  room: 'trailsHeadsUp_room'
+};
+
+function getClientId() {
+  let id = localStorage.getItem(STORAGE_KEYS.clientId);
+  if (!id) {
+    id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('c-' + Math.random().toString(36).slice(2) + Date.now());
+    localStorage.setItem(STORAGE_KEYS.clientId, id);
+  }
+  return id;
+}
+const clientId = getClientId();
+
+function saveName(name) { localStorage.setItem(STORAGE_KEYS.name, name); }
+function loadName() { return localStorage.getItem(STORAGE_KEYS.name) || ''; }
+
+function saveAvatar(a) { localStorage.setItem(STORAGE_KEYS.avatar, JSON.stringify(a)); }
+function loadAvatar() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEYS.avatar));
+    if (parsed && parsed.base && parsed.face && parsed.hat) return parsed;
+  } catch (e) { /* ignore malformed/missing data */ }
+  return null;
+}
+
+function saveCurrentRoom(code, wasSpectator) {
+  localStorage.setItem(STORAGE_KEYS.room, JSON.stringify({ code, wasSpectator: !!wasSpectator }));
+}
+function loadCurrentRoom() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.room)); }
+  catch (e) { return null; }
+}
+function clearCurrentRoom() { localStorage.removeItem(STORAGE_KEYS.room); }
+
 const LAYER_COUNTS = { base: 2, face: 2, hat: 3 };
-let avatar = { base: 1, face: 1, hat: 1 };
+let avatar = loadAvatar() || { base: 1, face: 1, hat: 1 };
 let gameOrder = [];
 let mySocketId = null;
 let currentRoomState = null;
@@ -66,6 +108,7 @@ socket.on('notice', (n) => showNotice(n.text));
 socket.on('kicked', () => {
   showNotice('You were removed from the room by the host.');
   currentRoomState = null;
+  clearCurrentRoom();
   stopGameTimer();
   showScreen('screen-home');
   document.getElementById('bottomBar').style.display = 'none';
@@ -74,6 +117,7 @@ socket.on('kicked', () => {
 socket.on('roomClosed', () => {
   showNotice('The room was closed.');
   currentRoomState = null;
+  clearCurrentRoom();
   stopGameTimer();
   showScreen('screen-home');
   document.getElementById('bottomBar').style.display = 'none';
@@ -97,6 +141,7 @@ document.querySelectorAll('.arrow-row button').forEach(btn => {
     const dir = parseInt(btn.dataset.dir, 10);
     const count = LAYER_COUNTS[layer];
     avatar[layer] = ((avatar[layer] - 1 + dir + count) % count) + 1;
+    saveAvatar(avatar);
     refreshAvatarStage();
   });
 });
@@ -106,9 +151,19 @@ document.getElementById('diceBtn').addEventListener('click', () => {
     face: 1 + Math.floor(Math.random() * LAYER_COUNTS.face),
     hat: 1 + Math.floor(Math.random() * LAYER_COUNTS.hat)
   };
+  saveAvatar(avatar);
   refreshAvatarStage();
 });
 refreshAvatarStage();
+
+// Restore the player's last-used name so they don't have to retype it every
+// time they come back.
+(function restoreName() {
+  const nameInputEl = document.getElementById('nameInput');
+  const savedName = loadName();
+  if (savedName) nameInputEl.value = savedName;
+  nameInputEl.addEventListener('input', () => saveName(nameInputEl.value));
+})();
 
 // ---------- visibility toggle ----------
 document.querySelectorAll('#visibilityRow .category-chip').forEach(chip => {
@@ -122,8 +177,10 @@ document.querySelectorAll('#visibilityRow .category-chip').forEach(chip => {
 // ---------- home: create / join ----------
 document.getElementById('createRoomBtn').addEventListener('click', () => {
   const name = document.getElementById('nameInput').value.trim() || 'Player';
-  socket.emit('createRoom', { name, avatar, visibility: selectedVisibility }, (res) => {
+  saveName(name);
+  socket.emit('createRoom', { name, avatar, visibility: selectedVisibility, clientId }, (res) => {
     if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
+    saveCurrentRoom(res.code, false);
     showScreen('screen-lobby');
   });
 });
@@ -132,8 +189,10 @@ document.getElementById('joinRoomBtn').addEventListener('click', () => {
   const name = document.getElementById('nameInput').value.trim() || 'Player';
   const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
   if (!code) { document.getElementById('homeError').textContent = 'Enter a room code.'; return; }
-  socket.emit('joinRoom', { code, name, avatar }, (res) => {
+  saveName(name);
+  socket.emit('joinRoom', { code, name, avatar, clientId }, (res) => {
     if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
+    saveCurrentRoom(res.code, false);
     showScreen('screen-lobby');
   });
 });
@@ -159,8 +218,10 @@ function refreshPublicRooms() {
         joinBtn.textContent = 'Join';
         joinBtn.addEventListener('click', () => {
           const name = document.getElementById('nameInput').value.trim() || 'Player';
-          socket.emit('joinRoom', { code: r.code, name, avatar }, (res) => {
+          saveName(name);
+          socket.emit('joinRoom', { code: r.code, name, avatar, clientId }, (res) => {
             if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
+            saveCurrentRoom(res.code, false);
             showScreen('screen-lobby');
           });
         });
@@ -170,8 +231,10 @@ function refreshPublicRooms() {
         watchBtn.textContent = 'Watch';
         watchBtn.addEventListener('click', () => {
           const name = document.getElementById('nameInput').value.trim() || 'Spectator';
+          saveName(name);
           socket.emit('joinAsSpectator', { code: r.code, name }, (res) => {
             if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
+            saveCurrentRoom(r.code, true);
           });
         });
         row.appendChild(watchBtn);
@@ -198,6 +261,22 @@ socket.on('connect', () => {
   console.log('[socket connect]', socket.id, 'was previously:', mySocketId);
   mySocketId = socket.id;
   refreshPublicRooms();
+  // If we think we're already in a room (this is a reconnect after a dropped
+  // connection, e.g. the phone was backgrounded, or just a page refresh), try to
+  // silently reclaim that player slot instead of landing back on the home screen
+  // as a stranger. The server matches us by clientId, not socket.id.
+  const saved = loadCurrentRoom();
+  if (saved && saved.code && !saved.wasSpectator) {
+    const name = document.getElementById('nameInput').value.trim() || loadName() || 'Player';
+    socket.emit('rejoin', { code: saved.code, clientId, name, avatar }, (res) => {
+      if (!res || !res.ok) {
+        console.log('[rejoin failed]', res && res.error);
+        clearCurrentRoom();
+      }
+      // On success the server's roomState broadcast (sent as part of the
+      // rejoin) restores the right screen automatically.
+    });
+  }
 });
 socket.on('disconnect', (reason) => {
   console.log('[socket disconnect]', socket.id, 'reason:', reason);
@@ -269,6 +348,7 @@ document.getElementById('confirmLeaveBtn').addEventListener('click', () => {
   socket.emit('leaveRoom');
   document.getElementById('leaveConfirmOverlay').classList.remove('active');
   currentRoomState = null;
+  clearCurrentRoom();
   stopGameTimer();
   document.getElementById('bottomBar').style.display = 'none';
   showScreen('screen-home');
@@ -351,7 +431,7 @@ function renderBoard(container, players) {
 
     const nameEl = document.createElement('div');
     nameEl.className = 'board-name';
-    nameEl.textContent = p.name + (p.revealed ? ' ✅' : '');
+    nameEl.textContent = p.name + (p.revealed ? ' ✅' : '') + (p.disconnected ? ' (reconnecting…)' : '');
 
     const nameWrap = document.createElement('div');
     nameWrap.className = 'board-name-wrap';
@@ -377,7 +457,7 @@ function renderLobbyList(players) {
     renderAvatarStage(mini, p.avatar);
     const name = document.createElement('div');
     name.className = 'name';
-    name.textContent = p.name;
+    name.textContent = p.name + (p.disconnected ? ' (reconnecting…)' : '');
     chip.appendChild(mini);
     chip.appendChild(name);
     if (p.id === currentRoomState.hostId) {
