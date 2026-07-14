@@ -91,13 +91,23 @@ Netlify alone won't work for the server half. Good options: Render, Railway, or 
 folder as-is; `npm start` is the start command, and it reads `PORT` from the environment
 already, which those platforms set automatically.
 
+## Reconnecting and remembering your name/avatar
+
+Your name and avatar customization are now saved in your browser and restored
+automatically the next time you open the app, even after leaving a room and coming
+back. Each browser also gets a persistent identity, so if your connection drops for
+a bit (locking your phone, a spotty signal, backgrounding the app to answer a text),
+you get a 45 second grace window to reconnect and silently reclaim your seat instead
+of the room treating you as a stranger. Other players will briefly see
+"(reconnecting...)" next to your name during that window. If you don't reconnect in
+time, you're removed from the room like normal and everyone is notified you left.
+
 ## Known gaps / next steps
 
 - Locations category isn't wired up yet (no data source).
-- No reconnect handling if someone's browser refreshes or their connection briefly drops
-  mid-round; they'd need to rejoin as a new player rather than resuming their seat, and
-  if that happens to the host it can currently orphan the room. Worth adding proper
-  reconnect/session support if this shows up during real play.
+- Spectators don't get the same reconnect grace period as players (a dropped spectator
+  just needs to rejoin via the room code and hit Watch again). Since spectators don't
+  hold any hidden game state, this was left out of scope for the reconnect work above.
 - Avatar layer contents (skin/face/hat) match exactly what you uploaded; if you add more
   sprite variants later, just drop them in `client/assets/avatar/<layer>/` following the
   `<layer>_N.png` naming pattern and bump the count in `LAYER_COUNTS` in `client/app.js`.
