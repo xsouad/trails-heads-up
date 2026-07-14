@@ -19,7 +19,7 @@
   },
   {
     "name": "Julia Schwarz",
-    "tag": "SC",
+    "tag": "FC",
     "alsoAppearsIn": "SC, 3RD, AO",
     "image": "julia_schwarz.png"
   },
@@ -67,7 +67,7 @@
   },
   {
     "name": "Kevin Graham",
-    "tag": "3RD",
+    "tag": "SC",
     "alsoAppearsIn": "3RD, AO, KAI",
     "image": "kevin_graham.png"
   },
@@ -103,7 +103,7 @@
   },
   {
     "name": "Rixia Mao",
-    "tag": "3RD",
+    "tag": "ZERO",
     "alsoAppearsIn": "AO, CS2, CS4, REV",
     "image": "rixia_mao.png"
   },
@@ -241,7 +241,7 @@
   },
   {
     "name": "Angelica Rogner",
-    "tag": "CS2",
+    "tag": "CS1",
     "alsoAppearsIn": "CS2, CS3, CS4",
     "image": "angelica_rogner.png"
   },
@@ -253,13 +253,13 @@
   },
   {
     "name": "Cedric Reise Arnor",
-    "tag": "CS2",
+    "tag": "CS3",
     "alsoAppearsIn": "CS3, CS4",
     "image": "cedric_reise_arnor.png"
   },
   {
     "name": "Giliath Osborne",
-    "tag": "CS1",
+    "tag": "THIRD",
     "alsoAppearsIn": "CS2, CS3, CS4",
     "image": "giliath_osborne.png"
   },
@@ -277,7 +277,7 @@
   },
   {
     "name": "Claire Rieveldt",
-    "tag": "CS3",
+    "tag": "CS1",
     "alsoAppearsIn": "CS2, CS3, CS4, REV",
     "image": "claire_rieveldt.png"
   },
@@ -295,7 +295,7 @@
   },
   {
     "name": "Ordine",
-    "tag": "REV",
+    "tag": "CS1",
     "alsoAppearsIn": "CS2, CS3, CS4, REV",
     "image": "ordine.png"
   },
@@ -307,13 +307,13 @@
   },
   {
     "name": "Aurelia Le Guin",
-    "tag": "REV",
+    "tag": "CS3",
     "alsoAppearsIn": "CS3, CS4, REV",
     "image": "aurelia_le_guin.png"
   },
   {
     "name": "Towa Herschel",
-    "tag": "CS3",
+    "tag": "CS1",
     "alsoAppearsIn": "CS2, CS3, CS4, REV",
     "image": "towa_herschel.png"
   },
@@ -337,7 +337,7 @@
   },
   {
     "name": "Ash Carbide",
-    "tag": "CS4",
+    "tag": "CS3",
     "alsoAppearsIn": "CS4, REV",
     "image": "ash_carbide.png"
   },
@@ -415,7 +415,7 @@
   },
   {
     "name": "Elaine Auclair",
-    "tag": "DB2",
+    "tag": "DB1",
     "alsoAppearsIn": "-",
     "image": "elaine_auclair.png"
   },
