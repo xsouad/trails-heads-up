@@ -6,20 +6,36 @@ const { gameOrder } = require('./gameData');
 const {
   createRoom, joinRoom, joinAsSpectator, listPublicRooms, leaveRoom,
   findRoomBySocket, isSpectator, startGame, revealPlayer, voteEndGame,
-  requestRematch, respondRematch, serializeRoomFor
+  requestRematch, respondRematch, serializeRoomFor,
+  markPlayerDisconnected, reconnectPlayer, removePlayerByClientId
 } = require('./rooms');
 
 function log(...args) { console.log(new Date().toISOString(), ...args); }
 
 const app = express();
 const server = http.createServer(app);
-// Detect dropped connections (closed tab, refresh, network drop) quickly rather than
-// waiting on Socket.IO's default ~45s ping window, so "X left the room" shows up
-// promptly instead of leaving a stale player in the list.
+// Ping timing: generous enough that a phone screen locking or a few seconds of
+// spotty signal doesn't even register as a drop at the transport level. Actual
+// drops (closed tab, real disconnect) are further covered by the grace-period
+// soft-disconnect handling below, which is what makes brief app-switching on
+// mobile not show up as "X left the room".
 const io = new Server(server, {
-  pingInterval: 8000,
-  pingTimeout: 5000
+  pingInterval: 20000,
+  pingTimeout: 20000
 });
+
+// clientId -> pending removal timeout. A player who drops isn't removed from
+// their room right away; they're marked "disconnected" and get a grace window
+// to reconnect (matched by clientId, which survives a socket.io reconnect,
+// unlike socket.id) before they're actually removed and everyone is notified.
+const DISCONNECT_GRACE_MS = 45000;
+const pendingRemovals = new Map();
+
+function cancelPendingRemoval(clientId) {
+  if (!clientId) return;
+  const timer = pendingRemovals.get(clientId);
+  if (timer) { clearTimeout(timer); pendingRemovals.delete(clientId); }
+}
 
 app.use(express.static(path.join(__dirname, '../client')));
 
@@ -46,12 +62,24 @@ io.on('connection', (socket) => {
   // socket into a room (create/join/spectate) calls this first to clean up any prior
   // membership -- this is what prevents someone ending up "host of two rooms at once"
   // or a stale player entry lingering in a room they've since left behind.
-  function leaveAnyCurrentRoom() {
+  function leaveAnyCurrentRoom(clientId) {
     const result = leaveRoom(socket.id);
     if (result.room && result.leftName) {
       log('AUTO-LEFT prior room before join/create', socket.id, 'room:', result.room.code, 'remaining players:', result.room.players.size);
       notifyRoom(result.room, result.wasSpectator ? `${result.leftName} stopped spectating.` : `${result.leftName} left the room.`);
       broadcastRoom(result.room);
+    }
+    // Also clean up any soft-disconnected ghost slot left behind under a stale
+    // socket id for this same browser -- e.g. they backgrounded the tab on their
+    // old room, then deliberately created/joined a different one before the old
+    // room's grace-period timer fired.
+    if (clientId) {
+      cancelPendingRemoval(clientId);
+      const ghost = removePlayerByClientId(clientId);
+      if (ghost.room && ghost.leftName) {
+        notifyRoom(ghost.room, ghost.wasSpectator ? `${ghost.leftName} stopped spectating.` : `${ghost.leftName} left the room.`);
+        broadcastRoom(ghost.room);
+      }
     }
     Array.from(socket.rooms).forEach(r => { if (r !== socket.id) socket.leave(r); });
   }
@@ -60,18 +88,18 @@ io.on('connection', (socket) => {
     cb && cb(listPublicRooms());
   });
 
-  socket.on('createRoom', ({ name, avatar, visibility }, cb) => {
-    leaveAnyCurrentRoom();
-    const room = createRoom(socket.id, name || 'Player', avatar, visibility);
+  socket.on('createRoom', ({ name, avatar, visibility, clientId }, cb) => {
+    leaveAnyCurrentRoom(clientId);
+    const room = createRoom(socket.id, name || 'Player', avatar, visibility, clientId);
     socket.join(room.code);
     log('CREATE ROOM', room.code, 'host:', socket.id, 'name:', name);
     cb && cb({ ok: true, code: room.code });
     broadcastRoom(room);
   });
 
-  socket.on('joinRoom', ({ code, name, avatar }, cb) => {
-    leaveAnyCurrentRoom();
-    const result = joinRoom((code || '').toUpperCase(), socket.id, name || 'Player', avatar);
+  socket.on('joinRoom', ({ code, name, avatar, clientId }, cb) => {
+    leaveAnyCurrentRoom(clientId);
+    const result = joinRoom((code || '').toUpperCase(), socket.id, name || 'Player', avatar, clientId);
     if (result.error) { log('JOIN FAILED', socket.id, 'code:', code, 'error:', result.error); cb && cb({ ok: false, error: result.error }); return; }
     socket.join(result.room.code);
     log('JOIN OK', socket.id, 'name:', name, 'room:', result.room.code, 'player count now:', result.room.players.size, 'ids:', Array.from(result.room.players.keys()));
@@ -88,6 +116,25 @@ io.on('connection', (socket) => {
     cb && cb({ ok: true, code: result.room.code });
     broadcastRoom(result.room);
     notifyRoom(result.room, `${name || 'Spectator'} started spectating.`);
+  });
+
+  // A returning browser tab (reconnected after a soft disconnect, or just a plain
+  // refresh) uses this to reclaim its existing player slot instead of the app
+  // treating it as a brand new stranger. Matched by clientId, which the client
+  // persists in localStorage and keeps sending across reconnects.
+  socket.on('rejoin', ({ code, clientId, name, avatar }, cb) => {
+    if (!code || !clientId) { cb && cb({ ok: false, error: 'Missing room code or client id.' }); return; }
+    cancelPendingRemoval(clientId);
+    const result = reconnectPlayer(code, clientId, socket.id, name, avatar);
+    if (result.error) {
+      log('REJOIN FAILED', socket.id, 'code:', code, 'clientId:', clientId, 'error:', result.error);
+      cb && cb({ ok: false, error: result.error });
+      return;
+    }
+    socket.join(result.room.code);
+    log('REJOIN OK', socket.id, 'room:', result.room.code, 'clientId:', clientId);
+    cb && cb({ ok: true });
+    broadcastRoom(result.room);
   });
 
   socket.on('updateAvatar', ({ avatar }) => {
@@ -179,7 +226,32 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', (reason) => {
     log('DISCONNECT', socket.id, 'reason:', reason);
-    handleLeave(socket, false);
+    const room = findRoomBySocket(socket.id);
+    if (!room) return;
+    if (isSpectator(room, socket.id)) {
+      // Spectators don't hold any hidden game state, so there's nothing worth
+      // protecting with a grace period -- just drop them like before.
+      handleLeave(socket, false);
+      return;
+    }
+    const result = markPlayerDisconnected(socket.id);
+    if (!result) return;
+    const { room: r, player } = result;
+    log('SOFT DISCONNECT, grace period started', socket.id, 'room:', r.code, 'clientId:', player.clientId);
+    broadcastRoom(r);
+    const timer = setTimeout(() => {
+      pendingRemovals.delete(player.clientId);
+      const stillThere = r.players.get(player.id);
+      if (stillThere && stillThere.disconnected && stillThere.clientId === player.clientId) {
+        log('GRACE PERIOD EXPIRED, removing player', player.id, 'room:', r.code);
+        const leaveResult = leaveRoom(player.id);
+        if (leaveResult.room && leaveResult.leftName) {
+          notifyRoom(leaveResult.room, `${leaveResult.leftName} left the room.`);
+          broadcastRoom(leaveResult.room);
+        }
+      }
+    }, DISCONNECT_GRACE_MS);
+    pendingRemovals.set(player.clientId, timer);
   });
 
   function handleLeave(socket, explicit) {

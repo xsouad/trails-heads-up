@@ -16,7 +16,7 @@ function endGameThreshold(n) {
   return Math.floor(n / 2) + 1;
 }
 
-function createRoom(hostSocketId, hostName, hostAvatar, visibility) {
+function createRoom(hostSocketId, hostName, hostAvatar, visibility, clientId) {
   const code = makeCode();
   const room = {
     code,
@@ -32,18 +32,22 @@ function createRoom(hostSocketId, hostName, hostAvatar, visibility) {
   };
   room.players.set(hostSocketId, {
     id: hostSocketId, name: hostName, avatar: hostAvatar,
-    item: null, revealed: false
+    item: null, revealed: false,
+    clientId: clientId || null, disconnected: false, disconnectedAt: null
   });
   rooms.set(code, room);
   return room;
 }
 
-function joinRoom(code, socketId, name, avatar) {
+function joinRoom(code, socketId, name, avatar, clientId) {
   const room = rooms.get(code);
   if (!room) return { error: 'Room not found.' };
   if (room.phase !== 'lobby') return { error: 'That room has already started. You can join as a spectator instead if it\'s public.' };
   if (room.players.size >= 5) return { error: 'That room is full (5 players max).' };
-  room.players.set(socketId, { id: socketId, name, avatar, item: null, revealed: false });
+  room.players.set(socketId, {
+    id: socketId, name, avatar, item: null, revealed: false,
+    clientId: clientId || null, disconnected: false, disconnectedAt: null
+  });
   return { room };
 }
 
@@ -95,6 +99,69 @@ function leaveRoom(socketId) {
         return { room: null, leftName, wasSpectator: true };
       }
       return { room, leftName, wasSpectator: true };
+    }
+  }
+  return { room: null, leftName: null, wasSpectator: false };
+}
+
+// Finds a player anywhere in the room by their persistent clientId (survives a
+// socket reconnect, unlike socket.id).
+function findPlayerByClientId(room, clientId) {
+  if (!clientId) return null;
+  for (const p of room.players.values()) {
+    if (p.clientId === clientId) return p;
+  }
+  return null;
+}
+
+// Soft-disconnect: mark a player as temporarily gone without removing them from
+// the room. This is what lets a brief mobile backgrounding (locking the phone,
+// answering a text) avoid immediately showing up as "X left the room" to everyone
+// else -- the caller is expected to start a grace-period timer and only actually
+// remove them (via leaveRoom) if they haven't reconnected by the time it expires.
+function markPlayerDisconnected(socketId) {
+  for (const room of rooms.values()) {
+    const player = room.players.get(socketId);
+    if (player) {
+      player.disconnected = true;
+      player.disconnectedAt = Date.now();
+      return { room, player };
+    }
+  }
+  return null;
+}
+
+// Reunites a returning browser tab with its existing player slot, matched by the
+// persistent clientId the browser sends rather than the transient socket id
+// (which is different after every reconnect). Re-keys the player's Map entry to
+// the new socket id and clears the disconnected flag.
+function reconnectPlayer(code, clientId, newSocketId, name, avatar) {
+  const room = rooms.get((code || '').toUpperCase());
+  if (!room) return { error: 'Room not found.' };
+  const player = findPlayerByClientId(room, clientId);
+  if (!player) return { error: 'No matching player in that room.' };
+  const oldSocketId = player.id;
+  if (oldSocketId !== newSocketId) {
+    room.players.delete(oldSocketId);
+    if (room.hostId === oldSocketId) room.hostId = newSocketId;
+    player.id = newSocketId;
+    room.players.set(newSocketId, player);
+  }
+  player.disconnected = false;
+  player.disconnectedAt = null;
+  if (name) player.name = name;
+  if (avatar) player.avatar = avatar;
+  return { room, player };
+}
+
+// Same idea as leaveRoom, but matched by clientId instead of socket id. Used to
+// clean up a stale "still disconnected" ghost entry if the same browser starts
+// fresh in a brand new room before the old room's grace-period timer has fired.
+function removePlayerByClientId(clientId) {
+  if (!clientId) return { room: null, leftName: null, wasSpectator: false };
+  for (const room of rooms.values()) {
+    for (const [sid, p] of room.players.entries()) {
+      if (p.clientId === clientId) return leaveRoom(sid);
     }
   }
   return { room: null, leftName: null, wasSpectator: false };
@@ -207,6 +274,7 @@ function serializeRoomFor(room, recipientId) {
       name: p.name,
       avatar: p.avatar,
       revealed: p.revealed,
+      disconnected: !!p.disconnected,
       item: (spectating || room.phase === 'ended' || p.id !== recipientId) ? p.item : null,
       isSelf: p.id === recipientId
     })),
@@ -224,5 +292,6 @@ function serializeRoomFor(room, recipientId) {
 module.exports = {
   rooms, createRoom, joinRoom, joinAsSpectator, listPublicRooms, leaveRoom,
   findRoomBySocket, isSpectator, startGame, revealPlayer, voteEndGame,
-  requestRematch, respondRematch, restartRoom, serializeRoomFor
+  requestRematch, respondRematch, restartRoom, serializeRoomFor,
+  findPlayerByClientId, markPlayerDisconnected, reconnectPlayer, removePlayerByClientId
 };
