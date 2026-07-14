@@ -13,10 +13,19 @@ h1 { text-align: center; font-size: 1.6rem; margin-bottom: 4px; }
   color: #ffd166;
   font-weight: bold;
   text-decoration: none;
-  margin: -12px 0 20px;
+  margin: -12px auto 20px;
   font-size: 0.9rem;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow: none;
 }
 .how-to-play-link:hover { text-decoration: underline; }
+.how-to-play-link:focus { outline: none; text-decoration: underline; }
 
 .card { background: #1f2b4d; border-radius: 14px; padding: 20px; margin-bottom: 16px; }
 
