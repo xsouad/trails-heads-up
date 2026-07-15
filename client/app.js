@@ -59,7 +59,7 @@ window.addEventListener('pagehide', () => {
   sessionStorage.removeItem(STORAGE_KEYS.room);
 });
 
-const LAYER_COUNTS = { base: 2, face: 2, hat: 3 };
+const LAYER_COUNTS = { base: 2, face: 5, hat: 3 };
 let avatar = loadAvatar() || { base: 1, face: 1, hat: 1 };
 let gameOrder = [];
 let mySocketId = null;
