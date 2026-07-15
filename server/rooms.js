@@ -23,12 +23,19 @@ function createRoom(hostSocketId, hostName, hostAvatar, visibility, clientId) {
     hostId: hostSocketId,
     phase: 'lobby', // lobby | playing | ended
     visibility: visibility === 'public' ? 'public' : 'private',
-    settings: { cutoffTag: 'KAI', categories: ['characters', 'events'] },
+    // No default cutoff/categories on purpose -- the host must explicitly pick
+    // both before the first game in this room can start. This is what closes the
+    // hole where a room could silently start with the full spoiler range (KAI)
+    // just because nobody happened to click a cutoff chip.
+    settings: { cutoffTag: null, categories: [] },
     players: new Map(),   // socketId -> player
     spectators: new Map(), // socketId -> { id, name }
     endGameVotes: new Set(),
     rematchRequested: false,
-    rematchResponses: new Set()
+    rematchResponses: new Set(),
+    // targetPlayerId -> Set of voter socket ids who've approved redrawing that
+    // player's card (see requestRedraw below).
+    redrawVotes: new Map()
   };
   room.players.set(hostSocketId, {
     id: hostSocketId, name: hostName, avatar: hostAvatar,
@@ -80,6 +87,8 @@ function leaveRoom(socketId) {
       room.players.delete(socketId);
       room.endGameVotes.delete(socketId);
       room.rematchResponses.delete(socketId);
+      room.redrawVotes.delete(socketId);
+      room.redrawVotes.forEach(voteSet => voteSet.delete(socketId));
       if (room.players.size === 0 && room.spectators.size === 0) {
         rooms.delete(room.code);
         return { room: null, leftName, wasSpectator: false };
@@ -178,13 +187,33 @@ function isSpectator(room, socketId) {
   return room.spectators.has(socketId);
 }
 
+// True Fisher-Yates shuffle. The old `array.sort(() => Math.random() - 0.5)`
+// trick looks random but is NOT uniformly distributed -- V8's sort algorithm
+// (and most engines') reuses comparisons in ways that bias the result, especially
+// on small arrays, which is exactly why some characters kept turning up far more
+// often than others (or several rounds in a row) while others never appeared.
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function startGame(room) {
+  if (!room.settings.cutoffTag) {
+    return { error: 'Pick a spoiler cutoff before starting.' };
+  }
+  if (!room.settings.categories || room.settings.categories.length === 0) {
+    return { error: 'Pick at least one category (characters or events) before starting.' };
+  }
   const pool = buildPool(room.settings.cutoffTag, room.settings.categories);
   const playerIds = Array.from(room.players.keys());
   if (pool.length < playerIds.length) {
     return { error: `Not enough content for ${playerIds.length} players with the current cutoff/category settings (only ${pool.length} available). Pick a later cutoff or add a category.` };
   }
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  const shuffled = shuffleArray(pool);
   playerIds.forEach((id, i) => {
     const player = room.players.get(id);
     player.item = shuffled[i];
@@ -195,7 +224,59 @@ function startGame(room) {
   room.endGameVotes.clear();
   room.rematchRequested = false;
   room.rematchResponses.clear();
+  room.redrawVotes.clear();
   return { room };
+}
+
+// How long after a round starts players are allowed to request a redraw for
+// someone. Kept in sync with the 30s window shown/greyed-out on the client.
+const REDRAW_WINDOW_MS = 30000;
+
+function itemKey(item) {
+  return item ? `${item.type}:${item.name}` : null;
+}
+
+// Lets any player OTHER than the target flag that the target's card looks like
+// a repeat from an earlier round (the target can't see their own card, so they
+// can't know -- only the people looking at it floating above their head can).
+// Requires every other player in the room (everyone except the target) to
+// approve before the redraw actually happens, and only works within the first
+// REDRAW_WINDOW_MS of the round.
+function requestRedraw(room, targetId, voterId) {
+  if (room.phase !== 'playing') return { error: 'Redraws only work during an active round.' };
+  if (!room.startedAt || Date.now() - room.startedAt > REDRAW_WINDOW_MS) {
+    return { error: 'The redraw window for this round has closed.' };
+  }
+  if (voterId === targetId) return { error: "You can't request a redraw for your own card." };
+  const target = room.players.get(targetId);
+  const voter = room.players.get(voterId);
+  if (!target || !voter) return { error: 'Player not found.' };
+
+  if (!room.redrawVotes.has(targetId)) room.redrawVotes.set(targetId, new Set());
+  const votes = room.redrawVotes.get(targetId);
+  votes.add(voterId);
+
+  const otherIds = Array.from(room.players.keys()).filter(id => id !== targetId);
+  const needed = otherIds.length;
+  const approved = needed > 0 && otherIds.every(id => votes.has(id));
+
+  if (!approved) {
+    return { votes: votes.size, needed, approved: false };
+  }
+
+  // Everyone else agreed -- redraw the target into a new item that's not
+  // currently held by anyone else in the room (including their own old item).
+  const pool = buildPool(room.settings.cutoffTag, room.settings.categories);
+  const heldKeys = new Set(Array.from(room.players.values()).map(p => itemKey(p.item)));
+  const candidates = pool.filter(item => !heldKeys.has(itemKey(item)));
+  room.redrawVotes.delete(targetId);
+  if (candidates.length === 0) {
+    return { error: 'No unique items left to redraw into.', approved: false };
+  }
+  const shuffled = shuffleArray(candidates);
+  target.item = shuffled[0];
+  target.revealed = false;
+  return { votes: 0, needed, approved: true, targetName: target.name };
 }
 
 function revealPlayer(room, socketId) {
@@ -254,6 +335,7 @@ function restartRoom(room) {
   room.rematchRequested = false;
   room.rematchResponses.clear();
   room.endGameVotes.clear();
+  room.redrawVotes.clear();
 }
 
 // Serializes room state for a specific recipient.
@@ -276,8 +358,11 @@ function serializeRoomFor(room, recipientId) {
       revealed: p.revealed,
       disconnected: !!p.disconnected,
       item: (spectating || room.phase === 'ended' || p.id !== recipientId) ? p.item : null,
-      isSelf: p.id === recipientId
+      isSelf: p.id === recipientId,
+      redrawVotes: room.redrawVotes.has(p.id) ? Array.from(room.redrawVotes.get(p.id)) : [],
+      redrawNeeded: Math.max(0, room.players.size - 1)
     })),
+    redrawWindowMs: REDRAW_WINDOW_MS,
     revealedCount: Array.from(room.players.values()).filter(p => p.revealed).length,
     totalPlayers: room.players.size,
     spectatorCount: room.spectators.size,
@@ -293,5 +378,6 @@ module.exports = {
   rooms, createRoom, joinRoom, joinAsSpectator, listPublicRooms, leaveRoom,
   findRoomBySocket, isSpectator, startGame, revealPlayer, voteEndGame,
   requestRematch, respondRematch, restartRoom, serializeRoomFor,
-  findPlayerByClientId, markPlayerDisconnected, reconnectPlayer, removePlayerByClientId
+  findPlayerByClientId, markPlayerDisconnected, reconnectPlayer, removePlayerByClientId,
+  requestRedraw, REDRAW_WINDOW_MS
 };

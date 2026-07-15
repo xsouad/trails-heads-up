@@ -4,6 +4,7 @@ body {
   background: #14213d; color: #fff; min-height: 100vh;
 }
 .screen { display: none; max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+#screen-game, #screen-lobby, #screen-ended, #screen-spectate { padding-bottom: 8px; }
 .screen.active { display: block; }
 h1 { text-align: center; font-size: 1.6rem; margin-bottom: 4px; }
 .subtitle { text-align: center; color: #9fb3d1; margin-bottom: 24px; font-size: 0.9rem; }
@@ -35,6 +36,15 @@ input[type=text] {
 }
 
 .avatar-builder { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.join-row { display: flex; gap: 8px; margin-top: 16px; }
+.join-row input[type=text] {
+  flex: 1; margin-bottom: 0; text-transform: uppercase; text-align: center;
+}
+.join-row button.secondary { width: auto; flex: 0 0 auto; margin-top: 0; padding: 12px 20px; }
+@media (max-width: 420px) {
+  .join-row { flex-direction: column; }
+  .join-row button.secondary { width: 100%; }
+}
 .avatar-stage { position: relative; width: 180px; height: 180px; }
 .avatar-stage img {
   position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -96,7 +106,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 /* ---- Game board ---- */
-.board { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+.board { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 24px; }
 .board-player {
   display: flex; flex-direction: column; align-items: center; width: 150px;
 }
@@ -114,7 +124,22 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 6px; display: block; margin-bottom: 4px;
 }
 .item-bubble.self-hidden { background: #333f5e; color: #7f8db3; font-style: italic; }
-.board-name { margin-top: 6px; font-size: 0.85rem; font-weight: 600; }
+.board-name-wrap { display: flex; flex-direction: column; align-items: center; }
+.board-name { margin-top: 6px; font-size: 0.85rem; font-weight: 600; text-align: center; width: 100%; }
+
+/* ---- redraw request icon ---- */
+.redraw-btn {
+  display: block; margin: 0 auto 6px; width: 30px; height: 30px; border-radius: 50%;
+  border: 2px solid #14213d; background: #fff; color: #14213d;
+  font-size: 0.75rem; font-weight: bold; cursor: pointer; line-height: 1;
+  padding: 0 4px; white-space: nowrap;
+}
+.redraw-btn:hover:not(:disabled) { background: #ffd166; }
+.redraw-btn.voted { background: #ffd166; border-color: #ffb703; }
+.redraw-btn.expired, .redraw-btn:disabled {
+  background: #7f8db3; border-color: #5c6a8c; color: #d9e0ee; cursor: not-allowed; opacity: 0.7;
+}
+.redraw-hint { text-align: center; color: #ffd166; font-size: 0.8rem; margin-bottom: 8px; }
 
 /* mobile compact layout */
 @media (max-width: 480px) {
@@ -124,9 +149,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     background: #1f2b4d; border-radius: 12px; padding: 8px 12px;
   }
   .board-avatar { width: 44px; height: 44px; flex-shrink: 0; }
-  .board-name-wrap { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+  .board-name-wrap {
+    display: flex; flex-direction: column; align-items: center; flex-shrink: 0;
+    order: 1;
+  }
   .board-name { margin-top: 2px; }
+  .redraw-btn { order: 2; margin: 0 0 0 4px; flex-shrink: 0; }
   .item-bubble {
+    order: 3;
     margin-bottom: 0; margin-left: 6px; flex: 1;
     width: auto; height: 56px; max-height: 56px; padding: 4px 8px;
     flex-direction: row; justify-content: flex-start; text-align: left; gap: 8px;
@@ -224,12 +254,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ---- bottom bar ---- */
 .bottom-bar {
-  max-width: 720px; margin: 24px auto 40px; padding: 0 16px;
-  display: flex; flex-direction: column; gap: 10px;
+  max-width: 720px; margin: 4px auto 40px; padding: 0 16px;
+  display: flex; flex-direction: row; gap: 10px;
 }
 .bar-btn {
-  width: 100%; border: none; padding: 14px; border-radius: 12px;
-  font-weight: bold; cursor: pointer; font-size: 1.05rem; text-align: center;
+  flex: 1 1 0; width: 0; border: none; padding: 14px; border-radius: 12px;
+  font-weight: bold; cursor: pointer; font-size: 1rem; text-align: center;
 }
 .bar-leave { background: #eb5757; color: #fff; }
 .bar-endgame { background: #2f80ed; color: #fff; }

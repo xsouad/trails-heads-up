@@ -7,7 +7,8 @@ const {
   createRoom, joinRoom, joinAsSpectator, listPublicRooms, leaveRoom,
   findRoomBySocket, isSpectator, startGame, revealPlayer, voteEndGame,
   requestRematch, respondRematch, serializeRoomFor,
-  markPlayerDisconnected, reconnectPlayer, removePlayerByClientId
+  markPlayerDisconnected, reconnectPlayer, removePlayerByClientId,
+  requestRedraw
 } = require('./rooms');
 
 function log(...args) { console.log(new Date().toISOString(), ...args); }
@@ -172,6 +173,19 @@ io.on('connection', (socket) => {
     const room = findRoomBySocket(socket.id);
     if (!room || room.phase !== 'playing' || isSpectator(room, socket.id)) return;
     revealPlayer(room, socket.id);
+    broadcastRoom(room);
+  });
+
+  socket.on('requestRedraw', ({ targetId }, cb) => {
+    const room = findRoomBySocket(socket.id);
+    if (!room || isSpectator(room, socket.id)) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = requestRedraw(room, targetId, socket.id);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    log('REDRAW VOTE', room.code, 'target:', targetId, 'voter:', socket.id, 'votes:', result.votes, '/', result.needed, 'approved:', result.approved);
+    if (result.approved) {
+      notifyRoom(room, `${result.targetName}'s card was redrawn.`);
+    }
+    cb && cb({ ok: true });
     broadcastRoom(room);
   });
 

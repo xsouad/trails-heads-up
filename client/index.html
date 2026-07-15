@@ -39,18 +39,21 @@
       </div>
       <button class="dice-btn" id="diceBtn">Randomize</button>
     </div>
+
+    <div class="join-row">
+      <input type="text" id="joinCodeInput" placeholder="Room code" maxlength="4">
+      <button class="secondary" id="joinRoomBtn">Join Room</button>
+    </div>
+    <div class="error-msg" id="homeError"></div>
   </div>
 
   <div class="card">
-    <p><strong>Room visibility</strong></p>
+    <p><strong>Host a game</strong></p>
     <div class="category-row" id="visibilityRow">
       <div class="category-chip selected" data-visibility="private">Private</div>
       <div class="category-chip" data-visibility="public">Public</div>
     </div>
     <button class="primary" id="createRoomBtn">Create Room</button>
-    <input type="text" id="joinCodeInput" placeholder="Room code" maxlength="4" style="text-transform:uppercase; margin-top:14px;">
-    <button class="secondary" id="joinRoomBtn">Join Room</button>
-    <div class="error-msg" id="homeError"></div>
   </div>
 
   <div class="card">
@@ -87,6 +90,7 @@
 <div id="screen-game" class="screen">
   <h1>Game On</h1>
   <div class="game-timer" id="gameTimer">00:00</div>
+  <div class="redraw-hint" id="redrawHint"></div>
   <div class="reveal-counter" id="revealCounter"></div>
   <div class="board" id="gameBoard"></div>
   <button class="primary" id="revealBtn">I'm Ready to Reveal</button>

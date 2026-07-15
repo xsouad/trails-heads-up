@@ -93,14 +93,47 @@ already, which those platforms set automatically.
 
 ## Reconnecting and remembering your name/avatar
 
-Your name and avatar customization are now saved in your browser and restored
-automatically the next time you open the app, even after leaving a room and coming
-back. Each browser also gets a persistent identity, so if your connection drops for
-a bit (locking your phone, a spotty signal, backgrounding the app to answer a text),
-you get a 45 second grace window to reconnect and silently reclaim your seat instead
-of the room treating you as a stranger. Other players will briefly see
-"(reconnecting...)" next to your name during that window. If you don't reconnect in
-time, you're removed from the room like normal and everyone is notified you left.
+Your name and avatar customization are saved for the current browser tab and restored
+automatically if you leave a room and come back, without needing to retype anything.
+This is scoped per-tab on purpose: opening several tabs gives each one its own
+independent identity, handy for testing a room solo instead of needing incognito
+windows. Refreshing or closing a tab always starts that tab fresh with a blank name
+and default avatar.
+
+Separately, if your connection drops mid-round for a bit (locking your phone, a spotty
+signal, backgrounding the app to answer a text), you get a 45 second grace window to
+reconnect and silently reclaim your seat instead of the room treating you as a
+stranger. Other players will briefly see "(reconnecting...)" next to your name during
+that window. If you don't reconnect in time, you're removed from the room like normal
+and everyone is notified you left. This reconnect grace period works independently of
+the tab refresh behavior above, since it only fires while the tab itself is still open.
+
+## Redrawing a card
+
+Since a player can never see their own item, only the people who can see it floating
+above their head are in a position to notice it's a repeat from an earlier round. Any
+player except the card holder can tap the small circular redraw icon shown above (or
+next to, on mobile) that player's card to request a redraw. Everyone else in the room
+except the card holder has to approve before it actually changes, shown as a live
+count on the icon like "1/2". Once approved, the holder gets a new item that's not
+currently held by anyone else in the room. This only works in the first 30 seconds of
+a round; after that the icon greys out and a note next to the round timer confirms the
+window has closed.
+
+## Making sure spoilers never slip through
+
+Every room now requires the host to explicitly pick both a spoiler cutoff and at least
+one category before the first game in that room can start. There's no default cutoff
+value anymore. This closes a real bug that came up in testing: a room could silently
+start with the full spoiler range (through the newest game) if the host simply forgot
+to click a cutoff chip, since the app used to quietly fall back to "allow everything."
+Rematches reuse whatever settings were already chosen for that room, so you're only
+asked once per room, not once per round.
+
+Item assignment also now uses a proper Fisher-Yates shuffle instead of the previous
+`array.sort(() => Math.random() - 0.5)` trick, which looks random but is not uniformly
+distributed and was the cause of some characters showing up far more often than others
+(or several rounds in a row) while others never appeared.
 
 ## Known gaps / next steps
 

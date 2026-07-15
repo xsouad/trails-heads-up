@@ -1,17 +1,14 @@
 const socket = io();
 
-// Proactively tell the server we're leaving the moment the page starts to unload
-// (refresh, close tab, navigate away) instead of waiting for the connection to time
-// out. This is what makes "X left the room" show up promptly for a refresh instead of
-// leaving a stale player sitting in the list for tens of seconds.
-window.addEventListener('pagehide', () => {
-  if (socket.connected) socket.emit('leaveRoom');
-});
-
 // ---------- persistence: name, avatar, client identity, current room ----------
-// Lets a player keep their name/avatar and get silently reunited with their
-// room after leaving and coming back (or a mobile browser backgrounding them),
-// instead of showing up as a stranger with a default avatar every time.
+// Uses sessionStorage (not localStorage) on purpose: it's scoped per browser tab
+// instead of shared across every tab on the site. That means opening several
+// tabs (to test a multiplayer room solo) gives each tab its own independent
+// identity automatically, no incognito windows needed. It also means a full
+// page refresh naturally starts fresh -- which we make explicit below by
+// clearing it entirely on pagehide, so "reload the page" always means "start
+// over" while leaving a room via the in-app button (no reload involved) still
+// keeps your name/avatar for next time.
 const STORAGE_KEYS = {
   clientId: 'trailsHeadsUp_clientId',
   name: 'trailsHeadsUp_name',
@@ -20,35 +17,47 @@ const STORAGE_KEYS = {
 };
 
 function getClientId() {
-  let id = localStorage.getItem(STORAGE_KEYS.clientId);
+  let id = sessionStorage.getItem(STORAGE_KEYS.clientId);
   if (!id) {
     id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('c-' + Math.random().toString(36).slice(2) + Date.now());
-    localStorage.setItem(STORAGE_KEYS.clientId, id);
+    sessionStorage.setItem(STORAGE_KEYS.clientId, id);
   }
   return id;
 }
 const clientId = getClientId();
 
-function saveName(name) { localStorage.setItem(STORAGE_KEYS.name, name); }
-function loadName() { return localStorage.getItem(STORAGE_KEYS.name) || ''; }
+function saveName(name) { sessionStorage.setItem(STORAGE_KEYS.name, name); }
+function loadName() { return sessionStorage.getItem(STORAGE_KEYS.name) || ''; }
 
-function saveAvatar(a) { localStorage.setItem(STORAGE_KEYS.avatar, JSON.stringify(a)); }
+function saveAvatar(a) { sessionStorage.setItem(STORAGE_KEYS.avatar, JSON.stringify(a)); }
 function loadAvatar() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEYS.avatar));
+    const parsed = JSON.parse(sessionStorage.getItem(STORAGE_KEYS.avatar));
     if (parsed && parsed.base && parsed.face && parsed.hat) return parsed;
   } catch (e) { /* ignore malformed/missing data */ }
   return null;
 }
 
 function saveCurrentRoom(code, wasSpectator) {
-  localStorage.setItem(STORAGE_KEYS.room, JSON.stringify({ code, wasSpectator: !!wasSpectator }));
+  sessionStorage.setItem(STORAGE_KEYS.room, JSON.stringify({ code, wasSpectator: !!wasSpectator }));
 }
 function loadCurrentRoom() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.room)); }
+  try { return JSON.parse(sessionStorage.getItem(STORAGE_KEYS.room)); }
   catch (e) { return null; }
 }
-function clearCurrentRoom() { localStorage.removeItem(STORAGE_KEYS.room); }
+function clearCurrentRoom() { sessionStorage.removeItem(STORAGE_KEYS.room); }
+
+// Proactively tell the server we're leaving the moment the page starts to unload
+// (refresh, close tab, navigate away) instead of waiting for the connection to
+// time out, AND wipe this tab's saved identity so a reload always starts fresh
+// rather than silently rejoining as the same player.
+window.addEventListener('pagehide', () => {
+  if (socket.connected) socket.emit('leaveRoom');
+  sessionStorage.removeItem(STORAGE_KEYS.clientId);
+  sessionStorage.removeItem(STORAGE_KEYS.name);
+  sessionStorage.removeItem(STORAGE_KEYS.avatar);
+  sessionStorage.removeItem(STORAGE_KEYS.room);
+});
 
 const LAYER_COUNTS = { base: 2, face: 2, hat: 3 };
 let avatar = loadAvatar() || { base: 1, face: 1, hat: 1 };
@@ -57,8 +66,11 @@ let mySocketId = null;
 let currentRoomState = null;
 let isHost = false;
 let selectedVisibility = 'private';
-let selectedCutoff = 'KAI';
-let selectedCategories = new Set(['characters', 'events']);
+// No default cutoff/categories -- the host has to actively pick both for a
+// room's first game, so a spoiler cutoff can never be silently left at "allow
+// everything" just because nobody happened to click a chip.
+let selectedCutoff = null;
+let selectedCategories = new Set();
 let pendingSpectate = null; // room code we're trying to spectate
 let timerInterval = null;
 let timerStartedAt = null;
@@ -87,6 +99,36 @@ function startGameTimer(startedAt, elementId) {
 function stopGameTimer() {
   clearInterval(timerInterval);
   timerInterval = null;
+  stopRedrawHintTimer();
+}
+
+// ---------- redraw window countdown + button greying ----------
+let redrawHintInterval = null;
+function tickRedrawWindow(startedAt, windowMs) {
+  const hint = document.getElementById('redrawHint');
+  const remaining = windowMs - (Date.now() - startedAt);
+  if (remaining > 0) {
+    if (hint) hint.textContent = `You have ${Math.ceil(remaining / 1000)}s to redraw a card`;
+  } else {
+    if (hint) hint.textContent = 'Redraw window closed';
+    document.querySelectorAll('.redraw-btn').forEach(btn => {
+      btn.disabled = true;
+      btn.classList.add('expired');
+    });
+    clearInterval(redrawHintInterval);
+    redrawHintInterval = null;
+  }
+}
+function startRedrawHintTimer(startedAt, windowMs) {
+  clearInterval(redrawHintInterval);
+  tickRedrawWindow(startedAt, windowMs);
+  redrawHintInterval = setInterval(() => tickRedrawWindow(startedAt, windowMs), 1000);
+}
+function stopRedrawHintTimer() {
+  clearInterval(redrawHintInterval);
+  redrawHintInterval = null;
+  const hint = document.getElementById('redrawHint');
+  if (hint) hint.textContent = '';
 }
 
 // ---------- screen switching ----------
@@ -434,11 +476,38 @@ function openZoom(item) {
 }
 
 // ---------- board rendering (shared by playing / ended / spectating) ----------
-function renderBoard(container, players) {
+// `opts.allowRedraw` turns on the small redraw-request icon for everyone's card
+// except your own (only meaningful during an active round -- see Section 2 of
+// the redraw feature: only players OTHER than the card holder can tell it's a
+// repeat, since the holder can't see their own item).
+function renderBoard(container, players, opts) {
+  opts = opts || {};
   container.innerHTML = '';
   players.forEach(p => {
     const cell = document.createElement('div');
     cell.className = 'board-player';
+
+    if (opts.allowRedraw && !p.isSelf) {
+      const votes = p.redrawVotes || [];
+      const needed = p.redrawNeeded || 0;
+      const iVoted = votes.includes(mySocketId);
+      const windowMs = opts.redrawWindowMs || 30000;
+      const expired = opts.startedAt ? (Date.now() - opts.startedAt > windowMs) : false;
+      const redrawBtn = document.createElement('button');
+      redrawBtn.type = 'button';
+      redrawBtn.className = 'redraw-btn' + (expired ? ' expired' : '') + (iVoted ? ' voted' : '');
+      redrawBtn.textContent = votes.length > 0 ? `↻ ${votes.length}/${needed}` : '↻';
+      redrawBtn.title = expired
+        ? 'The redraw window for this round has closed.'
+        : (iVoted ? 'Waiting on everyone else to approve…' : "Think they've already had this one? Ask for a redraw.");
+      redrawBtn.disabled = expired || iVoted;
+      redrawBtn.addEventListener('click', () => {
+        socket.emit('requestRedraw', { targetId: p.id }, (res) => {
+          if (res && !res.ok) showNotice(res.error);
+        });
+      });
+      cell.appendChild(redrawBtn);
+    }
 
     const bubble = document.createElement('div');
     if (p.item) {
@@ -545,7 +614,7 @@ socket.on('roomState', (state) => {
 
   if (state.isSpectator) {
     showScreen('screen-spectate');
-    renderBoard(document.getElementById('spectateBoard'), state.players);
+    renderBoard(document.getElementById('spectateBoard'), state.players, {});
     document.getElementById('spectatorCountSpectate').textContent = `${state.spectatorCount} spectator(s) watching`;
     return;
   }
@@ -558,7 +627,10 @@ socket.on('roomState', (state) => {
   } else if (state.phase === 'playing') {
     showScreen('screen-game');
     if (state.startedAt) startGameTimer(state.startedAt, 'gameTimer');
-    renderBoard(document.getElementById('gameBoard'), state.players);
+    if (state.startedAt) startRedrawHintTimer(state.startedAt, state.redrawWindowMs || 30000);
+    renderBoard(document.getElementById('gameBoard'), state.players, {
+      allowRedraw: true, startedAt: state.startedAt, redrawWindowMs: state.redrawWindowMs
+    });
     document.getElementById('revealCounter').textContent = `${state.revealedCount}/${state.totalPlayers} ready to reveal`;
     document.getElementById('spectatorCountGame').textContent = state.spectatorCount ? `${state.spectatorCount} spectator(s) watching` : '';
     const me = state.players.find(p => p.id === mySocketId);
@@ -577,7 +649,7 @@ socket.on('roomState', (state) => {
       const el = document.getElementById('endedTimer');
       if (el) el.textContent = 'Round took ' + formatElapsed(Date.now() - state.startedAt);
     }
-    renderBoard(document.getElementById('endedBoard'), state.players);
+    renderBoard(document.getElementById('endedBoard'), state.players, {});
 
     const askBtn = document.getElementById('askRematchBtn');
     const waitingMsg = document.getElementById('rematchWaitingHost');
