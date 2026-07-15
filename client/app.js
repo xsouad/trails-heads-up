@@ -59,7 +59,7 @@ window.addEventListener('pagehide', () => {
   sessionStorage.removeItem(STORAGE_KEYS.room);
 });
 
-const LAYER_COUNTS = { base: 6, face: 9, hat: 3 };
+const LAYER_COUNTS = { base: 6, face: 2, hat: 3 };
 let avatar = loadAvatar() || { base: 1, face: 1, hat: 1 };
 let gameOrder = [];
 let mySocketId = null;
@@ -166,8 +166,17 @@ socket.on('roomClosed', () => {
 });
 
 // ---------- avatar builder ----------
+// If a prank swap has happened, the avatar object gets a `prank: true` flag
+// (see the roomState handler / server) and renders as a single fixed image
+// instead of the normal layered base/face/hat stack.
 function renderAvatarStage(container, avatarObj) {
   container.innerHTML = '';
+  if (avatarObj && avatarObj.prank) {
+    const img = document.createElement('img');
+    img.src = 'assets/avatar/prank.png';
+    container.appendChild(img);
+    return;
+  }
   ['base', 'face', 'hat'].forEach(layer => {
     const img = document.createElement('img');
     img.src = `assets/avatar/${layer}/${layer}_${avatarObj[layer]}.png`;
@@ -177,11 +186,21 @@ function renderAvatarStage(container, avatarObj) {
 function refreshAvatarStage() {
   renderAvatarStage(document.getElementById('avatarStage'), avatar);
 }
+
+// Secret 6th face option, unlocked for this tab only by typing SPINSTELLE into
+// the hidden input on this screen. Nobody who hasn't unlocked it can reach past
+// face_2 with the normal arrows.
+let cheatFaceUnlocked = false;
+function effectiveLayerCount(layer) {
+  if (layer === 'face' && cheatFaceUnlocked) return 6;
+  return LAYER_COUNTS[layer];
+}
+
 document.querySelectorAll('.arrow-row button').forEach(btn => {
   btn.addEventListener('click', () => {
     const layer = btn.dataset.layer;
     const dir = parseInt(btn.dataset.dir, 10);
-    const count = LAYER_COUNTS[layer];
+    const count = effectiveLayerCount(layer);
     avatar[layer] = ((avatar[layer] - 1 + dir + count) % count) + 1;
     saveAvatar(avatar);
     refreshAvatarStage();
@@ -189,14 +208,36 @@ document.querySelectorAll('.arrow-row button').forEach(btn => {
 });
 document.getElementById('diceBtn').addEventListener('click', () => {
   avatar = {
-    base: 1 + Math.floor(Math.random() * LAYER_COUNTS.base),
-    face: 1 + Math.floor(Math.random() * LAYER_COUNTS.face),
-    hat: 1 + Math.floor(Math.random() * LAYER_COUNTS.hat)
+    base: 1 + Math.floor(Math.random() * effectiveLayerCount('base')),
+    face: 1 + Math.floor(Math.random() * effectiveLayerCount('face')),
+    hat: 1 + Math.floor(Math.random() * effectiveLayerCount('hat'))
   };
   saveAvatar(avatar);
   refreshAvatarStage();
 });
 refreshAvatarStage();
+
+// ---------- hidden cheat inputs ----------
+// Each input is visually invisible (see .cheat-input in style.css) and only
+// listens for Enter. Wrong phrases and stray keystrokes are silently ignored
+// and the field clears itself either way, so there's never any visible trace.
+function wireCheatInput(inputId, secretPhrase, onMatch) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const val = el.value.trim().toUpperCase();
+    el.value = '';
+    el.blur();
+    if (val === secretPhrase) onMatch();
+  });
+}
+wireCheatInput('cheatInputHome', 'SPINSTELLE', () => {
+  cheatFaceUnlocked = true;
+});
+wireCheatInput('cheatInputGame', 'VANISVAN', () => {
+  socket.emit('cheatPrank', {});
+});
 
 // Restore the player's last-used name so they don't have to retype it every
 // time they come back.
