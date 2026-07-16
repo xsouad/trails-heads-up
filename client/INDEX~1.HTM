@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trails Heads Up</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="noticeBar"></div>
+
+<!-- HOME: name + avatar customization + create/join -->
+<div id="screen-home" class="screen active">
+  <h1>Trails Heads Up</h1>
+  <p class="subtitle">Guess what's above your head before your friends give it away.</p>
+  <button type="button" id="howToPlayBtn" class="how-to-play-link">How to Play</button>
+
+  <div class="card">
+    <input type="text" id="nameInput" placeholder="Your name" maxlength="20">
+
+    <div class="avatar-builder">
+      <div class="avatar-stage" id="avatarStage"></div>
+
+      <div class="arrow-row">
+        <button data-layer="hat" data-dir="-1">&lt;</button>
+        <span class="layer-label">Accessories</span>
+        <button data-layer="hat" data-dir="1">&gt;</button>
+      </div>
+      <div class="arrow-row">
+        <button data-layer="face" data-dir="-1">&lt;</button>
+        <span class="layer-label">Face</span>
+        <button data-layer="face" data-dir="1">&gt;</button>
+      </div>
+      <div class="arrow-row">
+        <button data-layer="base" data-dir="-1">&lt;</button>
+        <span class="layer-label">Color</span>
+        <button data-layer="base" data-dir="1">&gt;</button>
+      </div>
+      <button class="dice-btn" id="diceBtn">Randomize</button>
+    </div>
+
+    <div class="join-row">
+      <input type="text" id="joinCodeInput" placeholder="Room code" maxlength="4">
+      <button class="secondary" id="joinRoomBtn">Join Room</button>
+    </div>
+    <div class="error-msg" id="homeError"></div>
+  </div>
+
+  <div class="card">
+    <p><strong>Host a game</strong></p>
+    <div class="category-row" id="visibilityRow">
+      <div class="category-chip selected" data-visibility="private">Private</div>
+      <div class="category-chip" data-visibility="public">Public</div>
+    </div>
+    <button class="primary" id="createRoomBtn">Create Room</button>
+  </div>
+
+  <div class="card">
+    <p><strong>Public games</strong></p>
+    <button class="secondary" id="refreshPublicBtn" style="margin-top:0;">Refresh List</button>
+    <div id="publicRoomList" class="public-room-list"></div>
+  </div>
+
+  <input type="text" id="cheatInputHome" class="cheat-input" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false">
+</div>
+
+<!-- LOBBY -->
+<div id="screen-lobby" class="screen">
+  <h1>Lobby</h1>
+  <div class="room-code-display" id="lobbyCode">----</div>
+
+  <div class="card" id="hostSettings" style="display:none;">
+    <p><strong>Spoiler cutoff:</strong> content up to and including this game will be used.</p>
+    <div class="tag-row" id="cutoffRow"></div>
+    <p><strong>Categories</strong></p>
+    <div class="category-row" id="categoryRow"></div>
+    <button class="primary" id="startGameBtn">Start Game</button>
+    <div class="error-msg" id="lobbyError"></div>
+  </div>
+  <div class="card" id="guestWaiting" style="display:none;">
+    <p style="text-align:center;">Waiting for the host to start the game&hellip;</p>
+  </div>
+
+  <div class="card">
+    <p><strong>Players (<span id="playerCount">0</span>/5)</strong></p>
+    <div class="player-list" id="lobbyPlayerList"></div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="screen-game" class="screen">
+  <h1>Game On</h1>
+  <div class="game-timer" id="gameTimer">00:00</div>
+  <div class="redraw-hint" id="redrawHint"></div>
+  <div class="reveal-counter" id="revealCounter"></div>
+  <div class="board" id="gameBoard"></div>
+  <button class="primary" id="revealBtn">I'm Ready to Reveal</button>
+  <div class="spectator-count" id="spectatorCountGame"></div>
+</div>
+
+<!-- SPECTATING -->
+<div id="screen-spectate" class="screen">
+  <h1>Spectating</h1>
+  <p class="subtitle">You can see everyone's item. Just watch and enjoy.</p>
+  <div class="board" id="spectateBoard"></div>
+  <div class="spectator-count" id="spectatorCountSpectate"></div>
+</div>
+
+<!-- ENDED -->
+<div id="screen-ended" class="screen">
+  <h1>Round Over!</h1>
+  <div class="game-timer" id="endedTimer"></div>
+  <p class="subtitle">Here's what everyone had:</p>
+  <div class="board" id="endedBoard"></div>
+
+  <div class="card" id="rematchIdleCard">
+    <button class="secondary" id="askRematchBtn" style="display:none;">Ask for Rematch</button>
+    <p id="rematchWaitingHost" style="display:none; text-align:center;">Waiting for the host to decide what's next&hellip;</p>
+  </div>
+
+  <div class="card" id="rematchVoteCard" style="display:none;">
+    <p style="text-align:center;"><strong>Host is asking for a rematch!</strong></p>
+    <div class="player-list" id="rematchAvatarList"></div>
+    <button class="primary" id="acceptRematchBtn">Yes, I'm in!</button>
+  </div>
+</div>
+
+<div class="zoom-overlay" id="zoomOverlay">
+  <div class="zoom-card" id="zoomCard"></div>
+</div>
+
+<div class="zoom-overlay" id="howToPlayOverlay">
+  <div class="how-to-play-card">
+    <button class="close-btn how-to-play-close" id="howToPlayCloseBtn">Close</button>
+    <div class="how-to-play-viewer">
+      <button class="how-to-play-arrow how-to-play-prev" id="howToPlayPrevBtn" aria-label="Previous page">&lt;</button>
+      <img id="howToPlayImg" src="" alt="How to Play">
+      <button class="how-to-play-arrow how-to-play-next" id="howToPlayNextBtn" aria-label="Next page">&gt;</button>
+    </div>
+    <div class="how-to-play-pagecount" id="howToPlayPageCount"></div>
+  </div>
+</div>
+
+<div class="zoom-overlay" id="leaveConfirmOverlay">
+  <div class="zoom-card">
+    <p>If you leave the room you won't be able to return until the game is over, are you sure?</p>
+    <button class="danger" id="confirmLeaveBtn" style="width:100%; border:none; padding:12px; border-radius:20px; margin-top:10px; cursor:pointer;">Yes, leave</button>
+    <button class="close-btn" id="cancelLeaveBtn" style="width:100%; margin-top:8px;">Cancel</button>
+  </div>
+</div>
+
+<!-- persistent bottom bar -->
+<div class="bottom-bar" id="bottomBar" style="display:none;">
+  <button class="bar-btn bar-leave" id="leaveRoomBtn">Leave Room</button>
+  <button class="bar-btn bar-endgame" id="endGameBtn">End Game</button>
+</div>
+
+<!-- VANISVAN cheat input -- only works while a round is playing (server-side
+     check), placed below everything else so it can never overlap any button
+     regardless of how much content is above it. -->
+<div class="cheat-input-game-wrap">
+  <input type="text" id="cheatInputGame" class="cheat-input" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false">
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -65,6 +65,13 @@ window.addEventListener('pagehide', () => {
 // (shifted down by one). If you add a real 4th accessory later, add it as
 // hat_4.png and bump this count to 5.
 const LAYER_COUNTS = { base: 6, face: 9, hat: 4 };
+
+// SPINSTELLE unlocks this many extra HIDDEN accessories beyond the normal hat
+// count above, for whenever you've made bonus/secret accessory sprites. They
+// continue the same hat_N.png numbering right after your normal ones -- with
+// hat: 4 normal (3 real + blank), the first secret one is hat_4.png, the next
+// is hat_5.png, and so on. Bump this number as you add more secret sprites.
+const BONUS_HAT_COUNT = 2;
 let avatar = loadAvatar() || { base: 1, face: 1, hat: 1 };
 let gameOrder = [];
 let mySocketId = null;
@@ -201,12 +208,12 @@ function refreshAvatarStage() {
   renderAvatarStage(document.getElementById('avatarStage'), avatar);
 }
 
-// Secret 6th face option, unlocked for this tab only by typing SPINSTELLE into
-// the hidden input on this screen. Nobody who hasn't unlocked it can reach past
-// face_2 with the normal arrows.
-let cheatFaceUnlocked = false;
+// Hidden accessories, unlocked for this tab only by typing SPINSTELLE into the
+// hidden input on the home screen. Nobody who hasn't unlocked it can reach past
+// the normal accessory set with the arrows or the dice.
+let cheatAccessoriesUnlocked = false;
 function effectiveLayerCount(layer) {
-  if (layer === 'face' && cheatFaceUnlocked) return 6;
+  if (layer === 'hat' && cheatAccessoriesUnlocked) return LAYER_COUNTS.hat + BONUS_HAT_COUNT;
   return LAYER_COUNTS[layer];
 }
 
@@ -247,7 +254,7 @@ function wireCheatInput(inputId, secretPhrase, onMatch) {
   });
 }
 wireCheatInput('cheatInputHome', 'SPINSTELLE', () => {
-  cheatFaceUnlocked = true;
+  cheatAccessoriesUnlocked = true;
   showNotice('Cheat code inputted correctly!');
 });
 wireCheatInput('cheatInputGame', 'VANISVAN', () => {
