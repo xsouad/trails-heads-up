@@ -72,7 +72,7 @@ const LAYER_COUNTS = { base: 6, face: 9, hat: 4 };
 // hat: 4 normal (3 real + blank), the first secret one is hat_4.png, the next
 // is hat_5.png, and so on. Bump this number as you add more secret sprites.
 const BONUS_HAT_COUNT = 2;
-let avatar = loadAvatar() || { base: 1, face: 1, hat: 1 };
+let avatar = loadAvatar() || { base: 1, face: 1, hat: 3 };
 let gameOrder = [];
 let mySocketId = null;
 let currentRoomState = null;
