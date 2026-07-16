@@ -64,7 +64,7 @@ window.addEventListener('pagehide', () => {
 // values 1-3 are your actual accessory sprites and 4 just skips rendering
 // that layer. If you add a real 4th accessory later, add it as hat_4.png and
 // bump this count to 5 so 5 becomes the new "none" slot.
-const LAYER_COUNTS = { base: 6, face: 2, hat: 4 };
+const LAYER_COUNTS = { base: 6, face: 9, hat: 4 };
 let avatar = loadAvatar() || { base: 1, face: 1, hat: 1 };
 let gameOrder = [];
 let mySocketId = null;
