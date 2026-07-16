@@ -71,7 +71,7 @@ const LAYER_COUNTS = { base: 6, face: 9, hat: 4 };
 // continue the same hat_N.png numbering right after your normal ones -- with
 // hat: 4 normal (3 real + blank), the first secret one is hat_4.png, the next
 // is hat_5.png, and so on. Bump this number as you add more secret sprites.
-const BONUS_HAT_COUNT = 3;
+const BONUS_HAT_COUNT = 2;
 let avatar = loadAvatar() || { base: 1, face: 1, hat: 1 };
 let gameOrder = [];
 let mySocketId = null;
@@ -166,6 +166,7 @@ socket.on('kicked', () => {
   stopGameTimer();
   showScreen('screen-home');
   document.getElementById('bottomBar').style.display = 'none';
+  { const w = document.querySelector('.cheat-input-game-wrap'); if (w) w.classList.remove('visible'); }
   refreshPublicRooms();
 });
 socket.on('roomClosed', () => {
@@ -175,6 +176,7 @@ socket.on('roomClosed', () => {
   stopGameTimer();
   showScreen('screen-home');
   document.getElementById('bottomBar').style.display = 'none';
+  { const w = document.querySelector('.cheat-input-game-wrap'); if (w) w.classList.remove('visible'); }
 });
 
 // ---------- avatar builder ----------
@@ -492,6 +494,7 @@ document.getElementById('confirmLeaveBtn').addEventListener('click', () => {
   clearCurrentRoom();
   stopGameTimer();
   document.getElementById('bottomBar').style.display = 'none';
+  { const w = document.querySelector('.cheat-input-game-wrap'); if (w) w.classList.remove('visible'); }
   showScreen('screen-home');
   refreshPublicRooms();
 });
@@ -690,6 +693,13 @@ socket.on('roomState', (state) => {
 
   const bottomBar = document.getElementById('bottomBar');
   bottomBar.style.display = 'flex';
+  // The VANISVAN input only ever matters while a round is actually playing
+  // (and never for spectators), so it's hidden the rest of the time instead of
+  // sitting around on every screen.
+  const cheatGameWrap = document.querySelector('.cheat-input-game-wrap');
+  if (cheatGameWrap) {
+    cheatGameWrap.classList.toggle('visible', !state.isSpectator && state.phase === 'playing');
+  }
   const endGameBtn = document.getElementById('endGameBtn');
   endGameBtn.textContent = state.youVotedEndGame
     ? `Cancel End-Game Vote (${state.endGameVotes}/${state.endGameNeeded})`
