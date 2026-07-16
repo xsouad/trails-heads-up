@@ -64,7 +64,7 @@ window.addEventListener('pagehide', () => {
 // file. Values 2-4 map to your actual accessory sprites hat_1.png-hat_3.png
 // (shifted down by one). If you add a real 4th accessory later, add it as
 // hat_4.png and bump this count to 5.
-const LAYER_COUNTS = { base: 6, face: 2, hat: 4 };
+const LAYER_COUNTS = { base: 6, face: 9, hat: 4 };
 let avatar = loadAvatar() || { base: 1, face: 1, hat: 1 };
 let gameOrder = [];
 let mySocketId = null;
