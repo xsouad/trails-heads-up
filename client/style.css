@@ -1,0 +1,300 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0; font-family: 'Segoe UI', Arial, sans-serif;
+  background: #14213d; color: #fff; min-height: 100vh;
+}
+.screen { display: none; max-width: 720px; margin: 0 auto; padding: 24px 16px; position: relative; }
+#screen-game, #screen-lobby, #screen-ended, #screen-spectate { padding-bottom: 8px; }
+.screen.active { display: block; }
+h1 { text-align: center; font-size: 1.6rem; margin-bottom: 4px; }
+.subtitle { text-align: center; color: #9fb3d1; margin-bottom: 24px; font-size: 0.9rem; }
+.how-to-play-link {
+  display: block;
+  text-align: center;
+  color: #ffd166;
+  font-weight: bold;
+  text-decoration: none;
+  margin: -12px auto 20px;
+  font-size: 0.9rem;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow: none;
+}
+.how-to-play-link:hover { text-decoration: underline; }
+.how-to-play-link:focus { outline: none; text-decoration: underline; }
+
+/* Intentionally invisible -- matches the page background on purpose so it can't
+   be spotted by looking, only found by someone who already knows exactly where
+   to click. Click into this exact spot and type the phrase, then press Enter. */
+.cheat-input {
+  position: absolute; bottom: 6px; right: 10px;
+  width: 26px; height: 14px;
+  background: transparent; border: none; outline: none;
+  color: transparent; caret-color: transparent;
+  font-size: 10px; padding: 0; margin: 0;
+  z-index: 5;
+}
+
+.card { background: #1f2b4d; border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+
+input[type=text] {
+  width: 100%; padding: 12px; border-radius: 10px; border: none;
+  font-size: 1rem; margin-bottom: 12px;
+}
+
+.avatar-builder { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.join-row { display: flex; gap: 8px; margin-top: 16px; }
+.join-row input[type=text] {
+  flex: 1; margin-bottom: 0; text-transform: uppercase; text-align: center;
+}
+.join-row button.secondary { width: auto; flex: 0 0 auto; margin-top: 0; padding: 12px 20px; }
+@media (max-width: 420px) {
+  .join-row { flex-direction: column; }
+  .join-row button.secondary { width: 100%; }
+}
+.avatar-stage { position: relative; width: 180px; height: 180px; }
+.avatar-stage img {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  image-rendering: pixelated;
+}
+.arrow-row { display: flex; align-items: center; gap: 16px; margin: 4px 0; }
+.arrow-row button {
+  width: 34px; height: 34px; border-radius: 50%; border: none;
+  background: #3a5a99; color: #fff; font-size: 1.1rem; cursor: pointer;
+}
+.arrow-row button:hover { background: #4d72c2; }
+.layer-label { min-width: 110px; text-align: center; font-size: 0.85rem; color: #b9c8e8; }
+
+.dice-btn {
+  margin-top: 10px; background: #ffb703; border: none; color: #14213d;
+  font-weight: bold; padding: 8px 16px; border-radius: 20px; cursor: pointer;
+}
+
+button.primary {
+  width: 100%; padding: 14px; border-radius: 12px; border: none;
+  font-size: 1.05rem; font-weight: bold; cursor: pointer; margin-top: 8px;
+  background: #4caf50; color: #fff;
+}
+button.secondary {
+  width: 100%; padding: 14px; border-radius: 12px; border: none;
+  font-size: 1.05rem; font-weight: bold; cursor: pointer; margin-top: 8px;
+  background: #2f80ed; color: #fff;
+}
+button.danger { background: #eb5757; color: #fff; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.tag-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.tag-chip {
+  padding: 6px 12px; border-radius: 20px; background: #2b3a63;
+  border: 2px solid transparent; cursor: pointer; font-size: 0.85rem; font-weight: bold;
+}
+.tag-chip.selected { border-color: #ffb703; background: #3a5a99; }
+
+.category-row { display: flex; gap: 10px; margin-bottom: 12px; }
+.category-chip {
+  flex: 1; text-align: center; padding: 10px; border-radius: 10px; background: #2b3a63;
+  border: 2px solid transparent; cursor: pointer; font-size: 0.9rem;
+}
+.category-chip.selected { border-color: #4caf50; background: #33512f; }
+.category-chip.disabled { opacity: 0.4; cursor: not-allowed; }
+
+.error-msg { color: #ff8080; font-size: 0.85rem; margin: 6px 0; min-height: 1em; }
+
+.player-list { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.player-chip { text-align: center; width: 76px; }
+.player-chip .mini-avatar { width: 60px; height: 60px; position: relative; margin: 0 auto; }
+.player-chip .mini-avatar img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.player-chip .name { font-size: 0.75rem; margin-top: 4px; word-break: break-word; }
+.host-badge { color: #ffb703; font-size: 0.7rem; }
+
+.room-code-display {
+  text-align: center; font-size: 2rem; letter-spacing: 6px; font-weight: bold;
+  background: #0d1730; border-radius: 10px; padding: 12px; margin-bottom: 16px;
+}
+
+/* ---- Game board ---- */
+.board { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 24px; }
+.board-player {
+  display: flex; flex-direction: column; align-items: center; width: 150px;
+}
+.board-avatar { width: 90px; height: 90px; position: relative; }
+.board-avatar img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.item-bubble {
+  cursor: pointer; background: #fff; color: #14213d; border-radius: 10px;
+  padding: 6px 8px; margin-bottom: 6px; width: 140px; height: 170px; text-align: center;
+  font-size: 0.75rem; font-weight: 600; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.item-bubble img {
+  max-width: 100%; max-height: 115px; width: auto; height: auto; object-fit: contain;
+  border-radius: 6px; display: block; margin-bottom: 4px;
+}
+.item-bubble.self-hidden { background: #333f5e; color: #7f8db3; font-style: italic; }
+.board-name-wrap { display: flex; flex-direction: column; align-items: center; }
+.board-name { margin-top: 6px; font-size: 0.85rem; font-weight: 600; text-align: center; width: 100%; }
+
+/* ---- redraw request icon ---- */
+.redraw-btn {
+  display: block; margin: 0 auto 6px; width: 30px; height: 30px; border-radius: 50%;
+  border: 2px solid #14213d; background: #fff; color: #14213d;
+  font-size: 0.75rem; font-weight: bold; cursor: pointer; line-height: 1;
+  padding: 0 4px; white-space: nowrap;
+}
+.redraw-btn:hover:not(:disabled) { background: #ffd166; }
+.redraw-btn.voted { background: #ffd166; border-color: #ffb703; }
+.redraw-btn.expired, .redraw-btn:disabled {
+  background: #7f8db3; border-color: #5c6a8c; color: #d9e0ee; cursor: not-allowed; opacity: 0.7;
+}
+.redraw-hint { text-align: center; color: #ffd166; font-size: 0.8rem; margin-bottom: 8px; }
+.redraw-btn-spacer { visibility: hidden; pointer-events: none; }
+
+/* mobile compact layout */
+@media (max-width: 480px) {
+  .board { flex-direction: column; align-items: stretch; }
+  .board-player {
+    flex-direction: row; width: auto; align-items: center; gap: 10px;
+    background: #1f2b4d; border-radius: 12px; padding: 8px 12px;
+  }
+  .board-avatar { width: 44px; height: 44px; flex-shrink: 0; }
+  .board-name-wrap {
+    display: flex; flex-direction: column; align-items: center; flex-shrink: 0;
+    order: 1;
+  }
+  .board-name { margin-top: 2px; }
+  .redraw-btn { order: 2; margin: 0 0 0 4px; flex-shrink: 0; }
+  .item-bubble {
+    order: 3;
+    /* min-width: 0 is what lets a flex child actually shrink below the intrinsic
+       width of its unbreakable content -- without it, long captions were forcing
+       this box wider than its siblings, which is why the box width used to jump
+       around between cards depending on how long the text happened to be. */
+    margin-bottom: 0; margin-left: 6px; flex: 1 1 0; min-width: 0;
+    width: auto; height: auto; min-height: 56px; max-height: none; padding: 6px 8px;
+    flex-direction: row; justify-content: flex-start; align-items: flex-start;
+    text-align: left; gap: 8px;
+  }
+  .item-bubble img {
+    max-width: 44px; max-height: 44px; width: 44px; height: 44px;
+    object-fit: cover; margin-bottom: 0; flex-shrink: 0;
+  }
+  .item-card-content {
+    display: flex; align-items: flex-start; gap: 8px; width: 100%; min-width: 0;
+  }
+  .item-card-content > div {
+    white-space: normal; overflow-wrap: break-word; word-break: break-word;
+    min-width: 0;
+  }
+}
+
+.game-timer {
+  text-align: center; font-size: 1.3rem; font-weight: bold; letter-spacing: 1px;
+  font-family: 'Courier New', monospace; color: #ffd166; margin-bottom: 8px;
+}
+
+.reveal-counter { text-align: center; font-size: 1.1rem; margin: 12px 0; }
+
+.zoom-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+  display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px;
+}
+.zoom-overlay.active { display: flex; }
+.zoom-card {
+  background: #fff; color: #14213d; border-radius: 14px; padding: 20px;
+  max-width: 340px; text-align: center;
+}
+.zoom-card img { width: 100%; border-radius: 10px; margin-bottom: 10px; }
+.zoom-card .close-btn {
+  margin-top: 14px; background: #eb5757; color: #fff; border: none;
+  padding: 8px 16px; border-radius: 20px; cursor: pointer;
+}
+
+/* ---- how to play page-flip viewer ---- */
+.how-to-play-card {
+  background: #14213d; color: #fff; border-radius: 14px; padding: 16px;
+  max-width: 480px; width: 100%; text-align: center; position: relative;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.how-to-play-close {
+  position: absolute; top: 10px; right: 10px; margin-top: 0;
+  background: #eb5757; color: #fff; border: none;
+  padding: 6px 14px; border-radius: 20px; cursor: pointer; z-index: 1;
+}
+.how-to-play-viewer {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 36px;
+}
+.how-to-play-viewer img {
+  max-width: 100%; max-height: 65vh; border-radius: 10px; object-fit: contain;
+  background: #fff;
+}
+.how-to-play-arrow {
+  flex-shrink: 0; background: rgba(255,255,255,0.1); color: #fff;
+  border: 1px solid rgba(255,255,255,0.3); border-radius: 50%;
+  width: 40px; height: 40px; font-size: 1.2rem; cursor: pointer;
+}
+.how-to-play-arrow:disabled { opacity: 0.3; cursor: default; }
+.how-to-play-arrow:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
+.how-to-play-pagecount { margin-top: 10px; color: #9fb3d1; font-size: 0.85rem; }
+
+@media (max-width: 480px) {
+  .how-to-play-viewer { gap: 4px; }
+  .how-to-play-arrow { width: 32px; height: 32px; font-size: 1rem; }
+}
+
+/* ---- notices/toasts ---- */
+#noticeBar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 60;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px;
+  pointer-events: none;
+}
+.notice-toast {
+  background: #0d1730; color: #ffd166; padding: 8px 16px; border-radius: 20px;
+  font-size: 0.85rem; box-shadow: 0 2px 8px rgba(0,0,0,0.4); max-width: 90%;
+  text-align: center;
+}
+
+/* ---- public room browser ---- */
+.public-room-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.public-room-row {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #24325c; border-radius: 10px; padding: 8px 12px; font-size: 0.85rem;
+}
+.public-room-row button {
+  background: #ffb703; border: none; color: #14213d; font-weight: bold;
+  padding: 6px 12px; border-radius: 16px; cursor: pointer; font-size: 0.8rem;
+}
+.public-room-empty { text-align: center; color: #7f8db3; font-size: 0.85rem; padding: 6px; }
+
+/* ---- bottom bar ---- */
+.bottom-bar {
+  max-width: 720px; margin: 4px auto 0; padding: 0 16px calc(40px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: row; gap: 10px;
+}
+.bar-btn {
+  flex: 1 1 0; width: 0; border: none; padding: 14px; border-radius: 12px;
+  font-weight: bold; cursor: pointer; font-size: 1rem; text-align: center;
+}
+.bar-leave { background: #eb5757; color: #fff; }
+.bar-endgame { background: #2f80ed; color: #fff; }
+
+.spectator-count { text-align: center; color: #9fb3d1; font-size: 0.85rem; margin-top: 10px; }
+
+/* ---- rematch checkmarks ---- */
+.player-chip.rematch-yes .mini-avatar { box-shadow: 0 0 0 3px #4caf50; border-radius: 10px; }
+.player-chip .rematch-tick { color: #4caf50; font-weight: bold; font-size: 0.8rem; }
+
+.kick-btn {
+  margin-top: 4px; background: #eb5757; color: #fff; border: none;
+  padding: 3px 8px; border-radius: 10px; font-size: 0.7rem; cursor: pointer;
+}
+
+.game-timer {
+  text-align: center; font-size: 1.6rem; font-weight: bold; letter-spacing: 2px;
+  color: #ffb703; margin-bottom: 4px; font-variant-numeric: tabular-nums;
+}
