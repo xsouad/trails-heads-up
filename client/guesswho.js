@@ -388,26 +388,33 @@ function renderHome(){
   // Heads Up's home screen -- same sprites, same shared avatar state, same
   // rounded colorful buttons -- just recolored to the purple Guess Who theme
   // via #app-guesswho overrides in guesswho.css.
+  // Missing the .avatar-builder wrapper here was the actual bug behind the
+  // avatar never centering -- that class is what gives it
+  // display:flex/flex-direction:column/align-items:center (see style.css).
+  // Without it, the fixed-width avatar-stage box just sits at the left edge
+  // of the card like any other block element would.
   return `
     <div class="card">
-      <label>Your avatar</label>
-      <div class="avatar-stage" id="gwAvatarStage"></div>
-      <div class="arrow-row">
-        <button type="button" data-gwlayer="hat" data-gwdir="-1">&lt;</button>
-        <span class="layer-label">Accessories</span>
-        <button type="button" data-gwlayer="hat" data-gwdir="1">&gt;</button>
+      <label style="display:block; text-align:center;">Your avatar</label>
+      <div class="avatar-builder">
+        <div class="avatar-stage" id="gwAvatarStage"></div>
+        <div class="arrow-row">
+          <button type="button" data-gwlayer="hat" data-gwdir="-1">&lt;</button>
+          <span class="layer-label">Accessories</span>
+          <button type="button" data-gwlayer="hat" data-gwdir="1">&gt;</button>
+        </div>
+        <div class="arrow-row">
+          <button type="button" data-gwlayer="face" data-gwdir="-1">&lt;</button>
+          <span class="layer-label">Face</span>
+          <button type="button" data-gwlayer="face" data-gwdir="1">&gt;</button>
+        </div>
+        <div class="arrow-row">
+          <button type="button" data-gwlayer="base" data-gwdir="-1">&lt;</button>
+          <span class="layer-label">Color</span>
+          <button type="button" data-gwlayer="base" data-gwdir="1">&gt;</button>
+        </div>
+        <button type="button" class="dice-btn" id="gwDiceBtn">Randomize</button>
       </div>
-      <div class="arrow-row">
-        <button type="button" data-gwlayer="face" data-gwdir="-1">&lt;</button>
-        <span class="layer-label">Face</span>
-        <button type="button" data-gwlayer="face" data-gwdir="1">&gt;</button>
-      </div>
-      <div class="arrow-row">
-        <button type="button" data-gwlayer="base" data-gwdir="-1">&lt;</button>
-        <span class="layer-label">Color</span>
-        <button type="button" data-gwlayer="base" data-gwdir="1">&gt;</button>
-      </div>
-      <button type="button" class="dice-btn" id="gwDiceBtn">Randomize</button>
     </div>
 
     <div class="card">
