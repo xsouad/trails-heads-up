@@ -42,6 +42,19 @@ body { background:#433c68; margin:0; }
     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
   }
 #app-guesswho * {box-sizing:border-box;}
+/* Pick/game screens get real room to spread the character grid out on
+   desktop instead of staying capped at the same narrow width as the home
+   cards. Mobile is untouched -- .screen's normal rules still apply there. */
+@media (min-width:900px) {
+  #app-guesswho .screen.screen-wide { max-width:1180px; }
+}
+/* Join a game / Watch a game side by side on desktop so they don't eat
+   vertical scroll space; stacked on mobile like before. */
+#app-guesswho .join-watch-row { display:flex; flex-direction:column; gap:16px; }
+@media (min-width:620px) {
+  #app-guesswho .join-watch-row { flex-direction:row; align-items:stretch; }
+  #app-guesswho .join-watch-row .card { flex:1; margin-bottom:0; }
+}
 #app-guesswho h1 { font-size:22px; font-weight:600; margin:0 0 4px; text-align:center; }
 #app-guesswho .subtitle { color:var(--muted); text-align:center; margin:0 0 24px; font-size:14px; }
 #app-guesswho .card {
@@ -99,17 +112,34 @@ body { background:#433c68; margin:0; }
     z-index:40; width:auto; white-space:nowrap; max-width:90vw;
     overflow:hidden; text-overflow:ellipsis;
     box-shadow:0 4px 16px rgba(0,0,0,.45);
+    background:#17C3B2; color:#fff;
   }
 /* Fixed 4-across grid on desktop instead of an auto-fill count that varied
    with container width; stays a single stacked column on narrow/mobile
    screens. */
+/* Mobile default is 3 across -- one giant full-width tile per screen (the
+   old default) meant scrolling through 90+ characters one at a time, which
+   is exactly what this is fixing. Steps up to more columns as room allows,
+   topping out at 8 across on desktop for the pick grid, and even wider tiles
+   specifically on the live-game board (see .grid-wide below) since that one
+   only ever has to fit 32 characters, not 90+. */
 #app-guesswho .grid {
-    display:grid; grid-template-columns:1fr;
-    gap:8px; margin-top:6px;
+    display:grid; grid-template-columns:repeat(3,1fr);
+    gap:6px; margin-top:6px;
   }
+@media (min-width:420px) {
+  #app-guesswho .grid { grid-template-columns:repeat(4,1fr); }
+}
 @media (min-width:620px) {
-  #app-guesswho .grid { grid-template-columns:repeat(8,1fr); gap:6px; }
-  #app-guesswho .cname { font-size:9px; }
+  #app-guesswho .grid { grid-template-columns:repeat(6,1fr); }
+}
+@media (min-width:900px) {
+  #app-guesswho .grid { grid-template-columns:repeat(8,1fr); gap:8px; }
+}
+@media (min-width:900px) {
+  #app-guesswho .grid-wide { grid-template-columns:repeat(8,1fr); gap:12px; }
+  #app-guesswho .grid-wide .cname { font-size:13px; }
+  #app-guesswho .grid-wide .card-tile { padding:10px; }
 }
 #app-guesswho .card-tile {
     background:var(--panel2); border:2px solid var(--border); border-radius:10px;
@@ -188,6 +218,22 @@ body { background:#433c68; margin:0; }
   }
 #app-guesswho .id-label { font-size:13px; font-weight:600; margin:0; }
 #app-guesswho .id-sub { font-size:11px; color:var(--muted); margin:2px 0 0; }
+
+/* Live-game header: your strike count, the Guess Who? toggle, and the
+   opponent's mini avatar/name all in one compact row instead of the old
+   two-card layout (which was one of the things eating vertical space). */
+#app-guesswho .guess-header {
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  flex-wrap:wrap; margin-bottom:16px;
+}
+#app-guesswho .strikes-row { display:flex; gap:6px; }
+#app-guesswho .strike {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:26px; height:26px; border-radius:50%; font-weight:700; font-size:13px;
+  background:var(--panel2); color:var(--border); border:1px solid var(--border);
+}
+#app-guesswho .strike.used { background:var(--danger); color:#fff; border-color:var(--danger); }
+#app-guesswho #openGuessBtn.guessing { background:#17C3B2; color:#fff; }
 /* Mini avatar previews used in the lobby player list and next to the
    opponent's name badge during a game. Reuses Heads Up's own .avatar-stage
    sizing/layering rules, just scaled down. */

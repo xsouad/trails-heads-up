@@ -10,7 +10,7 @@
     "image": "joshua_bright.png"
   },
   {
-    "name": "LOEWE",
+    "name": "Loewe",
     "tag": "SC",
     "image": "loewe.png"
   },
@@ -320,7 +320,7 @@
     "image": "quatre_salision.png"
   },
   {
-    "name": "Bergard",
+    "name": "Bergard Zeman",
     "tag": "DB1",
     "image": "bergard_zeman.png"
   },
@@ -330,9 +330,9 @@
     "image": "judith_lanster.png"
   },
   {
-    "name": "Risette Twinnings",
+    "name": "Risette Twinings",
     "tag": "DB1",
-    "image": "risette_twinnings.png"
+    "image": "risette_twinings.png"
   },
   {
     "name": "Nadia Rayne",

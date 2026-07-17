@@ -345,6 +345,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: #8a94b8;
   border: none;
   font-size: 14px;
+  text-align: center;
+  text-decoration: none;
+  display: block;
   font-weight: 600;
   cursor: pointer;
 }

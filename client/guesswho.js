@@ -88,10 +88,7 @@ let state = {
   eliminated:new Set(),
   search:'',
   pickSelection:null,
-  guessSelection:null,
-  guessPanelOpen:false,
-  guessSearch:'',
-  guessResult:null,
+  guessMode:false,
   confettiPlayed:false,
   error:'',
   watchError:'',
@@ -140,10 +137,8 @@ function syncScreen(){
     if(state.screen==='game'){
       state.eliminated = new Set();
       state.pickSelection = null;
-      state.guessPanelOpen = false;
-      state.guessSearch = '';
+      state.guessMode = false;
       state.search = '';
-      state.guessResult = null;
       state.confettiPlayed = false;
     }
     state.screen='pick';
@@ -172,7 +167,7 @@ async function createRoom(){
     status:'lobby',
     boardIds: null,
     players:{
-      [state.playerId]: { name: state.playerName.trim(), avatar: JSON.parse(JSON.stringify(avatar)), secret: null }
+      [state.playerId]: { name: state.playerName.trim(), avatar: JSON.parse(JSON.stringify(avatar)), secret: null, strikes: 0 }
     },
     winner:null
   };
@@ -201,7 +196,7 @@ async function joinRoom(codeInput){
     state.error='That room is full'; state.loading=false; render(); return;
   }
   if(!players[state.playerId]){
-    players[state.playerId] = { name: state.playerName.trim(), avatar: JSON.parse(JSON.stringify(avatar)), secret: null };
+    players[state.playerId] = { name: state.playerName.trim(), avatar: JSON.parse(JSON.stringify(avatar)), secret: null, strikes: 0 };
   }
   room.players = players;
   if(Object.keys(players).length===2 && room.status==='lobby'){
@@ -258,32 +253,47 @@ async function lockInPick(){
   }
 }
 
-function toggleFlip(charId){
+// One board now does both jobs: a plain click flips a card down as normal,
+// but while "Guess Who?" is toggled on, that same click is treated as your
+// actual guess instead. Replaces the old design where guessing opened a
+// second, separate grid of the same 32 characters stacked on top of the
+// first one.
+function handleTileClick(charId){
   if(state.isSpectator) return;
+  if(state.guessMode){
+    guessChar(charId);
+    return;
+  }
   if(state.eliminated.has(charId)) state.eliminated.delete(charId);
   else state.eliminated.add(charId);
   render();
 }
 
-function toggleGuessPanel(){
+function toggleGuessMode(){
   if(state.isSpectator) return;
-  state.guessPanelOpen = !state.guessPanelOpen;
-  state.guessResult = null;
-  if(!state.guessPanelOpen){ state.guessSearch=''; }
+  state.guessMode = !state.guessMode;
   render();
 }
+
+const MAX_STRIKES = 3;
 
 async function guessChar(charId){
   if(state.isSpectator) return;
   const room = state.room;
   const opp = oppPlayer();
-  if(!room || !opp || room.status==='over') return;
+  const oppId = room && room.players ? Object.keys(room.players).find(id=>id!==state.playerId) : null;
+  if(!room || !opp || !oppId || room.status==='over') return;
   if(charId===opp.secret){
     await db.ref('rooms/' + state.code).update({ status:'over', winner:state.playerId });
-    state.guessPanelOpen = false;
-    state.guessResult = null;
+    state.guessMode = false;
   }else{
-    state.guessResult = 'miss';
+    const me = myPlayer();
+    const nextStrikes = (me && me.strikes ? me.strikes : 0) + 1;
+    await db.ref('rooms/' + state.code + '/players/' + state.playerId + '/strikes').set(nextStrikes);
+    if(nextStrikes >= MAX_STRIKES){
+      await db.ref('rooms/' + state.code).update({ status:'over', winner:oppId });
+    }
+    state.guessMode = false;
     render();
   }
 }
@@ -300,7 +310,7 @@ async function respondRematch(accept){
   if(accept){
     const playerIds = Object.keys(room.players || {});
     const updates = { status:'picking', boardIds:null, winner:null, rematch:null };
-    playerIds.forEach(id=>{ updates['players/'+id+'/secret'] = null; });
+    playerIds.forEach(id=>{ updates['players/'+id+'/secret'] = null; updates['players/'+id+'/strikes'] = 0; });
     await db.ref('rooms/' + state.code).update(updates);
   }else{
     await db.ref('rooms/' + state.code + '/rematch').remove();
@@ -352,7 +362,7 @@ async function leaveRoom(){
   state = {
     screen:'home', code:null, playerId:genId(), playerName:state.playerName,
     room:null, isSpectator:false, eliminated:new Set(), search:'', pickSelection:null,
-    guessSelection:null, guessPanelOpen:false, guessSearch:'', guessResult:null,
+    guessMode:false,
     error:'', watchError:'', loading:false, hadFullRoom:false
   };
   render();
@@ -423,22 +433,24 @@ function renderHome(){
       <div class="error-msg">${state.error}</div>
     </div>
 
-    <div class="card">
-      <p><strong>Join a game</strong></p>
-      <div class="join-row">
-        <input id="codeInput" type="text" placeholder="ROOM CODE" maxlength="4" />
-        <button type="button" class="secondary" id="joinBtn">Join Room</button>
+    <div class="join-watch-row">
+      <div class="card">
+        <p><strong>Join a game</strong></p>
+        <div class="join-row">
+          <input id="codeInput" type="text" placeholder="ROOM CODE" maxlength="4" />
+          <button type="button" class="secondary" id="joinBtn">Join Room</button>
+        </div>
       </div>
-    </div>
 
-    <div class="card">
-      <p><strong>Watch a game</strong></p>
-      <p class="subtitle" style="margin:-4px 0 12px; font-size:0.85rem;">Can't join a match that already has two players, but you can watch it live.</p>
-      <div class="join-row">
-        <input id="watchCodeInput" type="text" placeholder="ROOM CODE" maxlength="4" />
-        <button type="button" class="secondary" id="watchBtn">Watch</button>
+      <div class="card">
+        <p><strong>Watch a game</strong></p>
+        <p class="subtitle" style="margin:-4px 0 12px; font-size:0.85rem;">Can't join a match that already has two players, but you can watch it live.</p>
+        <div class="join-row">
+          <input id="watchCodeInput" type="text" placeholder="ROOM CODE" maxlength="4" />
+          <button type="button" class="secondary" id="watchBtn">Watch</button>
+        </div>
+        <div class="error-msg">${state.watchError}</div>
       </div>
-      <div class="error-msg">${state.watchError}</div>
     </div>
   `;
 }
@@ -591,7 +603,10 @@ function renderGame(){
   const over = room && room.status==='over';
   if(over) return renderGameOver();
 
-  const board = filteredBoardChars();
+  // Always the full 32-character board now -- there's no search box on this
+  // screen anymore, so nothing should ever come through filtered here even if
+  // state.search still has leftover text from the pick screen's search box.
+  const board = filteredBoardChars('');
 
   if(state.isSpectator){
     const players = room.players ? Object.values(room.players) : [];
@@ -633,58 +648,28 @@ function renderGame(){
 
   const me = myPlayer();
   const opp = oppPlayer();
-  const mySecretChar = me && me.secret ? CHARACTERS.find(c=>c.id===me.secret) : null;
-
-  const guessPanel = state.guessPanelOpen ? `
-    <div class="card" style="border-color:var(--accent);">
-      <p class="panel-title">
-        <span>Guess the character (search the ${BOARD_SIZE} on the board)</span>
-        <button type="button" class="secondary" id="closeGuessBtn" style="padding:4px 10px; font-size:12px;">Close</button>
-      </p>
-      <div class="search-row"><input id="guessSearchInput" type="text" placeholder="Search a name..." value="${state.guessSearch.replace(/"/g,'&quot;')}" autofocus /></div>
-      ${state.guessResult==='miss' ? `<p class="hint" style="color:var(--danger); margin-bottom:8px;">Not quite, try again.</p>` : ''}
-      <div class="grid">
-        ${filteredBoardChars(state.guessSearch).map(c=>`
-          <div class="card-tile" data-guess="${c.id}">
-            <img src="${imgUrl(c)}" alt="${c.name}" loading="lazy" />
-            <div class="cname">${c.name}</div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  ` : '';
+  const myStrikes = me && me.strikes ? me.strikes : 0;
 
   return `
     <div class="game">
-      <div class="id-row">
-        <div class="id-card">
-          ${mySecretChar ? `<img class="id-photo" src="${imgUrl(mySecretChar)}" alt="${mySecretChar.name}" />` : `<div class="id-silhouette">?</div>`}
-          <p class="id-label">${mySecretChar ? mySecretChar.name : ''}</p>
-          <p class="id-sub">Your character</p>
+      <div class="guess-header">
+        <div class="strikes-row" title="Wrong guesses -- three and you're out">
+          ${[1,2,3].map(n=>`<span class="strike ${myStrikes>=n?'used':''}">X</span>`).join('')}
         </div>
-        <div class="id-card guess-card" id="openGuessBtn">
-          <div class="id-silhouette">?</div>
-          <p class="id-label">?????</p>
-          <p class="id-sub">Guess who?</p>
-        </div>
+        <button type="button" id="openGuessBtn" class="${state.guessMode?'guessing':''}">${state.guessMode ? 'Tap a character below to guess' : 'Guess Who?'}</button>
+        <span class="pill opp" style="display:flex; align-items:center; gap:6px;">
+          <span class="avatar-stage avatar-stage-mini" id="gwOppAvatar"></span>
+          ${opp ? opp.name : 'opponent'}
+        </span>
       </div>
 
-      ${guessPanel}
-
       <div class="card">
-        <p class="panel-title">
-          <span>Board. Click to flip down characters you've ruled out</span>
-          <span class="pill opp" style="display:flex; align-items:center; gap:6px;">
-            <span class="avatar-stage avatar-stage-mini" id="gwOppAvatar"></span>
-            ${opp ? opp.name : 'opponent'}
-          </span>
-        </p>
-        <div class="search-row"><input id="searchInput2" type="text" placeholder="Search a name..." value="${state.search.replace(/"/g,'&quot;')}" /></div>
-        <div class="grid">
+        <p class="panel-title"><span>${opp ? opp.name+"'s character" : "Opponent's character"}</span></p>
+        <div class="grid grid-wide">
           ${board.map(c=>`
             <div class="card-tile ${state.eliminated.has(c.id)?'eliminated':''}" data-flip="${c.id}">
               <div class="img-wrap">
-                <img src="${imgUrl(c)}" alt="${c.name}" loading="lazy" />
+                <img src="${imgUrl(c)}" alt="${c.name}" />
                 <div class="x-mark"></div>
               </div>
               <div class="cname">${c.name}</div>
@@ -714,6 +699,15 @@ function render(){
 
   gwRoot.innerHTML = html;
   attachHandlers();
+
+  // The pick and live-game screens get a wider container on desktop so the
+  // character grid can actually spread across the screen instead of
+  // staying capped at the same width as the home/lobby cards.
+  const gwScreen = document.getElementById('gwScreen');
+  if(gwScreen){
+    const wide = state.screen === 'pick' || state.screen === 'game';
+    gwScreen.classList.toggle('screen-wide', wide);
+  }
 
   const newGrid = document.querySelector('.grid');
   if(newGrid) newGrid.scrollTop = prevScroll;
@@ -753,26 +747,13 @@ function attachHandlers(){
   const leaveBtn = document.getElementById('leaveBtn');
   if(leaveBtn) leaveBtn.addEventListener('click', leaveRoom);
 
-  ['searchInput','searchInput2'].forEach(id=>{
-    const node = document.getElementById(id);
-    if(node){
-      node.addEventListener('input', e=>{
-        const pos = e.target.selectionStart;
-        state.search = e.target.value;
-        render();
-        const again = document.getElementById(id);
-        if(again){ again.focus(); again.setSelectionRange(pos,pos); }
-      });
-    }
-  });
-
-  const guessSearchInput = document.getElementById('guessSearchInput');
-  if(guessSearchInput){
-    guessSearchInput.addEventListener('input', e=>{
+  const searchNode = document.getElementById('searchInput');
+  if(searchNode){
+    searchNode.addEventListener('input', e=>{
       const pos = e.target.selectionStart;
-      state.guessSearch = e.target.value;
+      state.search = e.target.value;
       render();
-      const again = document.getElementById('guessSearchInput');
+      const again = document.getElementById('searchInput');
       if(again){ again.focus(); again.setSelectionRange(pos,pos); }
     });
   }
@@ -784,19 +765,14 @@ function attachHandlers(){
   const lockInBtn = document.getElementById('lockInBtn');
   if(lockInBtn) lockInBtn.addEventListener('click', lockInPick);
 
+  // A board tile now either flips (normal) or guesses (while Guess Who? is
+  // toggled on) -- see handleTileClick.
   document.querySelectorAll('[data-flip]').forEach(node=>{
-    node.addEventListener('click', ()=>{ toggleFlip(node.getAttribute('data-flip')); });
+    node.addEventListener('click', ()=>{ handleTileClick(node.getAttribute('data-flip')); });
   });
 
   const openGuessBtn = document.getElementById('openGuessBtn');
-  if(openGuessBtn) openGuessBtn.addEventListener('click', toggleGuessPanel);
-
-  const closeGuessBtn = document.getElementById('closeGuessBtn');
-  if(closeGuessBtn) closeGuessBtn.addEventListener('click', toggleGuessPanel);
-
-  document.querySelectorAll('[data-guess]').forEach(node=>{
-    node.addEventListener('click', ()=>guessChar(node.getAttribute('data-guess')));
-  });
+  if(openGuessBtn) openGuessBtn.addEventListener('click', toggleGuessMode);
 
   const rematchBtn = document.getElementById('rematchBtn');
   if(rematchBtn) rematchBtn.addEventListener('click', requestRematch);
