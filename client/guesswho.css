@@ -27,7 +27,7 @@
 /* This page's background needs to be the purple theme all the way down,
    not just behind #app-guesswho's own content -- setting it on body too
    means there's no sliver of Heads Up's navy peeking through on short pages. */
-body { background:#433c68; margin:0; }
+body { background:#2e2a49; margin:0; }
 #gwNoticeBar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 60;
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px;
@@ -35,11 +35,18 @@ body { background:#433c68; margin:0; }
 }
 
 #app-guesswho {
-    --bg:#433c68; --panel:#3a3260; --panel2:#463b72; --border:#6a5fa8;
+    --bg:#2e2a49; --panel:#3a3260; --panel2:#463b72; --border:#6a5fa8;
     --text:#f4f2fb; --muted:#c9bdec; --accent:#9b8bf4; --accent2:#2bd9a0;
     --danger:#ff5c72; --warn:#ffb43e;
     background:var(--bg); color:var(--text); min-height:100vh;
     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+/* The board card stays noticeably brighter than the darkened page around it,
+   so it's the thing your eye lands on during a match instead of blending
+   into everything else. */
+#app-guesswho .board-card {
+    background:#4a4078; border:1px solid #7f6fd6;
+    box-shadow:0 0 0 1px rgba(159,139,244,.15), 0 8px 30px rgba(0,0,0,.35);
   }
 #app-guesswho * {box-sizing:border-box;}
 /* Pick/game screens get real room to spread the character grid out on
@@ -70,7 +77,8 @@ body { background:#433c68; margin:0; }
 /* Room-code join/watch rows: input and button need to be the exact same
    height, or the button visibly looms over the input next to it. */
 #app-guesswho .join-row input[type=text] { margin-bottom:0; }
-#app-guesswho .join-row button.secondary {
+#app-guesswho .join-row button.secondary,
+#app-guesswho .join-row .join-btn {
     height:44px; padding:0 20px; margin-top:0;
   }
 #app-guesswho input[type=text].code { text-transform:uppercase; letter-spacing:2px; font-weight:600; }
@@ -80,6 +88,7 @@ body { background:#433c68; margin:0; }
     cursor:pointer; transition:opacity .15s;
   }
 #app-guesswho button.secondary { background:var(--panel2); color:var(--text); }
+#app-guesswho .join-btn { background:#17C3B2; color:#fff; }
 /* Heads Up's home screen uses color to tell actions apart at a glance --
    carrying that same idea over here with your specified colors. */
 #app-guesswho button.primary { background:#17C3B2; color:#fff; }

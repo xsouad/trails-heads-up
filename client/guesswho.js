@@ -436,9 +436,10 @@ function renderHome(){
     <div class="join-watch-row">
       <div class="card">
         <p><strong>Join a game</strong></p>
+        <p class="subtitle" style="margin:-4px 0 12px; font-size:0.85rem;">Already have a room code from a friend? Jump in as their opponent.</p>
         <div class="join-row">
           <input id="codeInput" type="text" placeholder="ROOM CODE" maxlength="4" />
-          <button type="button" class="secondary" id="joinBtn">Join Room</button>
+          <button type="button" class="join-btn" id="joinBtn">Join Room</button>
         </div>
       </div>
 
@@ -649,21 +650,34 @@ function renderGame(){
   const me = myPlayer();
   const opp = oppPlayer();
   const myStrikes = me && me.strikes ? me.strikes : 0;
+  const mySecretChar = me && me.secret ? CHARACTERS.find(c=>c.id===me.secret) : null;
 
   return `
     <div class="game">
+      <div class="id-row">
+        <div class="id-card">
+          ${mySecretChar ? `<img class="id-photo" src="${imgUrl(mySecretChar)}" alt="${mySecretChar.name}" />` : `<div class="id-silhouette">?</div>`}
+          <p class="id-label">${mySecretChar ? mySecretChar.name : ''}</p>
+          <p class="id-sub">Your character</p>
+        </div>
+        <div class="id-card guess-card ${state.guessMode?'guessing':''}" id="openGuessBtn">
+          <div class="id-silhouette">?</div>
+          <p class="id-label">?????</p>
+          <p class="id-sub">${state.guessMode ? 'Tap a character below' : 'Guess who?'}</p>
+        </div>
+      </div>
+
       <div class="guess-header">
         <div class="strikes-row" title="Wrong guesses -- three and you're out">
           ${[1,2,3].map(n=>`<span class="strike ${myStrikes>=n?'used':''}">X</span>`).join('')}
         </div>
-        <button type="button" id="openGuessBtn" class="${state.guessMode?'guessing':''}">${state.guessMode ? 'Tap a character below to guess' : 'Guess Who?'}</button>
         <span class="pill opp" style="display:flex; align-items:center; gap:6px;">
           <span class="avatar-stage avatar-stage-mini" id="gwOppAvatar"></span>
           ${opp ? opp.name : 'opponent'}
         </span>
       </div>
 
-      <div class="card">
+      <div class="card board-card">
         <p class="panel-title"><span>${opp ? opp.name+"'s character" : "Opponent's character"}</span></p>
         <div class="grid grid-wide">
           ${board.map(c=>`
@@ -733,11 +747,6 @@ function attachHandlers(){
   const codeInput = document.getElementById('codeInput');
   if(joinBtn && codeInput) joinBtn.addEventListener('click', ()=>joinRoom(codeInput.value));
   if(codeInput) codeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') joinRoom(codeInput.value); });
-
-  const gwHowToPlayBtn = document.getElementById('gwHowToPlayBtn');
-  if(gwHowToPlayBtn) gwHowToPlayBtn.addEventListener('click', ()=>{
-    showGwNotice('Instructions for Trails Guess Who are coming soon!');
-  });
 
   const watchBtn = document.getElementById('watchBtn');
   const watchCodeInput = document.getElementById('watchCodeInput');
