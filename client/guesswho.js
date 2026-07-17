@@ -17,10 +17,16 @@ let CHARACTERS = [];
 function slugify(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
+// Characters excluded from Guess Who specifically -- Heads Up still uses the
+// full shared list untouched, this only filters what shows up here.
+const EXCLUDED_FROM_GUESSWHO = new Set(['Olaf Craig']);
+
 async function loadCharacters() {
   const res = await fetch('data/characters.json');
   const data = await res.json();
-  CHARACTERS = data.map(c => ({ id: slugify(c.name), name: c.name, img: c.image }));
+  CHARACTERS = data
+    .filter(c => !EXCLUDED_FROM_GUESSWHO.has(c.name))
+    .map(c => ({ id: slugify(c.name), name: c.name, img: c.image }));
 }
 
 function imgUrl(c){ return 'assets/items/characters/' + encodeURIComponent(c.img); }
@@ -89,7 +95,8 @@ let state = {
   confettiPlayed:false,
   error:'',
   watchError:'',
-  loading:false
+  loading:false,
+  hadFullRoom:false
 };
 
 let roomRef = null;
@@ -99,6 +106,18 @@ function attachRoomListener(code){
   roomRef = db.ref('rooms/' + code);
   roomRef.on('value', snap=>{
     const room = snap.val();
+    const playerCount = room && room.players ? Object.keys(room.players).length : 0;
+    if(playerCount>=2) state.hadFullRoom = true;
+    // Someone who was there is gone -- either they hit Leave Room or their
+    // connection dropped (onDisconnect cleans up their slot automatically in
+    // that case too). Only fire once, and not while just sitting on the home
+    // screen or already looking at this same notice.
+    if(state.hadFullRoom && playerCount<2 && state.screen!=='home' && state.screen!=='opponentLeft'){
+      state.room = room;
+      state.screen = 'opponentLeft';
+      render();
+      return;
+    }
     if(room){
       state.room = room;
       syncScreen();
@@ -158,6 +177,11 @@ async function createRoom(){
     winner:null
   };
   await db.ref('rooms/' + code).set(room);
+  // If this tab closes, crashes, or loses connection without a clean Leave
+  // Room click, Firebase's own server-side hook removes this player's slot
+  // automatically -- that's what lets the other player find out even if we
+  // never got the chance to say goodbye ourselves.
+  db.ref('rooms/' + code + '/players/' + state.playerId).onDisconnect().remove();
   state.code=code; state.room=room; state.screen='lobby'; state.loading=false;
   attachRoomListener(code);
   render();
@@ -184,6 +208,7 @@ async function joinRoom(codeInput){
     room.status='picking';
   }
   await db.ref('rooms/' + code).set(room);
+  db.ref('rooms/' + code + '/players/' + state.playerId).onDisconnect().remove();
   state.code=code; state.room=room; state.loading=false;
   state.screen='lobby';
   syncScreen();
@@ -315,13 +340,20 @@ function launchConfetti(){
   setTimeout(()=>{ container.remove(); }, 4200);
 }
 
-function leaveRoom(){
+async function leaveRoom(){
+  if(state.code && !state.isSpectator){
+    const playerRef = db.ref('rooms/' + state.code + '/players/' + state.playerId);
+    try {
+      await playerRef.onDisconnect().cancel();
+      await playerRef.remove();
+    } catch(e) { /* best effort -- if this fails, onDisconnect still cleans it up */ }
+  }
   detachRoomListener();
   state = {
     screen:'home', code:null, playerId:genId(), playerName:state.playerName,
     room:null, isSpectator:false, eliminated:new Set(), search:'', pickSelection:null,
     guessSelection:null, guessPanelOpen:false, guessSearch:'', guessResult:null,
-    error:'', watchError:'', loading:false
+    error:'', watchError:'', loading:false, hadFullRoom:false
   };
   render();
 }
@@ -338,6 +370,16 @@ function filteredBoardChars(searchVal){
   if(!s.trim()) return board;
   const q = s.trim().toLowerCase();
   return board.filter(c=>c.name.toLowerCase().includes(q));
+}
+
+function renderOpponentLeft(){
+  return `
+    <div class="card center">
+      <p class="gameover-title" style="margin-top:0;">Your opponent left the room</p>
+      <p class="hint" style="margin-bottom:18px;">The match can't continue without them.</p>
+      <button type="button" class="secondary" id="leaveBtn">Return to Main Menu</button>
+    </div>
+  `;
 }
 
 function renderHome(){
@@ -664,6 +706,7 @@ function render(){
   else if(state.screen==='lobby') html = renderLobby();
   else if(state.screen==='pick') html = renderPick();
   else if(state.screen==='game') html = renderGame();
+  else if(state.screen==='opponentLeft') html = renderOpponentLeft();
 
   gwRoot.innerHTML = html;
   attachHandlers();
