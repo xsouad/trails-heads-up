@@ -39,6 +39,11 @@ function cancelPendingRemoval(clientId) {
 }
 
 app.use(express.static(path.join(__dirname, '../client')));
+// Guess Who's frontend fetches the shared character list directly
+// (fetch('data/characters.json')) so it always matches Heads Up's data
+// exactly -- same names, same tags, same image files -- with nothing to keep
+// in sync by hand.
+app.use('/data', express.static(path.join(__dirname, '../data')));
 
 function broadcastRoom(room) {
   log('BROADCAST', room.code, 'players:', room.players.size, 'spectators:', room.spectators.size, 'ids:', Array.from(room.players.keys()));
