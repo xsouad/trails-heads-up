@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trails Guess Who</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="guesswho.css">
+</head>
+<body>
+
+<div class="mode-switcher">
+  <a class="mode-btn" href="/">Trails Heads Up</a>
+  <a class="mode-btn active" href="/guesswho">Trails Guess Who</a>
+</div>
+
+<div id="app-guesswho">
+  <div id="gwNoticeBar"></div>
+
+  <div class="screen active" style="max-width:720px; margin:0 auto; padding:24px 16px;">
+    <h1>Trails Guess Who</h1>
+    <p class="subtitle">Pick a secret character. Ask yes or no questions. Guess who they've got first.</p>
+    <button type="button" id="gwHowToPlayBtn" class="how-to-play-link">How to Play</button>
+
+    <div id="gwRoot"></div>
+  </div>
+</div>
+
+<script src="avatar-shared.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="guesswho.js"></script>
+</body>
+</html>

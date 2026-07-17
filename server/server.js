@@ -45,6 +45,13 @@ app.use(express.static(path.join(__dirname, '../client')));
 // in sync by hand.
 app.use('/data', express.static(path.join(__dirname, '../data')));
 
+// Trails Guess Who lives on its own real URL (e.g. yoursite.onrender.com/guesswho)
+// instead of being a JS-toggled section of the Heads Up page, so it can be
+// linked/bookmarked directly and a refresh lands back on the same game.
+app.get('/guesswho', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/guesswho.html'));
+});
+
 function broadcastRoom(room) {
   log('BROADCAST', room.code, 'players:', room.players.size, 'spectators:', room.spectators.size, 'ids:', Array.from(room.players.keys()));
   room.players.forEach((player, socketId) => {

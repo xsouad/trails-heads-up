@@ -5,13 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Trails Heads Up</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="guesswho.css">
 </head>
 <body>
 
 <div class="mode-switcher">
-  <button type="button" class="mode-btn active" id="modeHeadsUpBtn">Trails Heads Up</button>
-  <button type="button" class="mode-btn" id="modeGuessWhoBtn">Trails Guess Who</button>
+  <a class="mode-btn active" href="/">Trails Heads Up</a>
+  <a class="mode-btn" href="/guesswho">Trails Guess Who</a>
 </div>
 
 <div id="app-headsup">
@@ -173,38 +172,8 @@
 
 </div><!-- /#app-headsup -->
 
-<div id="app-guesswho" style="display:none;">
-  <div id="gwRoot"></div>
-</div>
-
 <script src="/socket.io/socket.io.js"></script>
+<script src="avatar-shared.js"></script>
 <script src="app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="guesswho.js"></script>
-<script>
-(function(){
-  var headsUpBtn = document.getElementById('modeHeadsUpBtn');
-  var guessWhoBtn = document.getElementById('modeGuessWhoBtn');
-  var headsUpApp = document.getElementById('app-headsup');
-  var guessWhoApp = document.getElementById('app-guesswho');
-
-  function showHeadsUp(){
-    headsUpApp.style.display = '';
-    guessWhoApp.style.display = 'none';
-    headsUpBtn.classList.add('active');
-    guessWhoBtn.classList.remove('active');
-  }
-  function showGuessWho(){
-    headsUpApp.style.display = 'none';
-    guessWhoApp.style.display = '';
-    guessWhoBtn.classList.add('active');
-    headsUpBtn.classList.remove('active');
-  }
-
-  headsUpBtn.addEventListener('click', showHeadsUp);
-  guessWhoBtn.addEventListener('click', showGuessWho);
-})();
-</script>
 </body>
 </html>

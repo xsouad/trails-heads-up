@@ -31,6 +31,12 @@
     cursor:pointer; transition:opacity .15s;
   }
 #app-guesswho button.secondary { background:var(--panel2); color:var(--text); }
+/* Heads Up's home screen uses color to tell actions apart at a glance (green
+   create, blue join, orange randomize) -- carrying that same color language
+   over here, just recolored slightly to sit well against the purple panels,
+   so the two games feel like siblings rather than a generic reskin. */
+#app-guesswho button.primary { background:#4caf50; color:#fff; }
+#app-guesswho .dice-btn { background:#ffb703; color:#332d4f; }
 #app-guesswho button:hover { opacity:.88; }
 #app-guesswho button:disabled { opacity:.4; cursor:not-allowed; }
 #app-guesswho .row { display:flex; gap:12px; flex-wrap:wrap; }

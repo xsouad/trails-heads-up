@@ -65,7 +65,7 @@
     "image": "estelle_joshua_fall.png"
   },
   {
-    "text": "Estelle & Joshua visit Karen's Grave",
+    "text": "Estelle & Joshua visit Karin's Grave",
     "tag": "SC",
     "image": "karin_grave.png"
   },
@@ -73,6 +73,11 @@
     "text": "Joshua attacks Estelle because of Weissman's control",
     "tag": "SC",
     "image": "joshua_attack_estelle.png"
+  },
+  {
+    "text": "Olivier rows the boat to the bridge",
+    "tag": "SC",
+    "image": "olivier_bridge.png"
   },
   {
     "text": "Rufina feeds kevin chocolate",
@@ -125,6 +130,11 @@
     "image": "caught_you.png"
   },
   {
+    "text": "Renne hides in Lloyd's Closet",
+    "tag": "ZERO",
+    "image": "renne_closet.png"
+  },
+  {
     "text": "The Azure Tree manifests over Crossbell",
     "tag": "AO",
     "image": "azure_tree_manifests.png"
@@ -143,6 +153,11 @@
     "text": "Lloyd saves KeA",
     "tag": "AO",
     "image": "lloyd_kea.png"
+  },
+  {
+    "text": "Guy hugs Lloyd",
+    "tag": "AO",
+    "image": "guy_lloyd.png"
   },
   {
     "text": "ILF execution",
@@ -258,6 +273,26 @@
     "text": "The cave.",
     "tag": "CS4",
     "image": "cave.png"
+  },
+  {
+    "text": "The Hamel Quest",
+    "tag": "CS4",
+    "image": "hamelquest.png"
+  },
+  {
+    "text": "Olivier & Schera's Wedding",
+    "tag": "CS4",
+    "image": "the_wedding.png"
+  },
+  {
+    "text": "Class VII Uniting with the Sky & Crossbell Crew",
+    "tag": "CS4",
+    "image": "protagonists.png"
+  },
+  {
+    "text": "The Secret Ending - Path to the Unknown",
+    "tag": "CS4",
+    "image": "secret_ending.png"
   },
   {
     "text": "Crossbell secures its Day of Reindependence",

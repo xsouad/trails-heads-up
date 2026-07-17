@@ -59,12 +59,26 @@ function genId(){ return 'p_'+Math.random().toString(36).slice(2,10); }
 
 const gwRoot = document.getElementById('gwRoot');
 
+// Small top-of-page toast, mirroring Heads Up's showNotice, for things like
+// the placeholder "instructions coming soon" message until real how-to-play
+// content is added for this game.
+function showGwNotice(text){
+  const bar = document.getElementById('gwNoticeBar');
+  if(!bar) return;
+  const toast = document.createElement('div');
+  toast.className = 'notice-toast';
+  toast.textContent = text;
+  bar.appendChild(toast);
+  setTimeout(()=>{ toast.remove(); }, 4500);
+}
+
 let state = {
   screen:'home',
   code:null,
   playerId:genId(),
   playerName:'',
   room:null,
+  isSpectator:false,
   eliminated:new Set(),
   search:'',
   pickSelection:null,
@@ -74,6 +88,7 @@ let state = {
   guessResult:null,
   confettiPlayed:false,
   error:'',
+  watchError:'',
   loading:false
 };
 
@@ -176,7 +191,25 @@ async function joinRoom(codeInput){
   render();
 }
 
+// A third (or later) person can't join a 2-player Guess Who match, but they
+// can watch it live -- read-only, both players' secrets visible, no picking
+// or guessing controls. This never writes into room.players.
+async function watchRoom(codeInput){
+  const code = codeInput.trim().toUpperCase();
+  if(!code){ state.watchError='Enter a room code'; render(); return; }
+  state.watchError=''; state.loading=true; render();
+  const snap = await db.ref('rooms/' + code).get();
+  const room = snap.val();
+  if(!room){ state.watchError='Room not found'; state.loading=false; render(); return; }
+  state.code=code; state.room=room; state.isSpectator=true; state.loading=false;
+  state.screen='lobby';
+  syncScreen();
+  attachRoomListener(code);
+  render();
+}
+
 function selectPick(charId){
+  if(state.isSpectator) return;
   const me = myPlayer();
   if(me && me.secret) return;
   state.pickSelection = state.pickSelection===charId ? null : charId;
@@ -184,6 +217,7 @@ function selectPick(charId){
 }
 
 async function lockInPick(){
+  if(state.isSpectator) return;
   const room = state.room;
   const me = myPlayer();
   if(!room || !me || me.secret || !state.pickSelection) return;
@@ -200,12 +234,14 @@ async function lockInPick(){
 }
 
 function toggleFlip(charId){
+  if(state.isSpectator) return;
   if(state.eliminated.has(charId)) state.eliminated.delete(charId);
   else state.eliminated.add(charId);
   render();
 }
 
 function toggleGuessPanel(){
+  if(state.isSpectator) return;
   state.guessPanelOpen = !state.guessPanelOpen;
   state.guessResult = null;
   if(!state.guessPanelOpen){ state.guessSearch=''; }
@@ -213,6 +249,7 @@ function toggleGuessPanel(){
 }
 
 async function guessChar(charId){
+  if(state.isSpectator) return;
   const room = state.room;
   const opp = oppPlayer();
   if(!room || !opp || room.status==='over') return;
@@ -227,11 +264,12 @@ async function guessChar(charId){
 }
 
 async function requestRematch(){
-  if(!state.code) return;
+  if(state.isSpectator || !state.code) return;
   await db.ref('rooms/' + state.code + '/rematch').set({ requestedBy: state.playerId });
 }
 
 async function respondRematch(accept){
+  if(state.isSpectator) return;
   const room = state.room;
   if(!room || !state.code) return;
   if(accept){
@@ -281,9 +319,9 @@ function leaveRoom(){
   detachRoomListener();
   state = {
     screen:'home', code:null, playerId:genId(), playerName:state.playerName,
-    room:null, eliminated:new Set(), search:'', pickSelection:null,
+    room:null, isSpectator:false, eliminated:new Set(), search:'', pickSelection:null,
     guessSelection:null, guessPanelOpen:false, guessSearch:'', guessResult:null,
-    error:'', loading:false
+    error:'', watchError:'', loading:false
   };
   render();
 }
@@ -303,11 +341,11 @@ function filteredBoardChars(searchVal){
 }
 
 function renderHome(){
-  // Reuses Heads Up's own avatar-stage/arrow-row/dice-btn classes (defined,
-  // unscoped, in style.css) so this looks and behaves exactly like the Heads
-  // Up avatar builder -- same sprites, same shared avatar state -- just wired
-  // up with its own gw-prefixed data attributes so the two builders' click
-  // handlers never get mixed up with each other.
+  // Reuses Heads Up's own card/avatar-stage/arrow-row/dice-btn/button classes
+  // (defined, unscoped, in style.css) so this looks and behaves exactly like
+  // Heads Up's home screen -- same sprites, same shared avatar state, same
+  // rounded colorful buttons -- just recolored to the purple Guess Who theme
+  // via #app-guesswho overrides in guesswho.css.
   return `
     <div class="card">
       <label>Your avatar</label>
@@ -329,18 +367,29 @@ function renderHome(){
       </div>
       <button type="button" class="dice-btn" id="gwDiceBtn">Randomize</button>
     </div>
+
     <div class="card">
-      <label for="nameInput">Your name</label>
-      <input id="nameInput" type="text" placeholder="e.g. Estelle" value="${state.playerName.replace(/"/g,'&quot;')}" maxlength="20" />
-      <button id="createBtn" style="width:100%">Create a room</button>
-      <div style="height:14px"></div>
-      <label for="codeInput">Or join with a code</label>
-      <div class="row" style="align-items:flex-start">
-        <input id="codeInput" class="code" type="text" placeholder="ABCD" maxlength="4" style="flex:1" />
-        <button id="joinBtn" class="secondary" style="flex:0 0 auto">Join</button>
+      <input id="nameInput" type="text" placeholder="Your name" value="${state.playerName.replace(/"/g,'&quot;')}" maxlength="20" />
+      <button type="button" class="primary" id="createBtn">Create a Room</button>
+      <div class="error-msg">${state.error}</div>
+    </div>
+
+    <div class="card">
+      <p><strong>Join a game</strong></p>
+      <div class="join-row">
+        <input id="codeInput" type="text" placeholder="ROOM CODE" maxlength="4" />
+        <button type="button" class="secondary" id="joinBtn">Join Room</button>
       </div>
-      <div class="err">${state.error}</div>
-      <p class="hint">Create a room, share the 4-letter code with a friend, then both pick a secret character. Take turns asking yes/no questions out loud and eliminate characters on your own board!</p>
+    </div>
+
+    <div class="card">
+      <p><strong>Watch a game</strong></p>
+      <p class="subtitle" style="margin:-4px 0 12px; font-size:0.85rem;">Can't join a match that already has two players, but you can watch it live.</p>
+      <div class="join-row">
+        <input id="watchCodeInput" type="text" placeholder="ROOM CODE" maxlength="4" />
+        <button type="button" class="secondary" id="watchBtn">Watch</button>
+      </div>
+      <div class="error-msg">${state.watchError}</div>
     </div>
   `;
 }
@@ -355,11 +404,11 @@ function renderLobby(){
   `).join('');
   return `
     <div class="card center">
-      <p class="hint">Share this code with your friend</p>
+      ${state.isSpectator ? '<p class="hint">You are spectating this room</p>' : '<p class="hint">Share this code with your friend</p>'}
       <div class="code-display">${state.code}</div>
       <div class="lobby-player-row">${playerChips}</div>
       <p class="status-line">Waiting for opponent to join${players.length<2?'<span class="spinner"></span>':''}</p>
-      <div style="margin-top:16px"><button class="secondary" id="leaveBtn">Leave room</button></div>
+      <div style="margin-top:16px"><button type="button" class="secondary" id="leaveBtn">${state.isSpectator ? 'Stop Watching' : 'Leave Room'}</button></div>
     </div>
   `;
 }
@@ -367,6 +416,18 @@ function renderLobby(){
 function renderPick(){
   const me = myPlayer();
   const opp = oppPlayer();
+
+  if(state.isSpectator){
+    const entries = state.room && state.room.players ? Object.values(state.room.players) : [];
+    return `
+      <div class="card">
+        <p class="panel-title"><span>Both players are picking a secret character</span></p>
+        ${entries.map(p=>`<p class="status-line">${p.name}: ${p.secret ? 'Locked in' : 'Still choosing'}${p.secret ? '' : '<span class="spinner"></span>'}</p>`).join('')}
+        <div style="margin-top:16px; text-align:center;"><button type="button" class="secondary" id="leaveBtn">Stop Watching</button></div>
+      </div>
+    `;
+  }
+
   const picked = me && me.secret;
   const pickedChar = picked ? CHARACTERS.find(c=>c.id===me.secret) : null;
   const chars = filteredFullChars(state.search);
@@ -396,7 +457,7 @@ function renderPick(){
         </div>
         <div class="row" style="align-items:center; margin-top:12px">
           <div class="hint" style="flex:2">${state.pickSelection ? 'Selected: '+CHARACTERS.find(c=>c.id===state.pickSelection).name : 'Tap a character to select it'}</div>
-          <button id="lockInBtn" ${!state.pickSelection?'disabled':''} style="flex:1">Lock in</button>
+          <button type="button" id="lockInBtn" ${!state.pickSelection?'disabled':''} style="flex:1">Lock in</button>
         </div>
       `}
       <p class="status-line">${opp ? (opp.secret ? opp.name+' has locked in their character' : opp.name+' is still choosing'+'<span class="spinner"></span>') : ''}</p>
@@ -406,8 +467,34 @@ function renderPick(){
 
 function renderGameOver(){
   const room = state.room;
+  const players = room.players ? Object.values(room.players) : [];
   const me = myPlayer();
   const opp = oppPlayer();
+
+  if(state.isSpectator){
+    const winnerEntry = room.players ? Object.entries(room.players).find(([id])=>id===room.winner) : null;
+    const winnerName = winnerEntry ? winnerEntry[1].name : 'Someone';
+    return `
+      <div class="card gameover-screen">
+        <div class="gameover-icon">🏆</div>
+        <p class="gameover-title">${winnerName} wins!</p>
+        <div class="reveal-row">
+          ${players.map(p=>{
+            const c = p.secret ? CHARACTERS.find(x=>x.id===p.secret) : null;
+            return `
+              <div class="reveal-item">
+                <p class="reveal-label">${p.name}'s character</p>
+                ${c ? `<img src="${imgUrl(c)}" alt="${c.name}" />` : ''}
+                <p class="reveal-name">${c ? c.name : ''}</p>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div style="margin-top:14px;"><button type="button" class="secondary" id="leaveBtn">Stop Watching</button></div>
+      </div>
+    `;
+  }
+
   const iWon = room.winner===state.playerId;
   const mySecretChar = me && me.secret ? CHARACTERS.find(c=>c.id===me.secret) : null;
   const oppSecretChar = opp && opp.secret ? CHARACTERS.find(c=>c.id===opp.secret) : null;
@@ -420,14 +507,14 @@ function renderGameOver(){
     rematchSection = `
       <p class="hint" style="margin-bottom:10px;">${opp.name} wants to play again</p>
       <div class="row">
-        <button id="acceptRematchBtn">Yes, rematch</button>
-        <button class="secondary" id="declineRematchBtn">No thanks</button>
+        <button type="button" id="acceptRematchBtn">Yes, rematch</button>
+        <button type="button" class="secondary" id="declineRematchBtn">No thanks</button>
       </div>
     `;
   }else if(iRequested){
     rematchSection = `<p class="status-line">Waiting for ${opp ? opp.name : 'opponent'} to respond${'<span class="spinner"></span>'}</p>`;
   }else{
-    rematchSection = `<button id="rematchBtn" style="width:100%">Play again</button>`;
+    rematchSection = `<button type="button" id="rematchBtn" style="width:100%">Play again</button>`;
   }
 
   return `
@@ -448,26 +535,65 @@ function renderGameOver(){
         </div>
       </div>
       ${rematchSection}
-      <div style="margin-top:14px;"><button class="secondary" id="leaveBtn">Leave room</button></div>
+      <div style="margin-top:14px;"><button type="button" class="secondary" id="leaveBtn">Leave Room</button></div>
     </div>
   `;
 }
 
 function renderGame(){
   const room = state.room;
-  const me = myPlayer();
-  const opp = oppPlayer();
   const over = room && room.status==='over';
   if(over) return renderGameOver();
 
-  const mySecretChar = me && me.secret ? CHARACTERS.find(c=>c.id===me.secret) : null;
   const board = filteredBoardChars();
+
+  if(state.isSpectator){
+    const players = room.players ? Object.values(room.players) : [];
+    return `
+      <div class="game">
+        <div class="id-row">
+          ${players.map(p=>{
+            const c = p.secret ? CHARACTERS.find(x=>x.id===p.secret) : null;
+            return `
+              <div class="id-card">
+                ${c ? `<img class="id-photo" src="${imgUrl(c)}" alt="${c.name}" />` : `<div class="id-silhouette">?</div>`}
+                <p class="id-label">${c ? c.name : ''}</p>
+                <p class="id-sub">${p.name}'s character</p>
+              </div>
+            `;
+          }).join('')}
+        </div>
+
+        <div class="card">
+          <p class="panel-title"><span>Board (view only while spectating)</span></p>
+          <div class="grid">
+            ${board.map(c=>`
+              <div class="card-tile">
+                <div class="img-wrap">
+                  <img src="${imgUrl(c)}" alt="${c.name}" loading="lazy" />
+                </div>
+                <div class="cname">${c.name}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="center">
+          <button type="button" class="secondary" id="leaveBtn">Stop Watching</button>
+        </div>
+      </div>
+    `;
+  }
+
+  const me = myPlayer();
+  const opp = oppPlayer();
+  const mySecretChar = me && me.secret ? CHARACTERS.find(c=>c.id===me.secret) : null;
 
   const guessPanel = state.guessPanelOpen ? `
     <div class="card" style="border-color:var(--accent);">
       <p class="panel-title">
         <span>Guess the character (search the ${BOARD_SIZE} on the board)</span>
-        <button class="secondary" id="closeGuessBtn" style="padding:4px 10px; font-size:12px;">Close</button>
+        <button type="button" class="secondary" id="closeGuessBtn" style="padding:4px 10px; font-size:12px;">Close</button>
       </p>
       <div class="search-row"><input id="guessSearchInput" type="text" placeholder="Search a name..." value="${state.guessSearch.replace(/"/g,'&quot;')}" autofocus /></div>
       ${state.guessResult==='miss' ? `<p class="hint" style="color:var(--danger); margin-bottom:8px;">Not quite, try again.</p>` : ''}
@@ -522,7 +648,7 @@ function renderGame(){
       </div>
 
       <div class="center">
-        <button class="secondary" id="leaveBtn">Leave game</button>
+        <button type="button" class="secondary" id="leaveBtn">Leave Game</button>
       </div>
     </div>
   `;
@@ -566,6 +692,16 @@ function attachHandlers(){
   const codeInput = document.getElementById('codeInput');
   if(joinBtn && codeInput) joinBtn.addEventListener('click', ()=>joinRoom(codeInput.value));
   if(codeInput) codeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') joinRoom(codeInput.value); });
+
+  const gwHowToPlayBtn = document.getElementById('gwHowToPlayBtn');
+  if(gwHowToPlayBtn) gwHowToPlayBtn.addEventListener('click', ()=>{
+    showGwNotice('Instructions for Trails Guess Who are coming soon!');
+  });
+
+  const watchBtn = document.getElementById('watchBtn');
+  const watchCodeInput = document.getElementById('watchCodeInput');
+  if(watchBtn && watchCodeInput) watchBtn.addEventListener('click', ()=>watchRoom(watchCodeInput.value));
+  if(watchCodeInput) watchCodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') watchRoom(watchCodeInput.value); });
 
   const leaveBtn = document.getElementById('leaveBtn');
   if(leaveBtn) leaveBtn.addEventListener('click', leaveRoom);
@@ -639,7 +775,7 @@ function attachHandlers(){
       const dir = parseInt(node.getAttribute('data-gwdir'), 10);
       const count = effectiveLayerCount(layer);
       avatar[layer] = ((avatar[layer] - 1 + dir + count) % count) + 1;
-      if(typeof saveAvatar === 'function') saveAvatar();
+      if(typeof saveAvatar === 'function') saveAvatar(avatar);
       const stage = document.getElementById('gwAvatarStage');
       if(stage) renderAvatarStage(stage, avatar);
     });
@@ -651,7 +787,7 @@ function attachHandlers(){
       avatar.hat = Math.floor(Math.random() * effectiveLayerCount('hat')) + 1;
       avatar.face = Math.floor(Math.random() * effectiveLayerCount('face')) + 1;
       avatar.base = Math.floor(Math.random() * effectiveLayerCount('base')) + 1;
-      if(typeof saveAvatar === 'function') saveAvatar();
+      if(typeof saveAvatar === 'function') saveAvatar(avatar);
       const stage = document.getElementById('gwAvatarStage');
       if(stage) renderAvatarStage(stage, avatar);
     });
