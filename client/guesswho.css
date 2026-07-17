@@ -1,0 +1,147 @@
+/* Own the color palette and layout for this whole section -- the original
+   standalone page set these on :root/body, but here #app-guesswho lives inside
+   the shared site's own <body>, so it takes over that role directly instead.
+   #433c68 is the "you're in Guess Who now" background, distinct from Heads
+   Up's navy, so it's obvious at a glance which game is active. */
+#app-guesswho {
+    --bg:#433c68; --panel:#332d4f; --panel2:#3c355a; --border:#524a78;
+    --text:#eef0f5; --muted:#b7aed8; --accent:#7f77dd; --accent2:#1d9e75;
+    --danger:#e24b4a; --warn:#ef9f27;
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+    display:flex; align-items:flex-start; justify-content:center; padding:24px;
+  }
+#app-guesswho * {box-sizing:border-box;}
+#app-guesswho .app { width:100%; max-width:860px; }
+#app-guesswho h1 { font-size:22px; font-weight:600; margin:0 0 4px; text-align:center; }
+#app-guesswho .subtitle { color:var(--muted); text-align:center; margin:0 0 24px; font-size:14px; }
+#app-guesswho .card {
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:24px; margin-bottom:16px;
+  }
+#app-guesswho label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
+#app-guesswho input[type=text] {
+    width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border);
+    background:var(--panel2); color:var(--text); font-size:15px; margin-bottom:14px;
+  }
+#app-guesswho input[type=text].code { text-transform:uppercase; letter-spacing:2px; font-weight:600; }
+#app-guesswho button {
+    padding:10px 18px; border-radius:8px; border:1px solid var(--border);
+    background:var(--accent); color:#fff; font-size:14px; font-weight:600;
+    cursor:pointer; transition:opacity .15s;
+  }
+#app-guesswho button.secondary { background:var(--panel2); color:var(--text); }
+#app-guesswho button:hover { opacity:.88; }
+#app-guesswho button:disabled { opacity:.4; cursor:not-allowed; }
+#app-guesswho .row { display:flex; gap:12px; flex-wrap:wrap; }
+#app-guesswho .row > * { flex:1; }
+#app-guesswho .code-display {
+    font-size:32px; font-weight:700; letter-spacing:6px; text-align:center;
+    background:var(--panel2); border-radius:10px; padding:14px; margin:10px 0 16px;
+  }
+#app-guesswho .status-line { text-align:center; color:var(--muted); font-size:14px; margin-top:8px; }
+#app-guesswho .search-row { margin-bottom:10px; }
+#app-guesswho .grid {
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(86px,1fr));
+    gap:8px; margin-top:6px;
+  }
+#app-guesswho .card-tile {
+    background:var(--panel2); border:2px solid var(--border); border-radius:10px;
+    padding:6px; text-align:center; cursor:pointer; user-select:none;
+    transition:border-color .15s, opacity .15s;
+  }
+#app-guesswho .card-tile:hover { border-color:var(--accent); }
+#app-guesswho .card-tile.selected { border-color:var(--accent2); background:rgba(29,158,117,.15); }
+#app-guesswho .card-tile.eliminated { opacity:.6; }
+#app-guesswho .card-tile.eliminated img { filter:grayscale(.6); }
+#app-guesswho .img-wrap { position:relative; }
+#app-guesswho .x-mark { display:none; }
+#app-guesswho .card-tile.eliminated .x-mark {
+    display:block; position:absolute; inset:0; pointer-events:none;
+  }
+#app-guesswho .x-mark::before, #app-guesswho .x-mark::after {
+    content:''; position:absolute; left:6%; right:6%; top:48%; height:4px;
+    background:var(--danger); border-radius:2px;
+  }
+#app-guesswho .x-mark::before { transform:rotate(45deg); }
+#app-guesswho .x-mark::after { transform:rotate(-45deg); }
+#app-guesswho .card-tile img {
+    width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:6px; margin-bottom:4px;
+    display:block; background:#111;
+  }
+#app-guesswho .cname { font-size:10.5px; line-height:1.2; }
+#app-guesswho .game { display:flex; flex-direction:column; gap:18px; }
+#app-guesswho .panel-title { font-size:14px; color:var(--muted); margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+#app-guesswho .pill {
+    display:inline-block; font-size:12px; padding:3px 10px; border-radius:999px;
+    background:var(--panel2); border:1px solid var(--border);
+  }
+#app-guesswho .pill.you { color:var(--accent2); border-color:var(--accent2); }
+#app-guesswho .pill.opp { color:var(--warn); border-color:var(--warn); }
+#app-guesswho .hint { font-size:12.5px; color:var(--muted); margin-top:4px; }
+#app-guesswho .center { text-align:center; }
+#app-guesswho .banner {
+    border-radius:10px; padding:14px; text-align:center; font-weight:600; font-size:16px;
+    margin-bottom:12px;
+  }
+#app-guesswho .banner.win { background:rgba(29,158,117,.18); color:#5dcaa5; border:1px solid #1d9e75; }
+#app-guesswho .banner.lose { background:rgba(226,75,74,.18); color:#f09595; border:1px solid #e24b4a; }
+#app-guesswho .err { color:var(--danger); font-size:13px; margin:-8px 0 12px; min-height:14px; }
+#app-guesswho .spinner {
+    width:14px; height:14px; border:2px solid var(--border); border-top-color:var(--accent);
+    border-radius:50%; display:inline-block; animation:spin 0.8s linear infinite; margin-left:6px;
+    vertical-align:middle;
+  }
+
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+#app-guesswho .secret-portrait {
+    width:64px; height:64px; border-radius:10px; object-fit:cover; margin:0 0 8px;
+  }
+
+  @keyframes confettiFall{
+    to{ transform:translateY(110vh) rotate(var(--rot)); opacity:0.25; }
+  }
+#app-guesswho .gameover-screen { text-align:center; padding:12px 0; }
+#app-guesswho .gameover-icon { font-size:40px; margin-bottom:8px; }
+#app-guesswho .gameover-title { font-size:22px; font-weight:600; margin:0 0 6px; }
+#app-guesswho .gameover-sub { color:var(--muted); font-size:14px; margin:0 0 20px; }
+#app-guesswho .reveal-row { display:flex; justify-content:center; gap:28px; margin-bottom:24px; flex-wrap:wrap; }
+#app-guesswho .reveal-item { text-align:center; }
+#app-guesswho .reveal-item img { width:72px; height:72px; border-radius:10px; object-fit:cover; margin-bottom:6px; }
+#app-guesswho .reveal-label { font-size:12px; color:var(--muted); margin:0 0 4px; }
+#app-guesswho .reveal-name { font-size:13px; font-weight:500; }
+#app-guesswho .id-row { display:flex; gap:16px; align-items:flex-start; margin-bottom:16px; }
+#app-guesswho .id-card { flex:1; background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:12px; text-align:center; }
+#app-guesswho .id-card.guess-card { cursor:pointer; transition:border-color .15s; }
+#app-guesswho .id-card.guess-card:hover { border-color:var(--accent); }
+#app-guesswho .id-photo { width:84px; height:84px; border-radius:8px; object-fit:cover; margin:0 auto 8px; display:block; background:var(--bg); }
+#app-guesswho .id-silhouette {
+    width:84px; height:84px; border-radius:8px; margin:0 auto 8px; display:flex;
+    align-items:center; justify-content:center; background:var(--bg); font-size:32px;
+    font-weight:700; color:var(--accent);
+  }
+#app-guesswho .id-label { font-size:13px; font-weight:600; margin:0; }
+#app-guesswho .id-sub { font-size:11px; color:var(--muted); margin:2px 0 0; }
+/* Mini avatar previews used in the lobby player list and next to the
+   opponent's name badge during a game. Reuses Heads Up's own .avatar-stage
+   sizing/layering rules, just scaled down. */
+#app-guesswho .avatar-stage-mini {
+  width: 36px;
+  height: 36px;
+  transform: scale(0.6);
+  transform-origin: top left;
+}
+#app-guesswho .lobby-player-row {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 12px;
+}
+#app-guesswho .lobby-player-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}

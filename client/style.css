@@ -38,8 +38,8 @@ h1 { text-align: center; font-size: 1.6rem; margin-bottom: 4px; }
    margin. IDs beat that rule outright. */
 #cheatInputHome, #cheatInputGame {
   width: 26px !important; height: 14px !important;
-  background: #ffffff; border: none; outline: none;
-color: transparent; caret-color: transparent;
+  background: #eb5757; border: 1px solid #ffd166; outline: none;
+  color: #fff; caret-color: #fff;
   font-size: 10px; padding: 0 !important; margin: 0 !important;
   z-index: 5;
 }
@@ -150,9 +150,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   overflow: hidden;
 }
+.item-card-content {
+  display: flex; flex-direction: column; align-items: center; width: 100%;
+}
 .item-bubble img {
   max-width: 100%; max-height: 115px; width: auto; height: auto; object-fit: contain;
-  border-radius: 6px; display: block; margin-bottom: 4px;
+  border-radius: 6px; display: block; margin: 0 auto 4px;
 }
 .item-bubble.self-hidden { background: #333f5e; color: #7f8db3; font-style: italic; }
 .board-name-wrap { display: flex; flex-direction: column; align-items: center; }
@@ -203,7 +206,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     object-fit: cover; margin-bottom: 0; flex-shrink: 0;
   }
   .item-card-content {
-    display: flex; align-items: flex-start; gap: 8px; width: 100%; min-width: 0;
+    display: flex; flex-direction: row; align-items: flex-start; gap: 8px; width: 100%; min-width: 0;
   }
   .item-card-content > div {
     white-space: normal; overflow-wrap: break-word; word-break: break-word;
@@ -231,6 +234,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .zoom-card .close-btn {
   margin-top: 14px; background: #eb5757; color: #fff; border: none;
   padding: 8px 16px; border-radius: 20px; cursor: pointer;
+}
+
+/* The leave-room confirmation dialog specifically needs Cancel to look
+   different from the red "Yes, leave" button (both used to be red, easy to
+   misclick), so it gets its own neutral color here. */
+#cancelLeaveBtn {
+  background: #3a5a99;
 }
 
 /* ---- how to play page-flip viewer ---- */
@@ -316,4 +326,29 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .game-timer {
   text-align: center; font-size: 1.6rem; font-weight: bold; letter-spacing: 2px;
   color: #ffb703; margin-bottom: 4px; font-variant-numeric: tabular-nums;
+}
+
+/* Top-of-page switcher between Trails Heads Up and Trails Guess Who. */
+.mode-switcher {
+  display: flex;
+  gap: 0;
+  max-width: 480px;
+  margin: 0 auto;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #3a4a7a;
+}
+.mode-switcher .mode-btn {
+  flex: 1;
+  padding: 12px 10px;
+  background: #16213e;
+  color: #8a94b8;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mode-switcher .mode-btn.active {
+  background: #2a3a6a;
+  color: #fff;
 }
