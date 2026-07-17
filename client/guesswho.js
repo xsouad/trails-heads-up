@@ -723,6 +723,14 @@ function render(){
     gwScreen.classList.toggle('screen-wide', wide);
   }
 
+  // The subtitle/How to Play blurb is only for the home screen -- once
+  // you've actually started a room (lobby onward), it just eats space you
+  // need for the game itself.
+  const gwTopBlurb = document.getElementById('gwTopBlurb');
+  if(gwTopBlurb){
+    gwTopBlurb.style.display = state.screen === 'home' ? '' : 'none';
+  }
+
   const newGrid = document.querySelector('.grid');
   if(newGrid) newGrid.scrollTop = prevScroll;
   window.scrollTo(0, prevWindowScroll);
@@ -846,5 +854,13 @@ function attachHandlers(){
     }
   }
 }
+
+// Static, page-level element (not re-created by render()), so it only needs
+// binding once here rather than on every re-render like the dynamic gwRoot
+// content does.
+const gwHowToPlayBtn = document.getElementById('gwHowToPlayBtn');
+if(gwHowToPlayBtn) gwHowToPlayBtn.addEventListener('click', ()=>{
+  showGwNotice('Instructions for Trails Guess Who are coming soon!');
+});
 
 loadCharacters().then(render);
