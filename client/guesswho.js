@@ -489,7 +489,7 @@ function renderPick(){
         </div>
       ` : `
         <div class="search-row"><input id="searchInput" type="text" placeholder="Search a name..." value="${state.search.replace(/"/g,'&quot;')}" /></div>
-        <div class="grid">
+        <div class="grid lock-in-clearance">
           ${chars.map(c=>`
             <div class="card-tile ${state.pickSelection===c.id ? 'selected':''}" data-pick="${c.id}">
               <img src="${imgUrl(c)}" alt="${c.name}" loading="lazy" />
@@ -497,10 +497,7 @@ function renderPick(){
             </div>
           `).join('')}
         </div>
-        <div class="row" style="align-items:center; margin-top:12px">
-          <div class="hint" style="flex:2">${state.pickSelection ? 'Selected: '+CHARACTERS.find(c=>c.id===state.pickSelection).name : 'Tap a character to select it'}</div>
-          <button type="button" id="lockInBtn" ${!state.pickSelection?'disabled':''} style="flex:1">Lock in</button>
-        </div>
+        <button type="button" id="lockInBtn" class="lock-in-floating" ${!state.pickSelection?'disabled':''}>${state.pickSelection ? 'Lock In: '+CHARACTERS.find(c=>c.id===state.pickSelection).name : 'Tap a character to select it'}</button>
       `}
       <p class="status-line">${opp ? (opp.secret ? opp.name+' has locked in their character' : opp.name+' is still choosing'+'<span class="spinner"></span>') : ''}</p>
     </div>
