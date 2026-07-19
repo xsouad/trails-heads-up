@@ -62,7 +62,7 @@ body { background:#2e2a49; margin:0; }
   #app-guesswho .join-watch-row { flex-direction:row; align-items:stretch; }
   #app-guesswho .join-watch-row .card { flex:1; margin-bottom:0; }
 }
-#app-guesswho h1 { font-size:22px; font-weight:600; margin:0 0 24px; text-align:center; }
+#app-guesswho h1 { font-size:22px; font-weight:600; margin:0 0 4px; text-align:center; }
 #app-guesswho .subtitle { color:var(--muted); text-align:center; margin:0 0 24px; font-size:14px; }
 #app-guesswho .card {
     background:var(--panel); border:1px solid var(--border); border-radius:14px;
@@ -209,18 +209,10 @@ body { background:#2e2a49; margin:0; }
 #app-guesswho .gameover-screen { text-align:center; padding:12px 0; }
 #app-guesswho .gameover-icon { font-size:40px; margin-bottom:8px; }
 #app-guesswho .gameover-title { font-size:22px; font-weight:600; margin:0 0 6px; }
-/* Play again / Leave Room / rematch buttons on the game-over screen --
-   these previously inherited the site-wide full-width button style, which
-   looked absurdly stretched out on a screen that's otherwise centered and
-   compact. */
-#app-guesswho .gameover-btn { width:auto; display:inline-block; padding:10px 28px; margin-top:8px; }
-#app-guesswho .rematch-accept { background:#17C3B2; color:#fff; }
-#app-guesswho .gameover-screen .row { justify-content:center; }
-#app-guesswho .gameover-screen .row > * { flex:0 0 auto; }
 #app-guesswho .gameover-sub { color:var(--muted); font-size:14px; margin:0 0 20px; }
 #app-guesswho .reveal-row { display:flex; justify-content:center; gap:28px; margin-bottom:24px; flex-wrap:wrap; }
 #app-guesswho .reveal-item { text-align:center; }
-#app-guesswho .reveal-item img { width:120px; height:120px; border-radius:12px; object-fit:cover; margin-bottom:6px; }
+#app-guesswho .reveal-item img { width:72px; height:72px; border-radius:10px; object-fit:cover; margin-bottom:6px; }
 #app-guesswho .reveal-label { font-size:12px; color:var(--muted); margin:0 0 4px; }
 #app-guesswho .reveal-name { font-size:13px; font-weight:500; }
 #app-guesswho .id-row { display:flex; gap:16px; align-items:flex-start; margin-bottom:16px; }
