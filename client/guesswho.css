@@ -278,3 +278,12 @@ body { background:#2e2a49; margin:0; }
   font-size: 13px;
   color: var(--muted);
 }
+
+/* The how-to-play overlay reuses Heads Up's shared card styling (navy by
+   default) -- overridden here so it matches this game's purple theme
+   instead of looking like it teleported in from the other game. */
+#gwHowToPlayOverlay .how-to-play-card {
+  background: #3a3260;
+  border-color: #6a5fa8;
+}
+#gwHowToPlayOverlay .how-to-play-pagecount { color: #c9bdec; }
