@@ -186,6 +186,16 @@ async function joinRoom(codeInput){
   const code = codeInput.trim().toUpperCase();
   if(!state.playerName.trim()){ state.error='Enter your name first'; render(); return; }
   if(!code){ state.error='Enter a room code'; render(); return; }
+  // Catches the easy mix-up where someone pastes the room code into the name
+  // field instead of the code field (their opponent then sees the room code
+  // show up as a "name" everywhere -- confusing and has happened more than
+  // once). Blocks the exact case where the two match instead of guessing at
+  // what a "real" name looks like.
+  if(state.playerName.trim().toUpperCase() === code){
+    state.error = "That's the room code, not a name -- put your actual name in the name field above.";
+    render();
+    return;
+  }
   state.error=''; state.loading=true; render();
   const snap = await db.ref('rooms/' + code).get();
   const room = snap.val();
@@ -284,14 +294,14 @@ async function guessChar(charId){
   const oppId = room && room.players ? Object.keys(room.players).find(id=>id!==state.playerId) : null;
   if(!room || !opp || !oppId || room.status==='over') return;
   if(charId===opp.secret){
-    await db.ref('rooms/' + state.code).update({ status:'over', winner:state.playerId });
+    await db.ref('rooms/' + state.code).update({ status:'over', winner:state.playerId, winReason:'guessed' });
     state.guessMode = false;
   }else{
     const me = myPlayer();
     const nextStrikes = (me && me.strikes ? me.strikes : 0) + 1;
     await db.ref('rooms/' + state.code + '/players/' + state.playerId + '/strikes').set(nextStrikes);
     if(nextStrikes >= MAX_STRIKES){
-      await db.ref('rooms/' + state.code).update({ status:'over', winner:oppId });
+      await db.ref('rooms/' + state.code).update({ status:'over', winner:oppId, winReason:'strikeout' });
     }
     state.guessMode = false;
     render();
@@ -555,6 +565,7 @@ function renderGameOver(){
   }
 
   const iWon = room.winner===state.playerId;
+  const strikeout = room.winReason==='strikeout';
   const mySecretChar = me && me.secret ? CHARACTERS.find(c=>c.id===me.secret) : null;
   const oppSecretChar = opp && opp.secret ? CHARACTERS.find(c=>c.id===opp.secret) : null;
   const rematch = room.rematch;
@@ -565,22 +576,31 @@ function renderGameOver(){
   if(theyRequested){
     rematchSection = `
       <p class="hint" style="margin-bottom:10px;">${opp.name} wants to play again</p>
-      <div class="row">
-        <button type="button" id="acceptRematchBtn">Yes, rematch</button>
-        <button type="button" class="secondary" id="declineRematchBtn">No thanks</button>
-      </div>
+      <button type="button" id="acceptRematchBtn" class="gameover-btn rematch-accept">Yes, rematch</button>
     `;
   }else if(iRequested){
     rematchSection = `<p class="status-line">Waiting for ${opp ? opp.name : 'opponent'} to respond${'<span class="spinner"></span>'}</p>`;
   }else{
-    rematchSection = `<button type="button" id="rematchBtn" style="width:100%">Play again</button>`;
+    rematchSection = `<button type="button" id="rematchBtn" class="gameover-btn rematch-accept">Play again</button>`;
+  }
+
+  // Win/loss text is specific about *why* the round ended -- guessed
+  // correctly vs. the other player running out of tries reads very
+  // differently, so it shouldn't share the same generic "you win" line.
+  let title, sub;
+  if(strikeout){
+    title = iWon ? "You won, your friend guessed wrong!" : "You used up all your tries!";
+    sub = iWon ? "They ran out of guesses." : `${opp ? opp.name : 'Your friend'} wins this round.`;
+  }else{
+    title = iWon ? 'You win!' : (opp ? opp.name+' wins!' : 'Game over');
+    sub = iWon ? 'Nice deducing.' : 'Better luck next round.';
   }
 
   return `
     <div class="card gameover-screen">
-      <div class="gameover-icon">${iWon ? '🏆' : '🔎'}</div>
-      <p class="gameover-title">${iWon ? 'You win!' : (opp ? opp.name+' wins!' : 'Game over')}</p>
-      <p class="gameover-sub">${iWon ? 'Nice deducing.' : 'Better luck next round.'}</p>
+      <div class="gameover-icon">${iWon ? '🏆' : '😢'}</div>
+      <p class="gameover-title">${title}</p>
+      <p class="gameover-sub">${sub}</p>
       <div class="reveal-row">
         <div class="reveal-item">
           <p class="reveal-label">Your character</p>
@@ -594,7 +614,7 @@ function renderGameOver(){
         </div>
       </div>
       ${rematchSection}
-      <div style="margin-top:14px;"><button type="button" class="secondary" id="leaveBtn">Leave Room</button></div>
+      <div style="margin-top:14px;"><button type="button" class="secondary gameover-btn" id="leaveBtn">Leave Room</button></div>
     </div>
   `;
 }
@@ -796,9 +816,6 @@ function attachHandlers(){
 
   const acceptRematchBtn = document.getElementById('acceptRematchBtn');
   if(acceptRematchBtn) acceptRematchBtn.addEventListener('click', ()=>respondRematch(true));
-
-  const declineRematchBtn = document.getElementById('declineRematchBtn');
-  if(declineRematchBtn) declineRematchBtn.addEventListener('click', ()=>respondRematch(false));
 
   // Avatar builder on the home screen. This reuses the exact same shared
   // `avatar` object, LAYER_COUNTS/effectiveLayerCount, and renderAvatarStage
