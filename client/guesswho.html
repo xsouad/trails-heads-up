@@ -19,8 +19,24 @@
 
   <div class="screen active" id="gwScreen">
     <h1>Trails Guess Who</h1>
+    <div id="gwTopBlurb">
+      <p class="subtitle">Pick a secret character. Ask yes or no questions. Guess who they've got first.</p>
+      <button type="button" id="gwHowToPlayBtn" class="how-to-play-link">How to Play</button>
+    </div>
 
     <div id="gwRoot"></div>
+  </div>
+</div>
+
+<div class="zoom-overlay" id="gwHowToPlayOverlay">
+  <div class="how-to-play-card">
+    <button class="close-btn how-to-play-close" id="gwHowToPlayCloseBtn">Close</button>
+    <div class="how-to-play-viewer">
+      <button class="how-to-play-arrow how-to-play-prev" id="gwHowToPlayPrevBtn" aria-label="Previous page">&lt;</button>
+      <img id="gwHowToPlayImg" src="" alt="How to Play">
+      <button class="how-to-play-arrow how-to-play-next" id="gwHowToPlayNextBtn" aria-label="Next page">&gt;</button>
+    </div>
+    <div class="how-to-play-pagecount" id="gwHowToPlayPageCount"></div>
   </div>
 </div>
 
