@@ -15,14 +15,16 @@ const db = firebase.database();
 
 const svgns = "http://www.w3.org/2000/svg";
 const WHEEL_CX = 200, WHEEL_CY = 200, WHEEL_R = 170, HOOD_R = 185;
-const NOTCH_R0 = 190, NOTCH_R1 = 204, RAY_COUNT = 16;
-const ROUNDS_PER_MATCH = 7;
+const NOTCH_R0 = 186, NOTCH_R1 = 195, RAY_COUNT = 16;
+// 5 rounds each, alternating who's psychic, starting with the host -- 10 total.
+const ROUNDS_PER_MATCH = 10;
+const REVEAL_DISPLAY_MS = 15000;
 const ORANGE = "#F0997B";
 const TEAL = "#5DCAA5";
 const PURPLE_BAND = "#AFA9EC";
 
 // A grab bag of Trails-themed opposite word pairs for "Random" mode. "Shuffle"
-// just draws a new one from here, as many times as the players want before
+// just draws a new one from here, as many times as the host wants before
 // they're happy with it.
 const WORD_PAIRS = [
   ["Erebonia","Calvard"],["Noble","Commoner"],["Ironblood","Reformist"],
@@ -55,16 +57,6 @@ function genCode(){
 function genId(){ return 'p_'+Math.random().toString(36).slice(2,10); }
 function randomPair(){ return WORD_PAIRS[Math.floor(Math.random()*WORD_PAIRS.length)]; }
 
-function showWlNotice(text){
-  const bar = document.getElementById('wlNoticeBar');
-  if(!bar) return;
-  const toast = document.createElement('div');
-  toast.className = 'notice-toast';
-  toast.textContent = text;
-  bar.appendChild(toast);
-  setTimeout(()=>{ toast.remove(); }, 4500);
-}
-
 let state = {
   screen: 'home', // home, lobby, pairing, playing, complete, opponentLeft
   code: null,
@@ -81,10 +73,6 @@ let state = {
   localNeedle: 90,
   hoodOpen: 0,
   guesserHoodOpen: 0,
-  lastRawAngle: 0,
-  draggingWheel: false,
-  draggingHood: false,
-  draggingNeedle: false,
   notchesTarget: null // set once the psychic locks, so the reference marks survive
 };
 
@@ -92,9 +80,8 @@ let roomRef = null;
 let lastWriteAt = {};
 function throttledSet(path, value, minGapMs){
   const now = Date.now();
-  const key = path;
-  if(!lastWriteAt[key] || now-lastWriteAt[key] >= minGapMs){
-    lastWriteAt[key] = now;
+  if(!lastWriteAt[path] || now-lastWriteAt[path] >= minGapMs){
+    lastWriteAt[path] = now;
     db.ref(path).set(value);
   }
 }
@@ -117,15 +104,15 @@ function attachRoomListener(code){
       return;
     }
     if(room){
-      const wasPlaying = state.room && state.room.status;
+      const prevStatus = state.room && state.room.status;
+      const prevRound = state.room && state.room.round;
       state.room = room;
       if(state.screen!=='home' && state.screen!=='opponentLeft'){
         state.screen = room.status;
       }
       // A fresh round (or a fresh pair, in custom mode) means the persistent
-      // notches from the previous target are stale -- clear them so the
-      // psychic doesn't mistake old marks for the new one.
-      if(wasPlaying !== room.status && (room.status==='playing' || room.status==='pairing')){
+      // notches and local drag state from the previous target are stale.
+      if((prevStatus !== room.status || prevRound !== room.round) && (room.status==='playing' || room.status==='pairing')){
         state.notchesTarget = null;
         state.hoodOpen = 0;
         state.guesserHoodOpen = 0;
@@ -136,36 +123,18 @@ function attachRoomListener(code){
       if(room.status==='playing'){
         state.localNeedle = room.needleAngle;
       }
-      updateRoundFade(room);
       render();
     }
   });
 }
 function detachRoomListener(){ if(roomRef){ roomRef.off(); roomRef=null; } }
 
-// Instead of the game snapping straight into the next round's fresh layout,
-// this fades the whole board to the background color the instant a reveal
-// happens, resets underneath while hidden, then fades back in once the new
-// round's data has arrived -- no jarring instant reset.
-let prevLastScore = undefined;
-function updateRoundFade(room){
-  const fade = document.getElementById('wlRoundFade');
-  if(!fade) return;
-  if(room.lastScore != null && prevLastScore == null){
-    fade.classList.add('show');
-  } else if(room.lastScore == null && prevLastScore != null){
-    requestAnimationFrame(()=>{ fade.classList.remove('show'); });
-  }
-  prevLastScore = room.lastScore;
-}
-
 function myPlayer(){
   if(!state.room || !state.room.players) return null;
   return state.room.players[state.playerId] || null;
 }
-function isPsychic(){
-  return !!(state.room && state.room.psychicId === state.playerId);
-}
+function isHost(){ return !!(state.room && state.room.hostId === state.playerId); }
+function isPsychic(){ return !!(state.room && state.room.psychicId === state.playerId); }
 function opponentEntry(){
   if(!state.room || !state.room.players) return null;
   const entries = Object.entries(state.room.players);
@@ -285,6 +254,8 @@ async function leaveRoom(){
     try { await playerRef.onDisconnect().cancel(); await playerRef.remove(); } catch(e){}
   }
   detachRoomListener();
+  stopCountdown();
+  mountedPlayingKey = null;
   state = Object.assign({}, state, {
     screen:'home', code:null, playerId: genId(), room:null, isSpectator:false,
     joinIntent:null, error:'', hadFullRoom:false, localRotation:90, localNeedle:90,
@@ -293,38 +264,40 @@ async function leaveRoom(){
   render();
 }
 
-// ---------- pairing phase ----------
+// ---------- pairing phase (host-only) ----------
 
 function setPairMode(mode){
-  if(state.isSpectator) return;
+  if(!isHost()) return;
   db.ref('wavelength_rooms/' + state.code).update({
     pairMode: mode,
-    pair: mode==='random' ? randomPair() : { left:'', right:'' },
-    pairReady: null
+    pair: mode==='random' ? randomPair() : { left:'', right:'' }
   });
 }
 function shuffleRandomPair(){
-  if(state.isSpectator) return;
+  if(!isHost()) return;
   db.ref('wavelength_rooms/' + state.code + '/pair').set(randomPair());
 }
 function updateCustomPair(side, value){
-  if(state.isSpectator) return;
+  if(!isHost()) return;
   db.ref('wavelength_rooms/' + state.code + '/pair/' + side).set(value);
-  db.ref('wavelength_rooms/' + state.code + '/pairReady').set(null);
-}
-function agreeToPair(){
-  if(state.isSpectator) return;
-  const pair = state.room.pair || {};
-  if(!pair.left || !pair.right) return;
-  db.ref('wavelength_rooms/' + state.code + '/pairReady/' + state.playerId).set(true);
 }
 async function startFirstRound(){
-  if(state.isSpectator) return;
+  if(!isHost()) return;
   const pair = state.room.pair;
   if(!pair || !pair.left || !pair.right) return;
   await db.ref('wavelength_rooms/' + state.code).update({
     status: 'playing', round: 1, psychicId: state.room.hostId,
-    rotation: 90, needleAngle: 90, spun: false, locked: false, revealed: false, lastScore: null
+    rotation: 90, needleAngle: 90, spun: false, locked: false, revealed: false,
+    lastScore: null, revealedAt: null
+  });
+}
+async function startNextRoundFromPairing(){
+  if(!isHost()) return;
+  const pair = state.room.pair;
+  if(!pair || !pair.left || !pair.right) return;
+  await db.ref('wavelength_rooms/' + state.code).update({
+    status:'playing', rotation:90, needleAngle:90, spun:false, locked:false, revealed:false,
+    lastScore: null, revealedAt: null
   });
 }
 
@@ -334,6 +307,7 @@ function effectiveTarget(rotation){ return properMod(rotation, 180); }
 
 function drawWedges(target, revealNumbers){
   const g = document.getElementById('wlWedges');
+  if(!g) return;
   g.innerHTML = '';
   const base = document.createElementNS(svgns,'path');
   base.setAttribute('d', sectorPath(0,180,20,WHEEL_R));
@@ -436,9 +410,8 @@ function shortestDelta(from,to){ return properMod(to-from+180, 360) - 180; }
 
 async function lockTarget(){
   state.notchesTarget = effectiveTarget(state.localRotation);
+  await forceSet('wavelength_rooms/' + state.code + '/rotation', state.localRotation);
   forceSet('wavelength_rooms/' + state.code + '/locked', true);
-  forceSet('wavelength_rooms/' + state.code + '/rotation', state.localRotation);
-  render();
 }
 async function revealAndScore(){
   const room = state.room;
@@ -447,17 +420,19 @@ async function revealAndScore(){
   const pts = diff<=4?4:diff<=10?3:diff<=18?2:0;
   const psychicId = room.psychicId;
   const psychicScore = (room.players[psychicId] && room.players[psychicId].score) || 0;
+  const revealedAt = Date.now();
   await db.ref('wavelength_rooms/' + state.code).update({
     revealed: true,
     needleAngle: state.localNeedle,
     lastScore: pts,
+    revealedAt,
     ['players/'+psychicId+'/score']: psychicScore + pts
   });
-  setTimeout(advanceRound, 1600);
+  setTimeout(advanceRound, REVEAL_DISPLAY_MS);
 }
 async function advanceRound(){
   const room = state.room;
-  if(!room) return;
+  if(!room || room.status!=='playing') return;
   const nextRound = (room.round||1) + 1;
   const nextPsychic = opponentEntry() ? opponentEntry().id : room.psychicId;
   if(nextRound > ROUNDS_PER_MATCH){
@@ -468,35 +443,51 @@ async function advanceRound(){
     await db.ref('wavelength_rooms/' + state.code).update({
       status:'playing', round: nextRound, psychicId: nextPsychic,
       rotation:90, needleAngle:90, spun:false, locked:false, revealed:false,
+      lastScore: null, revealedAt: null,
       pair: randomPair()
     });
   } else {
     await db.ref('wavelength_rooms/' + state.code).update({
       status:'pairing', round: nextRound, psychicId: nextPsychic,
       rotation:90, needleAngle:90, spun:false, locked:false, revealed:false,
-      pair: { left:'', right:'' }, pairReady: null
+      lastScore: null, revealedAt: null,
+      pair: { left:'', right:'' }
     });
   }
 }
 async function playAgain(){
-  if(state.isSpectator) return;
+  if(!isHost()) return;
   const ids = Object.keys(state.room.players || {});
-  const updates = { status:'pairing', round:0, pair:{left:'',right:''}, pairReady:null };
+  const updates = { status:'pairing', round:0, pair:{left:'',right:''}, lastScore:null, revealedAt:null };
   ids.forEach(id=>{ updates['players/'+id+'/score'] = 0; });
   await db.ref('wavelength_rooms/' + state.code).update(updates);
 }
 
 // ---------- rendering ----------
 
+let mountedPlayingKey = null;
+
 function render(){
   const root = document.getElementById('wlRoot');
+  if(state.screen==='playing' && state.room){
+    const key = state.code + '|' + state.room.round;
+    if(mountedPlayingKey !== key){
+      root.innerHTML = renderPlaying();
+      mountedPlayingKey = key;
+      attachStaticHandlers();
+      mountWheel();
+    }
+    syncPlayingScreen();
+    return;
+  }
+  mountedPlayingKey = null;
+  stopCountdown();
   if(state.screen==='home') root.innerHTML = renderHome();
   else if(state.screen==='lobby') root.innerHTML = renderLobby();
   else if(state.screen==='pairing') root.innerHTML = renderPairing();
-  else if(state.screen==='playing') root.innerHTML = renderPlaying();
   else if(state.screen==='complete') root.innerHTML = renderComplete();
   else if(state.screen==='opponentLeft') root.innerHTML = renderOpponentLeft();
-  attachHandlers();
+  attachStaticHandlers();
 }
 
 function renderHome(){
@@ -505,11 +496,11 @@ function renderHome(){
       <button type="button" class="primary" id="wlCreateBtn">Create Room</button>
       <div class="join-row">
         <input id="wlCodeInput" type="text" placeholder="Room code" maxlength="4" />
-        <button type="button" id="wlJoinBtn">Join</button>
+        <button type="button" class="secondary" id="wlJoinBtn">Join</button>
       </div>
       <div class="join-row">
         <input id="wlWatchCodeInput" type="text" placeholder="Room code" maxlength="4" />
-        <button type="button" class="secondary" id="wlWatchBtn">Watch</button>
+        <button type="button" class="secondary wl-watch-btn" id="wlWatchBtn">Watch</button>
       </div>
       ${state.error ? `<p class="error-text">${state.error}</p>` : ''}
     </div>
@@ -543,32 +534,33 @@ function renderPairing(){
   const room = state.room;
   const mode = room.pairMode || 'random';
   const pair = room.pair || {left:'',right:''};
-  const psychic = room.psychicId === state.playerId;
-  const ready = room.pairReady || {};
-  const bothReady = Object.keys(ready).length>=2 && Object.values(ready).every(Boolean);
+  const host = isHost();
   return `
     <div class="card center">
-      <p class="hint">Round ${Math.max(1,room.round||1)} of ${ROUNDS_PER_MATCH} &middot; pick a word pair</p>
-      <div class="wl-mode-toggle">
-        <button type="button" class="wl-mode-btn ${mode==='random'?'active':''}" data-wlpairmode="random" ${state.isSpectator?'disabled':''}>Random suggestions</button>
-        <button type="button" class="wl-mode-btn ${mode==='custom'?'active':''}" data-wlpairmode="custom" ${state.isSpectator?'disabled':''}>Agree on your own</button>
-      </div>
-      ${mode==='random' ? `
+      <p class="hint">Round ${Math.max(1,room.round||1)} of ${ROUNDS_PER_MATCH} &middot; word pair</p>
+      ${host ? `
+        <div class="wl-mode-toggle">
+          <button type="button" class="wl-mode-btn ${mode==='random'?'active':''}" data-wlpairmode="random">Random suggestions</button>
+          <button type="button" class="wl-mode-btn ${mode==='custom'?'active':''}" data-wlpairmode="custom">Type your own</button>
+        </div>
+        ${mode==='random' ? `
+          <div class="wl-pair-display">
+            <span>${pair.left||'...'}</span><span class="wl-pair-vs">vs</span><span>${pair.right||'...'}</span>
+          </div>
+          <button type="button" class="secondary" id="wlShuffleBtn">Shuffle another pair</button>
+          <button type="button" class="primary" id="wlStartRoundBtn">Use this pair</button>
+        ` : `
+          <div class="wl-pair-inputs">
+            <input type="text" id="wlPairLeft" placeholder="Left word" maxlength="24" value="${(pair.left||'').replace(/"/g,'&quot;')}" />
+            <input type="text" id="wlPairRight" placeholder="Right word" maxlength="24" value="${(pair.right||'').replace(/"/g,'&quot;')}" />
+          </div>
+          <button type="button" class="primary" id="wlStartRoundBtn" ${(!pair.left||!pair.right)?'disabled':''}>Start round</button>
+        `}
+      ` : `
+        <p class="hint">The host is choosing this round's word pair...</p>
         <div class="wl-pair-display">
           <span>${pair.left||'...'}</span><span class="wl-pair-vs">vs</span><span>${pair.right||'...'}</span>
         </div>
-        ${state.isSpectator ? '' : `
-          <button type="button" class="secondary" id="wlShuffleBtn">Shuffle another pair</button>
-          <button type="button" class="primary" id="wlStartRoundBtn">Use this pair</button>
-        `}
-      ` : `
-        <div class="wl-pair-inputs">
-          <input type="text" id="wlPairLeft" placeholder="Left word" maxlength="24" value="${(pair.left||'').replace(/"/g,'&quot;')}" ${state.isSpectator?'disabled':''} />
-          <input type="text" id="wlPairRight" placeholder="Right word" maxlength="24" value="${(pair.right||'').replace(/"/g,'&quot;')}" ${state.isSpectator?'disabled':''} />
-        </div>
-        ${state.isSpectator ? '' : `<button type="button" class="secondary" id="wlAgreeBtn" ${ready[state.playerId]?'disabled':''}>${ready[state.playerId] ? 'Waiting on the other player...' : 'I agree to this pair'}</button>`}
-        <p class="hint">${bothReady ? 'Both players agreed!' : 'Both players need to agree before the round can start.'}</p>
-        ${(bothReady && !state.isSpectator) ? `<button type="button" class="primary" id="wlStartRoundBtn">Start round</button>` : ''}
       `}
     </div>
   `;
@@ -596,25 +588,22 @@ function renderWheelSvg(){
   `;
 }
 
+// Static shell for a round. Built once when the round number changes and
+// never innerHTML-replaced again mid-round -- only individual attributes and
+// text nodes get updated after this (see syncPlayingScreen), so an in-progress
+// drag never gets its listeners yanked out from under it.
 function renderPlaying(){
-  const room = state.room;
-  const psychic = isPsychic();
-  const pair = room.pair || {left:'',right:''};
   return `
     <div class="card center">
-      <p class="hint">Round ${room.round} of ${ROUNDS_PER_MATCH}</p>
-      <div class="wl-pair-display small">
-        <span>${pair.left}</span><span class="wl-pair-vs">vs</span><span>${pair.right}</span>
-      </div>
-      <p class="wl-role-label">${state.isSpectator ? 'Spectating' : (psychic ? "You're the psychic" : "You're guessing")}</p>
-      <div class="wl-scoreboard">
-        ${Object.entries(room.players||{}).map(([pid,p])=>`<span>${p.name}: ${p.score||0}</span>`).join(' &nbsp; ')}
-      </div>
+      <p class="hint" id="wlRoundLine"></p>
+      <div class="wl-pair-display small" id="wlPairLine"></div>
+      <p class="wl-role-label" id="wlRoleLine"></p>
+      <div class="wl-scoreboard" id="wlScoreboard"></div>
       <div class="wl-wheel-wrap" style="position:relative;">
         ${renderWheelSvg()}
       </div>
       <p class="status" id="wlStatusLine"></p>
-      ${room.lastScore!=null ? `<p class="wl-score-toast">${room.lastScore>0 ? 'Scored '+room.lastScore+' points!' : 'No points that round.'} Starting next round...</p>` : ''}
+      <div id="wlResultPanel" class="wl-result-panel"></div>
       ${state.isSpectator ? '' : '<button type="button" class="secondary" id="leaveBtn" style="margin-top:14px;">Leave Room</button>'}
     </div>
   `;
@@ -651,7 +640,10 @@ function renderOpponentLeft(){
 
 // ---------- wiring ----------
 
-function attachHandlers(){
+// Handlers for whatever screen is currently mounted (everything except the
+// in-round wheel itself, which mountWheel binds separately and only once per
+// round -- see render()'s mount/sync split above).
+function attachStaticHandlers(){
   const createBtn = document.getElementById('wlCreateBtn');
   if(createBtn) createBtn.addEventListener('click', ()=>openJoinModal('create'));
 
@@ -680,66 +672,28 @@ function attachHandlers(){
   if(shuffleBtn) shuffleBtn.addEventListener('click', shuffleRandomPair);
   const startRoundBtn = document.getElementById('wlStartRoundBtn');
   if(startRoundBtn) startRoundBtn.addEventListener('click', ()=>{
-    if(state.room.status==='lobby' || !state.room.round){ startFirstRound(); }
-    else {
-      db.ref('wavelength_rooms/' + state.code).update({
-        status:'playing', rotation:90, needleAngle:90, spun:false, locked:false, revealed:false
-      });
-    }
+    if(!state.room.round){ startFirstRound(); } else { startNextRoundFromPairing(); }
   });
   const pairLeft = document.getElementById('wlPairLeft');
   const pairRight = document.getElementById('wlPairRight');
   if(pairLeft) pairLeft.addEventListener('change', e=>updateCustomPair('left', e.target.value));
   if(pairRight) pairRight.addEventListener('change', e=>updateCustomPair('right', e.target.value));
-  const agreeBtn = document.getElementById('wlAgreeBtn');
-  if(agreeBtn) agreeBtn.addEventListener('click', agreeToPair);
 
   const playAgainBtn = document.getElementById('wlPlayAgainBtn');
   if(playAgainBtn) playAgainBtn.addEventListener('click', playAgain);
-
-  if(state.screen==='playing') wireWheel();
 }
 
-function wireWheel(){
-  const room = state.room;
+// Binds the wheel's drag listeners exactly once per round. Every check inside
+// reads live state.room fresh (never a captured snapshot), since locked/spun/
+// revealed all change mid-round without the shell being rebuilt.
+function mountWheel(){
   const svg = document.getElementById('wlSvg');
   if(!svg) return;
-  const psychic = isPsychic();
-  const target = effectiveTarget(room.rotation);
-
   buildHoodDecor();
-  // The guesser (and any spectator, deliberately, since watching is meant to
-  // show everything) always gets the numbers; a plain guesser only gets them
-  // after reveal.
-  const showNumbers = state.isSpectator || psychic || room.revealed;
-  drawWedges(target, showNumbers);
-  setHoodRotation(psychic ? state.localRotation : room.rotation);
-  setNeedleVisual(state.localNeedle);
-  drawNotches(psychic ? state.notchesTarget : null);
-
-  const handle = document.getElementById('wlNeedleHandle');
-  handle.style.display = (!psychic && !state.isSpectator) ? 'block' : 'none';
-  document.getElementById('wlSpinHint').style.display = (psychic && !room.spun) ? 'block' : 'none';
-
-  const statusLine = document.getElementById('wlStatusLine');
-  if(state.isSpectator){
-    statusLine.textContent = 'Watching this match.';
-  } else if(psychic){
-    statusLine.textContent = room.locked
-      ? 'Target locked. The tick marks around the rim still show roughly where the zones were.'
-      : (room.spun ? 'Drag the hood open to peek, then closed to lock it in.' : 'Drag anywhere on the wheel to spin it all the way around.');
-  } else {
-    statusLine.textContent = room.locked
-      ? 'Drag the needle, then drag your own hood fully open to lock in your guess.'
-      : 'Waiting for the psychic to spin and lock a target.';
-  }
-
-  const frac = psychic ? state.hoodOpen : state.guesserHoodOpen;
-  applyHoodClip(room.revealed ? 1 : frac);
 
   let draggingWheel=false, lastRaw=0;
   svg.addEventListener('pointerdown', e=>{
-    if(!psychic || state.isSpectator || room.locked || e.target.id==='wlNeedleHandle') return;
+    if(!isPsychic() || state.isSpectator || state.room.locked || e.target.id==='wlNeedleHandle') return;
     draggingWheel=true; lastRaw=rawAngleFromEvent(svg,e); svg.setPointerCapture(e.pointerId); svg.style.cursor='grabbing';
     e.preventDefault();
   });
@@ -751,7 +705,8 @@ function wireWheel(){
       lastRaw = raw;
       setHoodRotation(state.localRotation);
       drawWedges(effectiveTarget(state.localRotation), true);
-      document.getElementById('wlSpinHint').style.display = 'none';
+      const hint = document.getElementById('wlSpinHint');
+      if(hint) hint.style.display = 'none';
       throttledSet('wavelength_rooms/' + state.code + '/rotation', state.localRotation, 70);
     }
   });
@@ -763,9 +718,10 @@ function wireWheel(){
     }
   });
 
+  const handle = document.getElementById('wlNeedleHandle');
   let draggingNeedle=false;
   handle.addEventListener('pointerdown', e=>{
-    if(!room.locked || room.revealed) return;
+    if(isPsychic() || state.isSpectator || !state.room.locked || state.room.revealed) return;
     draggingNeedle=true; handle.setPointerCapture(e.pointerId); e.preventDefault();
   });
   handle.addEventListener('pointermove', e=>{
@@ -786,23 +742,24 @@ function wireWheel(){
   let draggingHood=false, startX=0, startVal=0;
   hoodHandle.addEventListener('pointerdown', e=>{
     if(state.isSpectator) return;
-    if(psychic && (!room.spun || room.locked)) return;
-    if(!psychic && (!room.locked || room.revealed)) return;
-    draggingHood=true; startX=e.clientX; startVal= psychic ? state.hoodOpen : state.guesserHoodOpen;
+    const psychic = isPsychic();
+    if(psychic && (!state.room.spun || state.room.locked)) return;
+    if(!psychic && (!state.room.locked || state.room.revealed)) return;
+    draggingHood=true; startX=e.clientX; startVal = psychic ? state.hoodOpen : state.guesserHoodOpen;
     hoodHandle.setPointerCapture(e.pointerId); e.preventDefault();
   });
   hoodHandle.addEventListener('pointermove', e=>{
     if(draggingHood){
       const rect = svg.getBoundingClientRect();
       const val = Math.max(0, Math.min(1, startVal + (e.clientX-startX)/rect.width));
-      if(psychic) state.hoodOpen = val; else state.guesserHoodOpen = val;
+      if(isPsychic()) state.hoodOpen = val; else state.guesserHoodOpen = val;
       applyHoodClip(val);
     }
   });
   hoodHandle.addEventListener('pointerup', ()=>{
     if(!draggingHood) return;
     draggingHood=false;
-    if(psychic){
+    if(isPsychic()){
       if(state.hoodOpen < 0.15){ state.hoodOpen = 0; applyHoodClip(0); lockTarget(); }
       else { state.hoodOpen = 0; applyHoodClip(0); }
     } else {
@@ -810,6 +767,76 @@ function wireWheel(){
       else { state.guesserHoodOpen = 0; applyHoodClip(0); }
     }
   });
+}
+
+// Cheap per-update refresh: only touches text/attributes, never innerHTML's
+// the svg or hood handle, so an active drag's listeners and pointer capture
+// stay intact across every Firebase update that lands mid-round.
+let countdownTimer = null;
+function stopCountdown(){ if(countdownTimer){ clearInterval(countdownTimer); countdownTimer = null; } }
+
+function syncPlayingScreen(){
+  const room = state.room;
+  if(!room) return;
+  const psychic = isPsychic();
+  const target = effectiveTarget(room.rotation);
+
+  document.getElementById('wlRoundLine').textContent = `Round ${room.round} of ${ROUNDS_PER_MATCH}`;
+  const pair = room.pair || {left:'',right:''};
+  document.getElementById('wlPairLine').innerHTML = `<span>${pair.left}</span><span class="wl-pair-vs">vs</span><span>${pair.right}</span>`;
+  document.getElementById('wlRoleLine').textContent = state.isSpectator ? 'Spectating' : (psychic ? "You're the psychic" : "You're guessing");
+  document.getElementById('wlScoreboard').innerHTML = Object.entries(room.players||{}).map(([pid,p])=>`<span>${p.name}: ${p.score||0}</span>`).join(' &nbsp; ');
+
+  const showNumbers = state.isSpectator || psychic || room.revealed;
+  drawWedges(target, showNumbers);
+  setHoodRotation(psychic ? state.localRotation : room.rotation);
+  setNeedleVisual(state.localNeedle);
+  drawNotches(psychic ? state.notchesTarget : null);
+
+  const handle = document.getElementById('wlNeedleHandle');
+  handle.style.display = (!psychic && !state.isSpectator) ? 'block' : 'none';
+  const hint = document.getElementById('wlSpinHint');
+  hint.style.display = (psychic && !room.spun) ? 'block' : 'none';
+
+  const statusLine = document.getElementById('wlStatusLine');
+  if(room.revealed){
+    statusLine.textContent = '';
+  } else if(state.isSpectator){
+    statusLine.textContent = 'Watching this match.';
+  } else if(psychic){
+    statusLine.textContent = room.locked
+      ? 'Target locked. The tick marks around the rim still show roughly where the zones were.'
+      : (room.spun ? 'Drag the hood open to peek, then closed to lock it in.' : 'Drag anywhere on the wheel to spin it all the way around.');
+  } else {
+    statusLine.textContent = room.locked
+      ? 'Drag the needle, then drag your own hood fully open to lock in your guess.'
+      : 'Waiting for the psychic to spin and lock a target.';
+  }
+
+  const frac = psychic ? state.hoodOpen : state.guesserHoodOpen;
+  applyHoodClip(room.revealed ? 1 : frac);
+
+  const resultPanel = document.getElementById('wlResultPanel');
+  if(room.revealed && room.lastScore != null){
+    const pts = room.lastScore;
+    const label = pts===4 ? "Bullseye!" : pts===3 ? "So close!" : pts===2 ? "Close enough!" : "No points that round.";
+    resultPanel.innerHTML = `<p class="wl-result-title">${label}</p><p class="wl-result-pts">+${pts} point${pts===1?'':'s'}</p><p class="wl-result-countdown" id="wlCountdownText"></p>`;
+    resultPanel.classList.add('show');
+    stopCountdown();
+    const tick = ()=>{
+      const remainMs = Math.max(0, REVEAL_DISPLAY_MS - (Date.now() - (room.revealedAt || Date.now())));
+      const secs = Math.ceil(remainMs/1000);
+      const el = document.getElementById('wlCountdownText');
+      if(el) el.textContent = `Next round in ${secs}s`;
+      if(remainMs<=0) stopCountdown();
+    };
+    tick();
+    countdownTimer = setInterval(tick, 250);
+  } else {
+    resultPanel.classList.remove('show');
+    resultPanel.innerHTML = '';
+    stopCountdown();
+  }
 }
 
 // ---------- static page chrome (avatar modal, how-to-play) ----------
@@ -837,7 +864,8 @@ document.getElementById('wlDiceBtn').addEventListener('click', ()=>{
 
 // Drop page-1.png, page-2.png, page-3.png (etc) into
 // client/assets/how-to-play-wavelength/ and this just works, same pattern as
-// Guess Who's viewer.
+// Guess Who's viewer. That folder isn't included in project zips going
+// forward since you're managing those images directly yourself now.
 const WL_HOW_TO_PLAY_PAGE_COUNT = 3;
 let wlHowToPlayPage = 1;
 function renderWlHowToPlayPage(){

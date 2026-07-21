@@ -101,7 +101,8 @@
 .wl-scoreboard { font-size: 0.95rem; color: #d8d2f5; margin-bottom: 10px; }
 .wl-score-toast { color: var(--wl-orange); font-weight: 600; }
 
-.wl-wheel-wrap { max-width: 420px; margin: 0 auto; }
+.wl-wheel-wrap { max-width: 420px; width: 100%; margin: 0 auto; overflow: visible; }
+.wl-wheel-wrap svg { width: 100%; height: auto; display: block; }
 
 .wl-hood-handle {
   position: absolute; top: 6px; right: 6px; width: 30px; height: 30px;
@@ -110,11 +111,27 @@
   color: #fff; font-size: 14px;
 }
 
-#wlRoundFade {
-  position: fixed; inset: 0; background: var(--wl-purple-bg);
-  opacity: 0; pointer-events: none; transition: opacity 450ms ease; z-index: 40;
+.wl-result-panel {
+  display: none;
+  margin: 14px auto 0;
+  max-width: 320px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: #3a3260;
+  border: 1px solid var(--wl-orange);
 }
-#wlRoundFade.show { opacity: 1; }
+.wl-result-panel.show { display: block; }
+.wl-result-title { font-size: 1.15rem; font-weight: 700; margin: 0 0 4px; color: #fff; }
+.wl-result-pts { font-size: 1rem; font-weight: 700; color: var(--wl-orange); margin: 0 0 8px; }
+.wl-result-countdown { font-size: 0.85rem; color: #cfc8f2; margin: 0; }
+
+/* Join/Watch buttons were missing a shared class entirely, which is why one
+   rendered as a plain unstyled browser button -- both now use the site's
+   .secondary button style so they look and behave identically. */
+#app-wavelength .join-row button.secondary {
+  background: #378add; color: #fff; border: none;
+}
+#app-wavelength .join-row button.secondary:hover { background: #2b6fb3; }
 
 .wl-join-card h2 { color: var(--wl-orange); margin-top: 0; }
 #app-wavelength .error-text { color: #ff6b6b; min-height: 18px; margin-top: 10px; }
