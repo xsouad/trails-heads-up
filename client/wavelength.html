@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trails Wavelength</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="wavelength.css">
+</head>
+<body>
+
+<div class="mode-switcher">
+  <a class="mode-btn" href="/">Trails Heads Up</a>
+  <a class="mode-btn" href="/guesswho">Trails Guess Who</a>
+  <a class="mode-btn active" href="/wavelength">Trails Wavelength</a>
+</div>
+
+<div id="app-wavelength">
+  <div id="wlNoticeBar"></div>
+
+  <div class="screen active" id="wlScreen">
+    <h1>Trails Wavelength</h1>
+    <div id="wlTopBlurb">
+      <p class="subtitle">One of you is the psychic. Spin the wheel, peek at the target, then give your partner a clue between the two words. They guess where the needle should land.</p>
+      <button type="button" id="wlHowToPlayBtn" class="how-to-play-link">How to Play</button>
+    </div>
+
+    <div id="wlRoot"></div>
+  </div>
+</div>
+
+<div id="wlRoundFade"></div>
+
+<div class="zoom-overlay" id="wlJoinModal">
+  <div class="how-to-play-card wl-join-card">
+    <button class="close-btn how-to-play-close" id="wlJoinCloseBtn">Close</button>
+    <h2 id="wlJoinTitle">Create Room</h2>
+    <label style="display:block; text-align:center;">Your avatar</label>
+    <div class="avatar-builder">
+      <div class="avatar-stage" id="wlAvatarStage"></div>
+      <div class="arrow-row">
+        <button type="button" data-wllayer="hat" data-wldir="-1">&lt;</button>
+        <span class="layer-label">Accessories</span>
+        <button type="button" data-wllayer="hat" data-wldir="1">&gt;</button>
+      </div>
+      <div class="arrow-row">
+        <button type="button" data-wllayer="face" data-wldir="-1">&lt;</button>
+        <span class="layer-label">Face</span>
+        <button type="button" data-wllayer="face" data-wldir="1">&gt;</button>
+      </div>
+      <div class="arrow-row">
+        <button type="button" data-wllayer="base" data-wldir="-1">&lt;</button>
+        <span class="layer-label">Outfit</span>
+        <button type="button" data-wllayer="base" data-wldir="1">&gt;</button>
+      </div>
+      <button type="button" id="wlDiceBtn" class="dice-btn" title="Randomize">🎲</button>
+    </div>
+    <input id="wlNameInput" type="text" placeholder="Your name" maxlength="20" style="margin-top:14px;" />
+    <p class="error-text" id="wlJoinError"></p>
+    <button type="button" class="primary" id="wlJoinConfirmBtn" style="margin-top:12px;">Create Room</button>
+  </div>
+</div>
+
+<div class="zoom-overlay" id="wlHowToPlayOverlay">
+  <div class="how-to-play-card">
+    <button class="close-btn how-to-play-close" id="wlHowToPlayCloseBtn">Close</button>
+    <div class="how-to-play-viewer">
+      <button class="how-to-play-arrow how-to-play-prev" id="wlHowToPlayPrevBtn" aria-label="Previous page">&lt;</button>
+      <img id="wlHowToPlayImg" src="" alt="How to Play">
+      <button class="how-to-play-arrow how-to-play-next" id="wlHowToPlayNextBtn" aria-label="Next page">&gt;</button>
+    </div>
+    <div class="how-to-play-pagecount" id="wlHowToPlayPageCount"></div>
+  </div>
+</div>
+
+<script src="avatar-shared.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="wavelength.js"></script>
+</body>
+</html>

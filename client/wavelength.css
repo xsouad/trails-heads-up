@@ -1,0 +1,124 @@
+/* Trails Wavelength -- page-scoped styles, only ever loaded on wavelength.html.
+   Main accent is the orange used in the wheel's 2-point wedges (#F0997B),
+   the same orange visible on the wheel itself, so the wheel and the page
+   chrome around it read as one consistent theme. Reuses Heads Up/Guess Who's
+   shared .card/.avatar-stage/.arrow-row/.dice-btn/button classes from
+   style.css so it looks and behaves like the rest of the site, just
+   recolored here via #app-wavelength overrides. */
+
+:root {
+  --wl-orange: #F0997B;
+  --wl-orange-dark: #d97b5c;
+  --wl-purple-bg: #201c33;
+  --wl-purple-panel: #2e2a49;
+  --wl-purple-border: #6a5fa8;
+}
+
+#app-wavelength h1 {
+  text-align: center;
+  color: var(--wl-orange);
+}
+
+#wlTopBlurb { text-align: center; }
+#wlTopBlurb .subtitle { text-align: center; margin: 0 auto 8px; max-width: 560px; }
+
+.mode-switcher .mode-btn.active {
+  background: var(--wl-orange-dark);
+}
+
+#app-wavelength .card {
+  background: var(--wl-purple-panel);
+  border: 1px solid var(--wl-purple-border);
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+}
+#app-wavelength .card.center { text-align: center; }
+
+#app-wavelength button.primary {
+  background: var(--wl-orange);
+  color: #201c33;
+}
+#app-wavelength button.primary:hover { background: var(--wl-orange-dark); color: #fff; }
+
+#app-wavelength .room-code {
+  font-size: 2rem;
+  letter-spacing: 4px;
+  font-weight: 700;
+  color: var(--wl-orange);
+  margin: 4px 0 16px;
+}
+
+.wl-lobby-row {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin: 12px 0 18px;
+  flex-wrap: wrap;
+}
+.wl-lobby-slot { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.wl-lobby-slot .avatar-stage.small { width: 90px; height: 90px; }
+
+.wl-mode-toggle {
+  display: flex;
+  gap: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 10px auto 16px;
+  max-width: 420px;
+}
+.wl-mode-btn {
+  flex: 1;
+  padding: 10px 8px;
+  background: #3a3260;
+  color: #cfc8f2;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+}
+.wl-mode-btn.active { background: var(--wl-orange); color: #201c33; font-weight: 700; }
+.wl-mode-btn:disabled { opacity: 0.6; cursor: default; }
+
+.wl-pair-display {
+  font-size: 1.3rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 10px 0 16px;
+}
+.wl-pair-display.small { font-size: 1rem; margin: 4px 0 12px; }
+.wl-pair-vs { color: var(--wl-orange); font-size: 0.85em; font-weight: 400; }
+
+.wl-pair-inputs { display: flex; gap: 10px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap; }
+.wl-pair-inputs input {
+  padding: 10px 12px; border-radius: 8px; border: 1px solid var(--wl-purple-border);
+  background: #14213d; color: #fff; width: 160px;
+}
+
+.wl-role-label { font-weight: 600; color: var(--wl-orange); margin: 2px 0 10px; }
+.wl-scoreboard { font-size: 0.95rem; color: #d8d2f5; margin-bottom: 10px; }
+.wl-score-toast { color: var(--wl-orange); font-weight: 600; }
+
+.wl-wheel-wrap { max-width: 420px; margin: 0 auto; }
+
+.wl-hood-handle {
+  position: absolute; top: 6px; right: 6px; width: 30px; height: 30px;
+  border-radius: 50%; background: #3a3260; border: 1px solid var(--wl-purple-border);
+  display: flex; align-items: center; justify-content: center; cursor: grab; z-index: 5;
+  color: #fff; font-size: 14px;
+}
+
+#wlRoundFade {
+  position: fixed; inset: 0; background: var(--wl-purple-bg);
+  opacity: 0; pointer-events: none; transition: opacity 450ms ease; z-index: 40;
+}
+#wlRoundFade.show { opacity: 1; }
+
+.wl-join-card h2 { color: var(--wl-orange); margin-top: 0; }
+#app-wavelength .error-text { color: #ff6b6b; min-height: 18px; margin-top: 10px; }
+
+@media (max-width: 480px) {
+  .wl-pair-inputs input { width: 130px; }
+}

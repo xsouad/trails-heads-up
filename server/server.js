@@ -52,6 +52,12 @@ app.get('/guesswho', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/guesswho.html'));
 });
 
+// Same pattern as Guess Who: its own real, bookmarkable URL rather than a
+// toggled section of another page.
+app.get('/wavelength', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/wavelength.html'));
+});
+
 function broadcastRoom(room) {
   log('BROADCAST', room.code, 'players:', room.players.size, 'spectators:', room.spectators.size, 'ids:', Array.from(room.players.keys()));
   room.players.forEach((player, socketId) => {
