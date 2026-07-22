@@ -397,7 +397,12 @@ function applyHoodClip(frac){
 // closed, point B (angle 0, right) is fully open. frac and angle are two
 // ways of describing the exact same position.
 function fracToAngle(frac){ return 180 - 180*Math.max(0,Math.min(1,frac)); }
-function angleToFrac(angle){ return Math.max(0, Math.min(1, (180-angle)/180)); }
+// NOTE: rawAngleFromEvent's own angle labeling runs the opposite direction
+// to polar()'s (it returns ~180 when the pointer is physically on the right
+// side of the wheel, ~0 when it's on the left) -- this has to mirror that or
+// the handle renders somewhere that doesn't match where you're dragging,
+// which is what made the drag feel broken/unresponsive.
+function angleToFrac(angle){ return Math.max(0, Math.min(1, angle/180)); }
 function setHoodHandlePosition(frac){
   const p = polar(HANDLE_R, fracToAngle(frac));
   const handle = document.getElementById('wlHoodHandle');
@@ -783,14 +788,28 @@ function mountWheel(){
   hoodHandle.addEventListener('pointerdown', e=>{
     if(state.isSpectator) return;
     const psychic = isPsychic();
-    if(psychic && (!state.room.spun || state.room.locked)) return;
-    if(!psychic && (!state.room.locked || state.room.revealed)) return;
+    const room = state.room;
+    if(psychic){
+      if(!room.spun) return;
+      // Once locked, the handle stays live only until it's been carried
+      // back to point A -- that second drag is what reveals the notches.
+      if(room.locked && state.hoodOpen <= 0.02) return;
+    } else {
+      if(!room.locked || room.revealed) return;
+      if(state.guesserHoodOpen >= 0.98) return;
+    }
     draggingHood=true;
     hoodHandle.setPointerCapture(e.pointerId); e.preventDefault();
   });
   hoodHandle.addEventListener('pointermove', e=>{
     if(draggingHood){
-      const angle = Math.max(0, Math.min(180, rawAngleFromEvent(svg,e)));
+      let raw = rawAngleFromEvent(svg,e);
+      // Natural drags dip below the flat baseline of the dial -- treat those
+      // as still belonging to whichever end (A or B) they're closer to,
+      // instead of the handle going dead or snapping to the wrong side.
+      let angle;
+      if(raw <= 180) angle = raw;
+      else angle = (raw <= 270) ? 180 : 0;
       const frac = angleToFrac(angle);
       setHoodHandlePosition(frac);
       applyHoodClip(frac);
@@ -807,15 +826,29 @@ function mountWheel(){
     if(!draggingHood) return;
     draggingHood=false;
     if(isPsychic()){
-      if(state.hoodOpen <= 0.1 && state.psychicPeeked){
-        state.hoodOpen = 0; applyHoodClip(0); setHoodHandlePosition(0); lockTarget();
-      } else if(state.hoodOpen <= 0.1){
-        // Didn't actually reach point B yet -- snap back closed, no lock.
-        state.hoodOpen = 0; applyHoodClip(0); setHoodHandlePosition(0);
+      if(!state.room.locked){
+        // Phase 1: opening to peek. Reaching point B locks the target right
+        // there -- carrying it back to point A is a separate drag after this.
+        if(state.hoodOpen >= 0.9 && state.psychicPeeked){
+          state.hoodOpen = 1; applyHoodClip(1); setHoodHandlePosition(1);
+          lockTarget();
+        } else {
+          state.hoodOpen = 0; applyHoodClip(0); setHoodHandlePosition(0);
+        }
+      } else {
+        // Phase 2: already locked -- this drag is carrying the handle back
+        // to point A to close the hood and reveal the reference notches.
+        if(state.hoodOpen <= 0.1){
+          state.hoodOpen = 0; applyHoodClip(0); setHoodHandlePosition(0);
+        } else {
+          state.hoodOpen = 1; applyHoodClip(1); setHoodHandlePosition(1);
+        }
       }
     } else {
       if(state.guesserHoodOpen >= 0.9 && state.guesserPeeked){
         state.guesserHoodOpen = 1; applyHoodClip(1); setHoodHandlePosition(1); revealAndScore();
+      } else {
+        state.guesserHoodOpen = 0; applyHoodClip(0); setHoodHandlePosition(0);
       }
     }
   });
@@ -861,8 +894,10 @@ function syncPlayingScreen(){
     statusLine.textContent = 'Watching this match.';
   } else if(psychic){
     statusLine.textContent = room.locked
-      ? 'Target locked. The tick marks around the rim still show roughly where the zones were.'
-      : (room.spun ? 'Drag the hood open to peek, then closed to lock it in.' : 'Drag anywhere on the wheel to spin it all the way around.');
+      ? (state.hoodOpen <= 0.02
+          ? 'Target locked. The tick marks around the rim still show roughly where the zones were.'
+          : 'Locked in! Drag the handle back to close the hood.')
+      : (room.spun ? 'Drag the hood open to peek -- it locks in as soon as you reach the other side.' : 'Drag anywhere on the wheel to spin it all the way around.');
   } else {
     statusLine.textContent = room.locked
       ? 'Drag the needle, then drag your own hood fully open to lock in your guess.'
@@ -874,7 +909,7 @@ function syncPlayingScreen(){
   setHoodHandlePosition(room.revealed ? 1 : frac);
   const hoodHandleEl = document.getElementById('wlHoodHandle');
   const canDragHood = !state.isSpectator && !room.revealed &&
-    (psychic ? (room.spun && !room.locked) : room.locked);
+    (psychic ? (room.spun && !(room.locked && state.hoodOpen <= 0.02)) : (room.locked && state.guesserHoodOpen < 0.98));
   hoodHandleEl.style.display = canDragHood ? 'block' : 'none';
 
   const resultPanel = document.getElementById('wlResultPanel');
