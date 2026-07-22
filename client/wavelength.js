@@ -140,6 +140,11 @@ function attachRoomListener(code){
       if(room.status==='playing'){
         state.localNeedle = room.needleAngle;
       }
+      if(room.status==='complete'){
+        // Either player's ready-up write can be the one that lands last --
+        // check on every update to this room, not just the one that sent it.
+        maybeStartNextMatch();
+      }
       render();
     }
   });
@@ -520,12 +525,28 @@ async function advanceRound(){
     lastScore: null, revealedAt: null
   });
 }
-async function playAgain(){
-  if(!isHost()) return;
-  const ids = Object.keys(state.room.players || {});
-  const updates = { status:'pairing', round:0, pair:{left:'',right:''}, lastScore:null, revealedAt:null };
-  ids.forEach(id=>{ updates['players/'+id+'/score'] = 0; });
-  await db.ref('wavelength_rooms/' + state.code).update(updates);
+// Play Again now needs both players to agree, not just the host -- either
+// player marks themselves ready, and whichever client's write lands second
+// is the one that actually sees both flags set and kicks off the reset.
+// Leaving is still available the whole time (leaveRoom is a normal button,
+// untouched by any of this), and the existing playerCount<2 check in the
+// room listener already flips the other player over to the "opponent left"
+// screen if someone leaves while waiting.
+async function markPlayAgainReady(){
+  if(state.isSpectator || !state.code) return;
+  await db.ref('wavelength_rooms/' + state.code + '/playAgainReady/' + state.playerId).set(true);
+  maybeStartNextMatch();
+}
+async function maybeStartNextMatch(){
+  const room = state.room;
+  if(!room || room.status!=='complete') return;
+  const ids = Object.keys(room.players || {});
+  const ready = room.playAgainReady || {};
+  if(ids.length===2 && ids.every(id=>ready[id])){
+    const updates = { status:'pairing', round:0, pair:{left:'',right:''}, lastScore:null, revealedAt:null, playAgainReady:null };
+    ids.forEach(id=>{ updates['players/'+id+'/score'] = 0; });
+    await db.ref('wavelength_rooms/' + state.code).update(updates);
+  }
 }
 
 // ---------- rendering ----------
@@ -679,14 +700,18 @@ function renderComplete(){
   const winnerLine = entries.length===2
     ? (entries[0][1].score===entries[1][1].score ? "It's a tie!" : (entries[0][1].score>entries[1][1].score ? entries[0][1].name+' wins!' : entries[1][1].name+' wins!'))
     : '';
+  const ready = room.playAgainReady || {};
+  const iAmReady = !!ready[state.playerId];
+  const waitingText = (!state.isSpectator && iAmReady) ? '<p class="hint">Waiting for the other player to be ready...</p>' : '';
   return `
     <div class="card center">
       <p class="gameover-title">Match complete</p>
       <div class="wl-scoreboard">
-        ${entries.map(([pid,p])=>`<span>${p.name}: ${p.score||0}</span>`).join(' &nbsp; ')}
+        ${entries.map(([pid,p])=>`<span>${p.name}: ${p.score||0}${ready[pid] ? ' ✓' : ''}</span>`).join(' &nbsp; ')}
       </div>
       <p class="hint">${winnerLine}</p>
-      ${state.isSpectator ? '' : '<button type="button" class="primary" id="wlPlayAgainBtn">Play again</button>'}
+      ${waitingText}
+      ${state.isSpectator ? '' : `<button type="button" class="primary" id="wlPlayAgainBtn" ${iAmReady ? 'disabled' : ''}>${iAmReady ? 'Ready!' : 'Play again'}</button>`}
       ${state.isSpectator ? '' : '<button type="button" class="secondary" id="leaveBtn">Leave Room</button>'}
     </div>
   `;
@@ -744,7 +769,7 @@ function attachStaticHandlers(){
   if(pairRight) pairRight.addEventListener('change', e=>updateCustomPair('right', e.target.value));
 
   const playAgainBtn = document.getElementById('wlPlayAgainBtn');
-  if(playAgainBtn) playAgainBtn.addEventListener('click', playAgain);
+  if(playAgainBtn) playAgainBtn.addEventListener('click', markPlayAgainReady);
 }
 
 // Binds the wheel's drag listeners exactly once per round. Every check inside
