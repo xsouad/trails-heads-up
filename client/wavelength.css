@@ -181,6 +181,19 @@ body { background: var(--wl-bg-orange); }
 .wl-join-card h2 { color: var(--wl-orange); margin-top: 0; }
 #app-wavelength .error-text { color: #ff6b6b; min-height: 18px; margin-top: 10px; }
 
+/* Leave Room used to just inherit the same .secondary look as everything
+   else on the page, making it blend in with actual game-action buttons --
+   it's a smaller, muted, distinctly "exit" red now so it doesn't compete
+   with Join/Watch/primary actions for attention. */
+#app-wavelength button#leaveBtn {
+  background: #7a4a4a;
+  color: #ffd9d9;
+  border: none;
+  font-size: 13px;
+  padding: 7px 14px;
+}
+#app-wavelength button#leaveBtn:hover { background: #935757; }
+
 @media (max-width: 480px) {
   .wl-pair-inputs input { width: 130px; }
 }

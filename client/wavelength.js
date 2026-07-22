@@ -27,7 +27,7 @@ const NOTCH_R0 = 186, NOTCH_R1 = 195, RAY_COUNT = 16;
 const HANDLE_R = 178;
 // 5 rounds each, alternating who's psychic, starting with the host -- 10 total.
 const ROUNDS_PER_MATCH = 10;
-const REVEAL_DISPLAY_MS = 15000;
+const REVEAL_DISPLAY_MS = 5000;
 const ORANGE = "#F0997B";
 const TEAL = "#5DCAA5";
 const PURPLE_BAND = "#AFA9EC";
@@ -498,7 +498,14 @@ async function advanceRound(){
   const room = state.room;
   if(!room || room.status!=='playing') return;
   const nextRound = (room.round||1) + 1;
-  const nextPsychic = opponentEntry() ? opponentEntry().id : room.psychicId;
+  // advanceRound always runs on the guesser's own client (it's fired from
+  // their reveal timeout), so opponentEntry() -- "whoever isn't me" -- would
+  // resolve to the current psychic and never actually switch anyone. The
+  // role has to swap relative to room.psychicId (still the OLD psychic here,
+  // untouched by this update yet), not relative to whichever client happens
+  // to be running this function.
+  const otherPlayerId = Object.keys(room.players || {}).find(id => id !== room.psychicId);
+  const nextPsychic = otherPlayerId || room.psychicId;
   if(nextRound > ROUNDS_PER_MATCH){
     await db.ref('wavelength_rooms/' + state.code).update({ status:'complete' });
     return;
@@ -639,7 +646,7 @@ function renderWheelSvg(){
       <g id="wlNotches"></g>
       <line id="wlNeedle" x1="200" y1="200" x2="200" y2="30" stroke="#14213d" stroke-width="4" stroke-linecap="round"></line>
       <circle cx="200" cy="200" r="8" fill="#14213d"></circle>
-      <circle id="wlNeedleHandle" cx="200" cy="30" r="14" fill="${ORANGE}" stroke="white" stroke-width="2" style="cursor:grab; display:none;"></circle>
+      <circle id="wlNeedleHandle" cx="200" cy="30" r="9" fill="${TEAL}" stroke="white" stroke-width="2" style="cursor:grab; display:none;"></circle>
       <text id="wlSpinHint" x="200" y="215" text-anchor="middle" font-size="12" fill="var(--text-secondary)">Drag the wheel to spin</text>
       <circle id="wlHoodHandle" cx="15" cy="200" r="12" fill="${ORANGE}" stroke="#fff" stroke-width="2" style="cursor:grab; touch-action:none;"></circle>
     </svg>
@@ -834,6 +841,11 @@ function mountWheel(){
       } else {
         state.guesserHoodOpen = frac;
         if(frac >= 0.85) state.guesserPeeked = true;
+        // The wedges/numbers otherwise only redraw on a sync pass, which
+        // never fires mid-drag (the hood handle doesn't write to Firebase
+        // until release) -- so the guesser saw nothing until they'd already
+        // let go at full open. Redraw them live as the cover peels back.
+        drawWedges(effectiveTarget(state.room.rotation), true);
       }
     }
   });
