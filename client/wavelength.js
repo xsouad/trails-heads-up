@@ -389,16 +389,11 @@ function setHoodRotation(angle){
   document.getElementById('wlHoodRays').setAttribute('transform', 'rotate(' + angle + ' ' + WHEEL_CX + ' ' + WHEEL_CY + ')');
 }
 function applyHoodClip(frac){
-  // The still-covered sector always runs from point B's side (angle 0) up to
-  // wherever the handle currently is -- i.e. its edge sits exactly at the
-  // handle's own rendered angle, and the area between point A and the handle
-  // is what's already been peeled open. This used to be computed straight
-  // from frac instead of from the handle's actual angle, which put the
-  // reveal boundary at frac's mirror position rather than under the handle
-  // -- the cover looked like it was opening from the wrong side and never
-  // lined up with what your hand was doing.
+  // The still-covered sector always runs from wherever the handle currently
+  // is (its own rendered angle, via fracToAngle) up to point B -- the area
+  // between point A and the handle is what's already been peeled open.
   const handleAngle = fracToAngle(frac);
-  const d = handleAngle<=0 ? '' : sectorPath(0,handleAngle,0,HOOD_R);
+  const d = handleAngle>=180 ? '' : sectorPath(handleAngle,180,0,HOOD_R);
   // wlHoodBase gets its own 'd' set directly rather than relying only on the
   // clip-path -- clip-path support for the decorative rays is left as a nice
   // to have, but the actual cover (the part that hides the target from the
@@ -408,15 +403,16 @@ function applyHoodClip(frac){
   document.getElementById('wlHoodClipPath').setAttribute('d', d || 'M0 0 Z');
   document.getElementById('wlHoodBorder').setAttribute('d', d);
 }
-// The handle itself rides along the rim: point A (angle 180, left) is fully
-// closed, point B (angle 0, right) is fully open. frac and angle are two
-// ways of describing the exact same position.
-function fracToAngle(frac){ return 180 - 180*Math.max(0,Math.min(1,frac)); }
-// NOTE: rawAngleFromEvent's own angle labeling runs the opposite direction
-// to polar()'s (it returns ~180 when the pointer is physically on the right
-// side of the wheel, ~0 when it's on the left) -- this has to mirror that or
-// the handle renders somewhere that doesn't match where you're dragging,
-// which is what made the drag feel broken/unresponsive.
+// The handle itself rides along the rim: point A (angle 0, left) is fully
+// closed, point B (angle 180, right) is fully open -- polar() renders angle
+// 0 on the left and 180 on the right (it maps angleDeg through (180-angleDeg)
+// internally), and rawAngleFromEvent uses that exact same labeling already,
+// so frac and angle just need a straight, unflipped 1:1 conversion between
+// them. The previous version flipped it (180-180*frac), which rendered the
+// handle at polar()'s mirror-opposite position from where frac said it
+// should be -- that's what made dragging left open it to the right and vice
+// versa.
+function fracToAngle(frac){ return 180*Math.max(0,Math.min(1,frac)); }
 function angleToFrac(angle){ return Math.max(0, Math.min(1, angle/180)); }
 function setHoodHandlePosition(frac){
   const p = polar(HANDLE_R, fracToAngle(frac));
@@ -507,21 +503,15 @@ async function advanceRound(){
     await db.ref('wavelength_rooms/' + state.code).update({ status:'complete' });
     return;
   }
-  if(room.pairMode === 'random'){
-    await db.ref('wavelength_rooms/' + state.code).update({
-      status:'playing', round: nextRound, psychicId: nextPsychic,
-      rotation:90, needleAngle:90, spun:false, locked:false, revealed:false,
-      lastScore: null, revealedAt: null,
-      pair: randomPair()
-    });
-  } else {
-    await db.ref('wavelength_rooms/' + state.code).update({
-      status:'pairing', round: nextRound, psychicId: nextPsychic,
-      rotation:90, needleAngle:90, spun:false, locked:false, revealed:false,
-      lastScore: null, revealedAt: null,
-      pair: { left:'', right:'' }
-    });
-  }
+  // The word pair is chosen once at the start of the match and stays put for
+  // all 10 rounds -- this used to re-roll a fresh random pair (or wipe the
+  // custom one back to blank, forcing a re-entry) on every single round
+  // advance instead of only when the whole match restarts via playAgain().
+  await db.ref('wavelength_rooms/' + state.code).update({
+    status:'playing', round: nextRound, psychicId: nextPsychic,
+    rotation:90, needleAngle:90, spun:false, locked:false, revealed:false,
+    lastScore: null, revealedAt: null
+  });
 }
 async function playAgain(){
   if(!isHost()) return;
