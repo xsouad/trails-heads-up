@@ -364,6 +364,13 @@ function drawWedges(target, revealNumbers){
 function buildHoodDecor(){
   // wlHoodBase's own 'd' is owned entirely by applyHoodClip (called right
   // after this on every mount/sync) -- this only builds the decorative rays.
+  // The rays sit in their own inner <g id="wlHoodRays"> which is what
+  // setHoodRotation spins; the clip-path lives one level up on a wrapper
+  // <g> that never gets a transform of its own. Putting the clip on the
+  // same element as the rotation would rotate the clip window right along
+  // with the rays, so the visible dome boundary would drift with every spin
+  // instead of staying fixed -- that drift is what showed up as stray white
+  // slivers leaking past the cover's edge.
   const rays = document.getElementById('wlHoodRays');
   rays.innerHTML = '';
   for(let k=0;k<RAY_COUNT;k++){
@@ -446,6 +453,17 @@ function toSvgPoint(svg,evt){
 function rawAngleFromEvent(svg,evt){
   const p = toSvgPoint(svg,evt);
   const dx=p.x-WHEEL_CX, dy=WHEEL_CY-p.y;
+  return properMod(180-(Math.atan2(dy,dx)*180/Math.PI), 360);
+}
+// Same idea as rawAngleFromEvent, but for the hood handle specifically: the
+// handle sits right on the flat baseline (dy===0) at rest, so a hard "snap
+// to the nearer end" for any dip below it made the tiniest jitter -- even
+// just hovering -- snap the whole hood open instantly. Clamping dy to never
+// go negative keeps the angle continuous right through that boundary instead
+// of jumping.
+function hoodAngleFromEvent(svg,evt){
+  const p = toSvgPoint(svg,evt);
+  const dx=p.x-WHEEL_CX, dy=Math.max(0, WHEEL_CY-p.y);
   return properMod(180-(Math.atan2(dy,dx)*180/Math.PI), 360);
 }
 function shortestDelta(from,to){ return properMod(to-from+180, 360) - 180; }
@@ -618,7 +636,7 @@ function renderWheelSvg(){
       <defs><clipPath id="wlHoodClip"><path id="wlHoodClipPath"></path></clipPath></defs>
       <g id="wlWedges"></g>
       <path id="wlHoodBase" fill="#3a3260"></path>
-      <g id="wlHoodRays" clip-path="url(#wlHoodClip)"></g>
+      <g clip-path="url(#wlHoodClip)"><g id="wlHoodRays"></g></g>
       <path id="wlHoodBorder" fill="none" stroke="var(--border-strong)" stroke-width="1"></path>
       <g id="wlNotches"></g>
       <line id="wlNeedle" x1="200" y1="200" x2="200" y2="30" stroke="#14213d" stroke-width="4" stroke-linecap="round"></line>
@@ -803,13 +821,7 @@ function mountWheel(){
   });
   hoodHandle.addEventListener('pointermove', e=>{
     if(draggingHood){
-      let raw = rawAngleFromEvent(svg,e);
-      // Natural drags dip below the flat baseline of the dial -- treat those
-      // as still belonging to whichever end (A or B) they're closer to,
-      // instead of the handle going dead or snapping to the wrong side.
-      let angle;
-      if(raw <= 180) angle = raw;
-      else angle = (raw <= 270) ? 180 : 0;
+      const angle = Math.max(0, Math.min(180, hoodAngleFromEvent(svg,e)));
       const frac = angleToFrac(angle);
       setHoodHandlePosition(frac);
       applyHoodClip(frac);
