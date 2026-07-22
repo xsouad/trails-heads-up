@@ -752,7 +752,12 @@ function mountWheel(){
 
   let draggingWheel=false, lastRaw=0;
   svg.addEventListener('pointerdown', e=>{
-    if(!isPsychic() || state.isSpectator || state.room.locked || e.target.id==='wlNeedleHandle') return;
+    // The hood handle sits inside this same <svg>, so a click on it bubbles
+    // up here too -- without this exclusion (matching the one already in
+    // place for the needle handle below), grabbing the hood handle would
+    // ALSO start spinning the wheel at the same time, fighting the hood's
+    // own drag for every subsequent move and up event.
+    if(!isPsychic() || state.isSpectator || state.room.locked || e.target.id==='wlNeedleHandle' || e.target.id==='wlHoodHandle') return;
     draggingWheel=true; lastRaw=rawAngleFromEvent(svg,e); svg.setPointerCapture(e.pointerId); svg.style.cursor='grabbing';
     e.preventDefault();
   });
@@ -817,7 +822,7 @@ function mountWheel(){
       if(state.guesserHoodOpen >= 0.98) return;
     }
     draggingHood=true;
-    hoodHandle.setPointerCapture(e.pointerId); e.preventDefault();
+    hoodHandle.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation();
   });
   hoodHandle.addEventListener('pointermove', e=>{
     if(draggingHood){
