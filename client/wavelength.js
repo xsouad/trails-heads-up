@@ -389,8 +389,16 @@ function setHoodRotation(angle){
   document.getElementById('wlHoodRays').setAttribute('transform', 'rotate(' + angle + ' ' + WHEEL_CX + ' ' + WHEEL_CY + ')');
 }
 function applyHoodClip(frac){
-  const covered = 180*frac;
-  const d = covered>=180 ? '' : sectorPath(covered,180,0,HOOD_R);
+  // The still-covered sector always runs from point B's side (angle 0) up to
+  // wherever the handle currently is -- i.e. its edge sits exactly at the
+  // handle's own rendered angle, and the area between point A and the handle
+  // is what's already been peeled open. This used to be computed straight
+  // from frac instead of from the handle's actual angle, which put the
+  // reveal boundary at frac's mirror position rather than under the handle
+  // -- the cover looked like it was opening from the wrong side and never
+  // lined up with what your hand was doing.
+  const handleAngle = fracToAngle(frac);
+  const d = handleAngle<=0 ? '' : sectorPath(0,handleAngle,0,HOOD_R);
   // wlHoodBase gets its own 'd' set directly rather than relying only on the
   // clip-path -- clip-path support for the decorative rays is left as a nice
   // to have, but the actual cover (the part that hides the target from the
@@ -832,10 +840,10 @@ function mountWheel(){
       applyHoodClip(frac);
       if(isPsychic()){
         state.hoodOpen = frac;
-        if(frac >= 0.9) state.psychicPeeked = true;
+        if(frac >= 0.85) state.psychicPeeked = true;
       } else {
         state.guesserHoodOpen = frac;
-        if(frac >= 0.9) state.guesserPeeked = true;
+        if(frac >= 0.85) state.guesserPeeked = true;
       }
     }
   });
@@ -846,7 +854,7 @@ function mountWheel(){
       if(!state.room.locked){
         // Phase 1: opening to peek. Reaching point B locks the target right
         // there -- carrying it back to point A is a separate drag after this.
-        if(state.hoodOpen >= 0.9 && state.psychicPeeked){
+        if(state.hoodOpen >= 0.85 && state.psychicPeeked){
           state.hoodOpen = 1; applyHoodClip(1); setHoodHandlePosition(1);
           lockTarget();
         } else {
@@ -855,14 +863,14 @@ function mountWheel(){
       } else {
         // Phase 2: already locked -- this drag is carrying the handle back
         // to point A to close the hood and reveal the reference notches.
-        if(state.hoodOpen <= 0.1){
+        if(state.hoodOpen <= 0.15){
           state.hoodOpen = 0; applyHoodClip(0); setHoodHandlePosition(0);
         } else {
           state.hoodOpen = 1; applyHoodClip(1); setHoodHandlePosition(1);
         }
       }
     } else {
-      if(state.guesserHoodOpen >= 0.9 && state.guesserPeeked){
+      if(state.guesserHoodOpen >= 0.85 && state.guesserPeeked){
         state.guesserHoodOpen = 1; applyHoodClip(1); setHoodHandlePosition(1); revealAndScore();
       } else {
         state.guesserHoodOpen = 0; applyHoodClip(0); setHoodHandlePosition(0);
@@ -893,7 +901,13 @@ function syncPlayingScreen(){
   document.getElementById('wlRoleLine').textContent = state.isSpectator ? 'Spectating' : (psychic ? "You're the psychic" : "You're guessing");
   document.getElementById('wlScoreboard').innerHTML = Object.entries(room.players||{}).map(([pid,p])=>`<span>${p.name}: ${p.score||0}</span>`).join(' &nbsp; ');
 
-  const showNumbers = state.isSpectator || psychic || room.revealed;
+  // The guesser's own hood cover already hides the numbers wherever it's
+  // still closed -- gating the numbers themselves behind room.revealed (only
+  // true after the full reveal-and-score fires) meant the wedges stayed
+  // blank the whole time they were peeking, so nothing showed through even
+  // as their cover peeled back. Numbers just need to exist underneath as
+  // soon as they've started opening their hood, same as the psychic.
+  const showNumbers = state.isSpectator || psychic || room.revealed || (!psychic && room.locked && state.guesserHoodOpen > 0);
   drawWedges(target, showNumbers);
   setHoodRotation(psychic ? state.localRotation : room.rotation);
   setNeedleVisual(state.localNeedle);
