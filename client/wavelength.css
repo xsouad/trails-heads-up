@@ -26,7 +26,14 @@ body { background: var(--wl-bg-orange); }
 }
 
 #wlTopBlurb { text-align: center; }
-#wlTopBlurb .subtitle { text-align: center; margin: 0 auto 8px; max-width: 560px; }
+/* The shared .subtitle color (a light blue-gray, tuned for the navy
+   Heads Up/Guess Who backgrounds) reads as muddy and low-contrast against
+   this page's orange background, so it gets a warmer, lighter override here.
+   How to Play also gets real breathing room -- the shared style.css rule
+   pulls it up with a negative margin that only made sense against a shorter
+   subtitle. */
+#wlTopBlurb .subtitle { text-align: center; margin: 0 auto 14px; max-width: 560px; color: #ffe8d9; }
+#wlTopBlurb .how-to-play-link { margin-top: 4px; }
 
 .mode-switcher .mode-btn.active {
   background: var(--wl-orange-dark);
@@ -110,17 +117,31 @@ body { background: var(--wl-bg-orange); }
 .wl-wheel-wrap { max-width: 420px; width: 100%; margin: 0 auto; overflow: visible; }
 .wl-wheel-wrap svg { width: 100%; height: auto; display: block; }
 
-/* Bottom-left, not top-right -- that's the natural spot to grab and slide the
-   cover open from, and it's sized up from the original 30px so it's an easy
-   target to grab instead of a fiddly little dot. */
-.wl-hood-handle {
-  position: absolute; bottom: 4px; left: 4px; width: 46px; height: 46px;
-  border-radius: 50%; background: var(--wl-orange); border: 2px solid #fff;
-  display: flex; align-items: center; justify-content: center; cursor: grab; z-index: 5;
-  color: #201c33; font-size: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-  touch-action: none;
+/* The wheel only used a fraction of the available width on desktop before --
+   this lets the card and the wheel inside it grow substantially wider once
+   there's actually room for it, while leaving phones (which were already
+   sized right) untouched. */
+@media (min-width: 700px) {
+  #app-wavelength .wl-playing-card { max-width: 820px; }
+  .wl-playing-card .wl-wheel-wrap,
+  .wl-playing-card .wl-pair-flank { max-width: 700px; }
 }
-.wl-hood-handle:active { cursor: grabbing; }
+
+/* The two clue words sit above the wheel, one per side, rather than inside
+   the SVG where the cover or handle could end up covering them. */
+.wl-pair-flank {
+  display: flex; justify-content: space-between; align-items: center;
+  max-width: 420px; margin: 0 auto 6px; padding: 0 4px; gap: 8px;
+}
+.wl-pair-flank-word { font-size: 15px; font-weight: 700; }
+.wl-pair-flank-word.left { color: var(--wl-orange); text-align: left; }
+.wl-pair-flank-word.right { color: #ffffff; text-align: right; }
+
+/* Now an SVG circle that rides along the rim (see setHoodHandlePosition in
+   wavelength.js) rather than a fixed HTML element -- this just handles its
+   cursor states. */
+#wlHoodHandle { cursor: grab; }
+#wlHoodHandle:active { cursor: grabbing; }
 
 .wl-result-panel {
   display: none;
@@ -149,6 +170,14 @@ body { background: var(--wl-bg-orange); }
 #app-wavelength .join-row button.wl-watch-btn { background: #378add; }
 #app-wavelength .join-row button.wl-watch-btn:hover { background: #2b6fb3; }
 
+/* The avatar/name modal shares the .how-to-play-card style with the other
+   games (dark navy), which doesn't read as "Wavelength" at all -- recolored
+   here to the same orange family as the rest of this page so it's obvious
+   which game you're building a character for. */
+#wlJoinModal .wl-join-card {
+  background: #4a2a17;
+  border: 1px solid var(--wl-orange);
+}
 .wl-join-card h2 { color: var(--wl-orange); margin-top: 0; }
 #app-wavelength .error-text { color: #ff6b6b; min-height: 18px; margin-top: 10px; }
 

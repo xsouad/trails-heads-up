@@ -22,6 +22,9 @@ const authReady = firebase.auth().signInAnonymously()
 const svgns = "http://www.w3.org/2000/svg";
 const WHEEL_CX = 200, WHEEL_CY = 200, WHEEL_R = 170, HOOD_R = 185;
 const NOTCH_R0 = 186, NOTCH_R1 = 195, RAY_COUNT = 16;
+// The hood handle travels along this radius, riding the rim between the
+// wedges and the tick marks rather than sitting in a fixed corner.
+const HANDLE_R = 178;
 // 5 rounds each, alternating who's psychic, starting with the host -- 10 total.
 const ROUNDS_PER_MATCH = 10;
 const REVEAL_DISPLAY_MS = 15000;
@@ -79,6 +82,12 @@ let state = {
   localNeedle: 90,
   hoodOpen: 0,
   guesserHoodOpen: 0,
+  // The hood handle has to actually reach the far side (point B) at some
+  // point before a return to the near side (point A) counts as "closed and
+  // locked" -- otherwise a tiny accidental nudge would lock in a target
+  // nobody actually peeked at.
+  psychicPeeked: false,
+  guesserPeeked: false,
   notchesTarget: null // set once the psychic locks, so the reference marks survive
 };
 
@@ -122,6 +131,8 @@ function attachRoomListener(code){
         state.notchesTarget = null;
         state.hoodOpen = 0;
         state.guesserHoodOpen = 0;
+        state.psychicPeeked = false;
+        state.guesserPeeked = false;
       }
       if(room.status==='playing' && !room.locked){
         state.localRotation = room.rotation;
@@ -268,7 +279,7 @@ async function leaveRoom(){
   state = Object.assign({}, state, {
     screen:'home', code:null, playerId: genId(), room:null, isSpectator:false,
     joinIntent:null, error:'', hadFullRoom:false, localRotation:90, localNeedle:90,
-    hoodOpen:0, guesserHoodOpen:0, notchesTarget:null
+    hoodOpen:0, guesserHoodOpen:0, psychicPeeked:false, guesserPeeked:false, notchesTarget:null
   });
   render();
 }
@@ -381,6 +392,17 @@ function applyHoodClip(frac){
   document.getElementById('wlHoodBase').setAttribute('d', d);
   document.getElementById('wlHoodClipPath').setAttribute('d', d || 'M0 0 Z');
   document.getElementById('wlHoodBorder').setAttribute('d', d);
+}
+// The handle itself rides along the rim: point A (angle 180, left) is fully
+// closed, point B (angle 0, right) is fully open. frac and angle are two
+// ways of describing the exact same position.
+function fracToAngle(frac){ return 180 - 180*Math.max(0,Math.min(1,frac)); }
+function angleToFrac(angle){ return Math.max(0, Math.min(1, (180-angle)/180)); }
+function setHoodHandlePosition(frac){
+  const p = polar(HANDLE_R, fracToAngle(frac));
+  const handle = document.getElementById('wlHoodHandle');
+  handle.setAttribute('cx', p[0]);
+  handle.setAttribute('cy', p[1]);
 }
 function setNeedleVisual(angle){
   const tip = polar(170, angle);
@@ -583,6 +605,10 @@ function renderPairing(){
 
 function renderWheelSvg(){
   return `
+    <div class="wl-pair-flank">
+      <span id="wlPairLeftLabel" class="wl-pair-flank-word left"></span>
+      <span id="wlPairRightLabel" class="wl-pair-flank-word right"></span>
+    </div>
     <svg id="wlSvg" viewBox="0 0 400 230" style="width:100%; height:auto; display:block;">
       <defs><clipPath id="wlHoodClip"><path id="wlHoodClipPath"></path></clipPath></defs>
       <g id="wlWedges"></g>
@@ -590,16 +616,12 @@ function renderWheelSvg(){
       <g id="wlHoodRays" clip-path="url(#wlHoodClip)"></g>
       <path id="wlHoodBorder" fill="none" stroke="var(--border-strong)" stroke-width="1"></path>
       <g id="wlNotches"></g>
-      <text id="wlPairLeftLabel" x="18" y="192" text-anchor="start" font-size="15" font-weight="700" fill="${ORANGE}"></text>
-      <text id="wlPairRightLabel" x="382" y="192" text-anchor="end" font-size="15" font-weight="700" fill="#ffffff"></text>
       <line id="wlNeedle" x1="200" y1="200" x2="200" y2="30" stroke="#14213d" stroke-width="4" stroke-linecap="round"></line>
       <circle cx="200" cy="200" r="8" fill="#14213d"></circle>
       <circle id="wlNeedleHandle" cx="200" cy="30" r="14" fill="${ORANGE}" stroke="white" stroke-width="2" style="cursor:grab; display:none;"></circle>
       <text id="wlSpinHint" x="200" y="215" text-anchor="middle" font-size="12" fill="var(--text-secondary)">Drag the wheel to spin</text>
+      <circle id="wlHoodHandle" cx="15" cy="200" r="12" fill="${ORANGE}" stroke="#fff" stroke-width="2" style="cursor:grab; touch-action:none;"></circle>
     </svg>
-    <div id="wlHoodHandle" class="wl-hood-handle" title="Drag to peek">
-      <i class="ti ti-arrows-horizontal" aria-hidden="true"></i>
-    </div>
   `;
 }
 
@@ -609,7 +631,7 @@ function renderWheelSvg(){
 // drag never gets its listeners yanked out from under it.
 function renderPlaying(){
   return `
-    <div class="card center">
+    <div class="card center wl-playing-card">
       <p class="hint" id="wlRoundLine"></p>
       <p class="wl-role-label" id="wlRoleLine"></p>
       <div class="wl-scoreboard" id="wlScoreboard"></div>
@@ -618,8 +640,8 @@ function renderPlaying(){
       </div>
       <p class="status" id="wlStatusLine"></p>
       <div id="wlResultPanel" class="wl-result-panel"></div>
-      ${state.isSpectator ? '' : '<button type="button" class="secondary" id="leaveBtn" style="margin-top:14px;">Leave Room</button>'}
     </div>
+    ${state.isSpectator ? '' : '<div class="center" style="margin-top:14px;"><button type="button" class="secondary" id="leaveBtn">Leave Room</button></div>'}
   `;
 }
 
@@ -752,33 +774,49 @@ function mountWheel(){
     }
   });
 
+  // The handle rides the rim from point A (closed, left) to point B (open,
+  // right) exactly like the wheel's own spin and the needle -- dragging it
+  // moves it along the arc, not sideways in a straight line, so its screen
+  // position always matches how far open the cover actually is.
   const hoodHandle = document.getElementById('wlHoodHandle');
-  let draggingHood=false, startX=0, startVal=0;
+  let draggingHood=false;
   hoodHandle.addEventListener('pointerdown', e=>{
     if(state.isSpectator) return;
     const psychic = isPsychic();
     if(psychic && (!state.room.spun || state.room.locked)) return;
     if(!psychic && (!state.room.locked || state.room.revealed)) return;
-    draggingHood=true; startX=e.clientX; startVal = psychic ? state.hoodOpen : state.guesserHoodOpen;
+    draggingHood=true;
     hoodHandle.setPointerCapture(e.pointerId); e.preventDefault();
   });
   hoodHandle.addEventListener('pointermove', e=>{
     if(draggingHood){
-      const rect = svg.getBoundingClientRect();
-      const val = Math.max(0, Math.min(1, startVal + (e.clientX-startX)/rect.width));
-      if(isPsychic()) state.hoodOpen = val; else state.guesserHoodOpen = val;
-      applyHoodClip(val);
+      const angle = Math.max(0, Math.min(180, rawAngleFromEvent(svg,e)));
+      const frac = angleToFrac(angle);
+      setHoodHandlePosition(frac);
+      applyHoodClip(frac);
+      if(isPsychic()){
+        state.hoodOpen = frac;
+        if(frac >= 0.9) state.psychicPeeked = true;
+      } else {
+        state.guesserHoodOpen = frac;
+        if(frac >= 0.9) state.guesserPeeked = true;
+      }
     }
   });
   hoodHandle.addEventListener('pointerup', ()=>{
     if(!draggingHood) return;
     draggingHood=false;
     if(isPsychic()){
-      if(state.hoodOpen < 0.15){ state.hoodOpen = 0; applyHoodClip(0); lockTarget(); }
-      else { state.hoodOpen = 0; applyHoodClip(0); }
+      if(state.hoodOpen <= 0.1 && state.psychicPeeked){
+        state.hoodOpen = 0; applyHoodClip(0); setHoodHandlePosition(0); lockTarget();
+      } else if(state.hoodOpen <= 0.1){
+        // Didn't actually reach point B yet -- snap back closed, no lock.
+        state.hoodOpen = 0; applyHoodClip(0); setHoodHandlePosition(0);
+      }
     } else {
-      if(state.guesserHoodOpen > 0.92){ state.guesserHoodOpen = 1; applyHoodClip(1); revealAndScore(); }
-      else { state.guesserHoodOpen = 0; applyHoodClip(0); }
+      if(state.guesserHoodOpen >= 0.9 && state.guesserPeeked){
+        state.guesserHoodOpen = 1; applyHoodClip(1); setHoodHandlePosition(1); revealAndScore();
+      }
     }
   });
 }
@@ -833,6 +871,11 @@ function syncPlayingScreen(){
 
   const frac = psychic ? state.hoodOpen : state.guesserHoodOpen;
   applyHoodClip(room.revealed ? 1 : frac);
+  setHoodHandlePosition(room.revealed ? 1 : frac);
+  const hoodHandleEl = document.getElementById('wlHoodHandle');
+  const canDragHood = !state.isSpectator && !room.revealed &&
+    (psychic ? (room.spun && !room.locked) : room.locked);
+  hoodHandleEl.style.display = canDragHood ? 'block' : 'none';
 
   const resultPanel = document.getElementById('wlResultPanel');
   if(room.revealed && room.lastScore != null){

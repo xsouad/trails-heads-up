@@ -227,7 +227,11 @@ body { background:#2e2a49; margin:0; }
 #app-guesswho .reveal-item img { width:120px; height:120px; border-radius:12px; object-fit:cover; margin-bottom:6px; }
 #app-guesswho .reveal-label { font-size:12px; color:var(--muted); margin:0 0 4px; }
 #app-guesswho .reveal-name { font-size:13px; font-weight:500; }
-#app-guesswho .id-row { display:flex; gap:16px; align-items:flex-start; margin-bottom:16px; }
+/* Strikes and the opponent's name badge now flank the two ID cards directly
+   (id-flank) instead of living in their own separate full-width row below --
+   that old row was the "strikes look weird floating on their own" and ate an
+   extra line of vertical space for no reason. */
+#app-guesswho .id-row { display:flex; gap:10px; align-items:center; margin-bottom:16px; }
 #app-guesswho .id-card { flex:1; background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:12px; text-align:center; }
 #app-guesswho .id-card.guess-card { cursor:pointer; transition:border-color .15s; }
 #app-guesswho .id-card.guess-card:hover { border-color:var(--accent); }
@@ -240,21 +244,24 @@ body { background:#2e2a49; margin:0; }
 #app-guesswho .id-label { font-size:13px; font-weight:600; margin:0; }
 #app-guesswho .id-sub { font-size:11px; color:var(--muted); margin:2px 0 0; }
 
-/* Live-game header: your strike count, the Guess Who? toggle, and the
-   opponent's mini avatar/name all in one compact row instead of the old
-   two-card layout (which was one of the things eating vertical space). */
-#app-guesswho .guess-header {
-  display:flex; align-items:center; justify-content:space-between; gap:12px;
-  flex-wrap:wrap; margin-bottom:16px;
+#app-guesswho .id-flank {
+  flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:6px;
+  width:64px;
 }
-#app-guesswho .strikes-row { display:flex; gap:6px; }
+#app-guesswho .strikes-row { display:flex; gap:4px; }
 #app-guesswho .strike {
   display:inline-flex; align-items:center; justify-content:center;
-  width:26px; height:26px; border-radius:50%; font-weight:700; font-size:13px;
+  width:22px; height:22px; border-radius:50%; font-weight:700; font-size:11px;
   background:var(--panel2); color:var(--border); border:1px solid var(--border);
 }
 #app-guesswho .strike.used { background:var(--danger); color:#fff; border-color:var(--danger); }
 #app-guesswho #openGuessBtn.guessing { background:#17C3B2; color:#fff; }
+
+@media (max-width: 480px) {
+  #app-guesswho .id-row { gap:6px; }
+  #app-guesswho .id-flank { width:48px; }
+  #app-guesswho .id-flank .pill { font-size:10px; padding:2px 6px; }
+}
 /* Mini avatar previews used in the lobby player list and next to the
    opponent's name badge during a game. Reuses Heads Up's own .avatar-stage
    sizing/layering rules, just scaled down. */

@@ -684,6 +684,12 @@ function renderGame(){
   return `
     <div class="game">
       <div class="id-row">
+        <div class="id-flank" title="Wrong guesses -- three and you're out">
+          <div class="strikes-row">
+            ${[1,2,3].map(n=>`<span class="strike ${myStrikes>=n?'used':''}">X</span>`).join('')}
+          </div>
+          <span class="pill you">You</span>
+        </div>
         <div class="id-card">
           ${mySecretChar ? `<img class="id-photo" src="${imgUrl(mySecretChar)}" alt="${mySecretChar.name}" />` : `<div class="id-silhouette">?</div>`}
           <p class="id-label">${mySecretChar ? mySecretChar.name : ''}</p>
@@ -694,16 +700,10 @@ function renderGame(){
           <p class="id-label">?????</p>
           <p class="id-sub">${state.guessMode ? 'Tap a character below' : 'Guess who?'}</p>
         </div>
-      </div>
-
-      <div class="guess-header">
-        <div class="strikes-row" title="Wrong guesses -- three and you're out">
-          ${[1,2,3].map(n=>`<span class="strike ${myStrikes>=n?'used':''}">X</span>`).join('')}
-        </div>
-        <span class="pill opp" style="display:flex; align-items:center; gap:6px;">
+        <div class="id-flank">
           <span class="avatar-stage avatar-stage-mini" id="gwOppAvatar"></span>
-          ${opp ? opp.name : 'opponent'}
-        </span>
+          <span class="pill opp">${opp ? opp.name : 'opponent'}</span>
+        </div>
       </div>
 
       <div class="card board-card">
