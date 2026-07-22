@@ -12,6 +12,12 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+// The database's security rules now require a signed-in auth token (rather
+// than being wide open), so every code path that touches db.ref(...) awaits
+// this first. It's anonymous sign-in -- no login screen, no password, it
+// just gets a token in the background the instant the page loads.
+const authReady = firebase.auth().signInAnonymously()
+  .catch(e => { console.error('Anonymous sign-in failed', e); });
 
 const svgns = "http://www.w3.org/2000/svg";
 const WHEEL_CX = 200, WHEEL_CY = 200, WHEEL_R = 170, HOOD_R = 185;
@@ -195,6 +201,7 @@ async function confirmJoinModal(){
 }
 
 async function createRoom(){
+  await authReady;
   const code = genCode();
   const room = {
     code,
@@ -215,6 +222,7 @@ async function createRoom(){
 
 async function joinRoom(code){
   state.error = '';
+  await authReady;
   const snap = await db.ref('wavelength_rooms/' + code).get();
   const room = snap.val();
   if(!room){ state.error = 'Room not found'; render(); return; }
@@ -240,6 +248,7 @@ async function joinRoom(code){
 
 async function watchRoom(code){
   state.error = '';
+  await authReady;
   const snap = await db.ref('wavelength_rooms/' + code).get();
   const room = snap.val();
   if(!room){ state.error = 'Room not found'; render(); return; }

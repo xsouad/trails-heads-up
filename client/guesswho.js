@@ -9,6 +9,12 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+// The database's security rules now require a signed-in auth token (rather
+// than being wide open), so every code path that touches db.ref(...) awaits
+// this first. It's anonymous sign-in -- no login screen, no password, it
+// just gets a token in the background the instant the page loads.
+const authReady = firebase.auth().signInAnonymously()
+  .catch(e => { console.error('Anonymous sign-in failed', e); });
 
 // Character list and images are shared with Trails Heads Up -- one list to
 // maintain instead of two. IDs are generated from each name since Heads Up's
@@ -161,6 +167,7 @@ function oppPlayer(){
 async function createRoom(){
   if(!state.playerName.trim()){ state.error='Enter your name first'; render(); return; }
   state.error=''; state.loading=true; render();
+  await authReady;
   const code = genCode();
   const room = {
     code,
@@ -197,6 +204,7 @@ async function joinRoom(codeInput){
     return;
   }
   state.error=''; state.loading=true; render();
+  await authReady;
   const snap = await db.ref('rooms/' + code).get();
   const room = snap.val();
   if(!room){ state.error='Room not found'; state.loading=false; render(); return; }
@@ -228,6 +236,7 @@ async function watchRoom(codeInput){
   const code = codeInput.trim().toUpperCase();
   if(!code){ state.watchError='Enter a room code'; render(); return; }
   state.watchError=''; state.loading=true; render();
+  await authReady;
   const snap = await db.ref('rooms/' + code).get();
   const room = snap.val();
   if(!room){ state.watchError='Room not found'; state.loading=false; render(); return; }
