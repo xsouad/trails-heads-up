@@ -342,8 +342,8 @@ function drawWedges(target, revealNumbers){
 }
 
 function buildHoodDecor(){
-  const base = document.getElementById('wlHoodBase');
-  base.setAttribute('d', sectorPath(0,360,0,HOOD_R));
+  // wlHoodBase's own 'd' is owned entirely by applyHoodClip (called right
+  // after this on every mount/sync) -- this only builds the decorative rays.
   const rays = document.getElementById('wlHoodRays');
   rays.innerHTML = '';
   for(let k=0;k<RAY_COUNT;k++){
@@ -363,9 +363,15 @@ function setHoodRotation(angle){
 }
 function applyHoodClip(frac){
   const covered = 180*frac;
-  const d = covered>=180 ? 'M0 0 Z' : sectorPath(covered,180,0,HOOD_R);
-  document.getElementById('wlHoodClipPath').setAttribute('d', d);
-  document.getElementById('wlHoodBorder').setAttribute('d', covered>=180 ? '' : d);
+  const d = covered>=180 ? '' : sectorPath(covered,180,0,HOOD_R);
+  // wlHoodBase gets its own 'd' set directly rather than relying only on the
+  // clip-path -- clip-path support for the decorative rays is left as a nice
+  // to have, but the actual cover (the part that hides the target from the
+  // psychic while spinning) must never depend on it, since that's the one
+  // piece that absolutely cannot silently fail to render.
+  document.getElementById('wlHoodBase').setAttribute('d', d);
+  document.getElementById('wlHoodClipPath').setAttribute('d', d || 'M0 0 Z');
+  document.getElementById('wlHoodBorder').setAttribute('d', d);
 }
 function setNeedleVisual(angle){
   const tip = polar(170, angle);
@@ -571,12 +577,12 @@ function renderWheelSvg(){
     <svg id="wlSvg" viewBox="0 0 400 230" style="width:100%; height:auto; display:block;">
       <defs><clipPath id="wlHoodClip"><path id="wlHoodClipPath"></path></clipPath></defs>
       <g id="wlWedges"></g>
-      <g clip-path="url(#wlHoodClip)">
-        <path id="wlHoodBase" fill="#3a3260"></path>
-        <g id="wlHoodRays"></g>
-      </g>
+      <path id="wlHoodBase" fill="#3a3260"></path>
+      <g id="wlHoodRays" clip-path="url(#wlHoodClip)"></g>
       <path id="wlHoodBorder" fill="none" stroke="var(--border-strong)" stroke-width="1"></path>
       <g id="wlNotches"></g>
+      <text id="wlPairLeftLabel" x="18" y="192" text-anchor="start" font-size="15" font-weight="700" fill="${ORANGE}"></text>
+      <text id="wlPairRightLabel" x="382" y="192" text-anchor="end" font-size="15" font-weight="700" fill="#ffffff"></text>
       <line id="wlNeedle" x1="200" y1="200" x2="200" y2="30" stroke="#14213d" stroke-width="4" stroke-linecap="round"></line>
       <circle cx="200" cy="200" r="8" fill="#14213d"></circle>
       <circle id="wlNeedleHandle" cx="200" cy="30" r="14" fill="${ORANGE}" stroke="white" stroke-width="2" style="cursor:grab; display:none;"></circle>
@@ -596,7 +602,6 @@ function renderPlaying(){
   return `
     <div class="card center">
       <p class="hint" id="wlRoundLine"></p>
-      <div class="wl-pair-display small" id="wlPairLine"></div>
       <p class="wl-role-label" id="wlRoleLine"></p>
       <div class="wl-scoreboard" id="wlScoreboard"></div>
       <div class="wl-wheel-wrap" style="position:relative;">
@@ -783,7 +788,11 @@ function syncPlayingScreen(){
 
   document.getElementById('wlRoundLine').textContent = `Round ${room.round} of ${ROUNDS_PER_MATCH}`;
   const pair = room.pair || {left:'',right:''};
-  document.getElementById('wlPairLine').innerHTML = `<span>${pair.left}</span><span class="wl-pair-vs">vs</span><span>${pair.right}</span>`;
+  // The two clue words live right above the two ends of the dial itself
+  // (like the real board's printed labels), not as a separate line of text
+  // floating above the whole wheel.
+  document.getElementById('wlPairLeftLabel').textContent = pair.left;
+  document.getElementById('wlPairRightLabel').textContent = pair.right;
   document.getElementById('wlRoleLine').textContent = state.isSpectator ? 'Spectating' : (psychic ? "You're the psychic" : "You're guessing");
   document.getElementById('wlScoreboard').innerHTML = Object.entries(room.players||{}).map(([pid,p])=>`<span>${p.name}: ${p.score||0}</span>`).join(' &nbsp; ');
 

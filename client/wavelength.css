@@ -9,10 +9,16 @@
 :root {
   --wl-orange: #F0997B;
   --wl-orange-dark: #d97b5c;
+  --wl-bg-orange: #3a2417;
   --wl-purple-bg: #201c33;
   --wl-purple-panel: #2e2a49;
   --wl-purple-border: #6a5fa8;
 }
+
+/* The page background itself, not just accents, is a darker shade of the
+   same wheel orange -- wavelength.css only ever loads on this page, so this
+   doesn't affect Heads Up or Guess Who's own backgrounds. */
+body { background: var(--wl-bg-orange); }
 
 #app-wavelength h1 {
   text-align: center;
@@ -104,12 +110,17 @@
 .wl-wheel-wrap { max-width: 420px; width: 100%; margin: 0 auto; overflow: visible; }
 .wl-wheel-wrap svg { width: 100%; height: auto; display: block; }
 
+/* Bottom-left, not top-right -- that's the natural spot to grab and slide the
+   cover open from, and it's sized up from the original 30px so it's an easy
+   target to grab instead of a fiddly little dot. */
 .wl-hood-handle {
-  position: absolute; top: 6px; right: 6px; width: 30px; height: 30px;
-  border-radius: 50%; background: #3a3260; border: 1px solid var(--wl-purple-border);
+  position: absolute; bottom: 4px; left: 4px; width: 46px; height: 46px;
+  border-radius: 50%; background: var(--wl-orange); border: 2px solid #fff;
   display: flex; align-items: center; justify-content: center; cursor: grab; z-index: 5;
-  color: #fff; font-size: 14px;
+  color: #201c33; font-size: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  touch-action: none;
 }
+.wl-hood-handle:active { cursor: grabbing; }
 
 .wl-result-panel {
   display: none;
@@ -125,13 +136,18 @@
 .wl-result-pts { font-size: 1rem; font-weight: 700; color: var(--wl-orange); margin: 0 0 8px; }
 .wl-result-countdown { font-size: 0.85rem; color: #cfc8f2; margin: 0; }
 
-/* Join/Watch buttons were missing a shared class entirely, which is why one
-   rendered as a plain unstyled browser button -- both now use the site's
-   .secondary button style so they look and behave identically. */
+/* Join and Watch are both .secondary now (one was missing a class entirely
+   before, which is why it looked like a bare unstyled browser button), but
+   they're deliberately two different colors since they're two different
+   actions, and both get a fixed width so "Join" and "Watch" line up exactly
+   even though the words themselves aren't the same length. */
 #app-wavelength .join-row button.secondary {
-  background: #378add; color: #fff; border: none;
+  border: none; color: #fff; min-width: 96px; text-align: center;
 }
-#app-wavelength .join-row button.secondary:hover { background: #2b6fb3; }
+#app-wavelength .join-row button#wlJoinBtn { background: #5DCAA5; }
+#app-wavelength .join-row button#wlJoinBtn:hover { background: #48a988; }
+#app-wavelength .join-row button.wl-watch-btn { background: #378add; }
+#app-wavelength .join-row button.wl-watch-btn:hover { background: #2b6fb3; }
 
 .wl-join-card h2 { color: var(--wl-orange); margin-top: 0; }
 #app-wavelength .error-text { color: #ff6b6b; min-height: 18px; margin-top: 10px; }
