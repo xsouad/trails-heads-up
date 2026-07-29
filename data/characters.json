@@ -458,5 +458,10 @@
     "name": "Ein Selnate",
     "tag": "3RD",
     "image": "ein_selnate.png"
+  },
+  {
+    "name": "Dieter Crois",
+    "tag": "ZERO",
+    "image": "dieter.png"
   }
 ]

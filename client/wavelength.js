@@ -313,7 +313,7 @@ async function startFirstRound(){
   await db.ref('wavelength_rooms/' + state.code).update({
     status: 'playing', round: 1, psychicId: state.room.hostId,
     rotation: 90, needleAngle: 90, spun: false, locked: false, revealed: false,
-    lastScore: null, revealedAt: null
+    lastScore: null, revealedAt: null, needleLocked: false, guesserPeeking: false
   });
 }
 async function startNextRoundFromPairing(){
@@ -322,7 +322,7 @@ async function startNextRoundFromPairing(){
   if(!pair || !pair.left || !pair.right) return;
   await db.ref('wavelength_rooms/' + state.code).update({
     status:'playing', rotation:90, needleAngle:90, spun:false, locked:false, revealed:false,
-    lastScore: null, revealedAt: null
+    lastScore: null, revealedAt: null, needleLocked: false, guesserPeeking: false
   });
 }
 
@@ -522,7 +522,7 @@ async function advanceRound(){
   await db.ref('wavelength_rooms/' + state.code).update({
     status:'playing', round: nextRound, psychicId: nextPsychic,
     rotation:90, needleAngle:90, spun:false, locked:false, revealed:false,
-    lastScore: null, revealedAt: null
+    lastScore: null, revealedAt: null, needleLocked: false, guesserPeeking: false
   });
 }
 // Play Again now needs both players to agree, not just the host -- either
@@ -815,7 +815,11 @@ function mountWheel(){
   const handle = document.getElementById('wlNeedleHandle');
   let draggingNeedle=false;
   handle.addEventListener('pointerdown', e=>{
-    if(isPsychic() || state.isSpectator || !state.room.locked || state.room.revealed) return;
+    // Once the guesser has moved the hood at all this round, the needle is
+    // permanently off-limits -- otherwise they could crack the hood open
+    // almost all the way to see the target, close it back up without ever
+    // fully revealing, and then adjust the needle with that peek in hand.
+    if(isPsychic() || state.isSpectator || !state.room.locked || state.room.revealed || state.room.needleLocked) return;
     draggingNeedle=true; handle.setPointerCapture(e.pointerId); e.preventDefault();
   });
   handle.addEventListener('pointermove', e=>{
@@ -853,6 +857,14 @@ function mountWheel(){
     }
     draggingHood=true;
     hoodHandle.setPointerCapture(e.pointerId); e.preventDefault(); e.stopPropagation();
+    if(!psychic){
+      // Grabbing the cover at all -- even before it moves -- is the guesser's
+      // one shot at a peek. Lock the needle immediately so there's no window
+      // where they can crack it open, see enough to know they're wrong,
+      // close it back up unrevealed, and quietly adjust their guess.
+      forceSet('wavelength_rooms/' + state.code + '/needleLocked', true);
+      forceSet('wavelength_rooms/' + state.code + '/guesserPeeking', true);
+    }
   });
   hoodHandle.addEventListener('pointermove', e=>{
     if(draggingHood){
@@ -897,6 +909,7 @@ function mountWheel(){
         }
       }
     } else {
+      forceSet('wavelength_rooms/' + state.code + '/guesserPeeking', false);
       if(state.guesserHoodOpen >= 0.85 && state.guesserPeeked){
         state.guesserHoodOpen = 1; applyHoodClip(1); setHoodHandlePosition(1); revealAndScore();
       } else {
@@ -950,6 +963,9 @@ function syncPlayingScreen(){
     statusLine.textContent = '';
   } else if(state.isSpectator){
     statusLine.textContent = 'Watching this match.';
+  } else if(psychic && room.guesserPeeking){
+    const guesser = opponentEntry();
+    statusLine.textContent = (guesser ? guesser.name : 'Your partner') + ' is moving the cover...';
   } else if(psychic){
     statusLine.textContent = room.locked
       ? (state.hoodOpen <= 0.02
@@ -957,9 +973,11 @@ function syncPlayingScreen(){
           : 'Locked in! Drag the handle back to close the hood.')
       : (room.spun ? 'Drag the hood open to peek -- it locks in as soon as you reach the other side.' : 'Drag anywhere on the wheel to spin it all the way around.');
   } else {
-    statusLine.textContent = room.locked
-      ? 'Drag the needle, then drag your own hood fully open to lock in your guess.'
-      : 'Waiting for the psychic to spin and lock a target.';
+    statusLine.textContent = !room.locked
+      ? 'Waiting for the psychic to spin and lock a target.'
+      : room.needleLocked
+        ? 'Needle locked in -- drag your hood fully open to confirm your guess.'
+        : 'Drag the needle, then drag your own hood fully open to lock in your guess.';
   }
 
   const frac = psychic ? state.hoodOpen : state.guesserHoodOpen;

@@ -85,12 +85,7 @@
     "image": "rufina_feeds_kevin.png"
   },
   {
-    "text": "The party is trapped inside the dream-world Phantasma",
-    "tag": "3RD",
-    "image": "party_trapped_inside.png"
-  },
-  {
-    "text": "Kevin kills Rufina",
+    "text": "Kevin & Ries kill Rufina",
     "tag": "3RD",
     "image": "kevin_kills_rufina.png"
   },
@@ -226,7 +221,7 @@
   },
   {
     "text": "The new C is revealed",
-    "tag": "CS3",
+    "tag": "REV",
     "image": "new_c_revealed.png"
   },
   {
@@ -290,17 +285,12 @@
     "image": "protagonists.png"
   },
   {
-    "text": "The Secret Ending - Path to the Unknown",
-    "tag": "CS4",
-    "image": "secret_ending.png"
-  },
-  {
     "text": "Crossbell secures its Day of Reindependence",
     "tag": "REV",
     "image": "crossbell_secures.png"
   },
   {
-    "text": "\"The crime of not knowing how damn loved you really are\"",
+    "text": "\"The crime of not understanding just how damn loved you really are\"",
     "tag": "REV",
     "image": "crime_not_knowing.png"
   },
@@ -308,6 +298,11 @@
     "text": "Van turns to the Grandel",
     "tag": "DB1",
     "image": "van_grandel.png"
+  },
+  {
+    "text": "Agnes confesses to Van",
+    "tag": "DB1",
+    "image": "agnes_confesses.png"
   },
   {
     "text": "Creil's Destruction",
@@ -345,7 +340,7 @@
     "image": "quatre_angel.png"
   },
   {
-    "text": "Project Startaker's orbal rocket launch",
+    "text": "Major Harring attempts to destroy the Sept-Terrion of Time",
     "tag": "KAI",
     "image": "project_startaker.png"
   },
@@ -353,5 +348,95 @@
     "text": "Agnes sacrifices herself",
     "tag": "KAI",
     "image": "agnes_sacrifices.png"
+  },
+  {
+    "text": "Jenis Royal Academy's play.",
+    "tag": "FC",
+    "image": "the_play.png"
+  },
+  {
+    "text": "Joshua's doll collapses in Estelle's arms",
+    "tag": "SC",
+    "image": "joshua_doll.png"
+  },
+  {
+    "text": "Joshua hugs Loewe",
+    "tag": "SC",
+    "image": "loewe_hug.png"
+  },
+  {
+    "text": "Renne saves Colin",
+    "tag": "ZERO",
+    "image": "renne_colin.png"
+  },
+  {
+    "text": "The West Zemuria Trade Conference",
+    "tag": "AO",
+    "image": "conference.png"
+  },
+  {
+    "text": "Olivier dances with Mishy",
+    "tag": "AO",
+    "image": "olivier_mishy.png"
+  },
+  {
+    "text": "Pater-Mater gets destroyed while saving Renne",
+    "tag": "AO",
+    "image": "patermater_renne.png"
+  },
+  {
+    "text": "Class VII's musical performance",
+    "tag": "CS1",
+    "image": "vii_performance.png"
+  },
+  {
+    "text": "Prince Cedric is kidnapped by Duke Cayenne and merges with Testa-Rossa",
+    "tag": "CS2",
+    "image": "cedric_rossa.png"
+  },
+  {
+    "text": "Towa becomes the acting captain of the Courageous airship",
+    "tag": "CS2",
+    "image": "towa_acting.png"
+  },
+  {
+    "text": "Millium cries alongside the rest of Class VII at the end of their adventure.",
+    "tag": "CS2",
+    "image": "millium_cries.png"
+  },
+  {
+    "text": "Class VII dig up Crow Armbrust's grave",
+    "tag": "CS3",
+    "image": "crow_grave.png"
+  },
+  {
+    "text": "Ash shoots Emperor Eugent Reise Arnor III",
+    "tag": "CS3",
+    "image": "ash_eugent.png"
+  },
+  {
+    "text": "Rean becomes a divine blade",
+    "tag": "CS4",
+    "image": "rean_divine_blade.png"
+  },
+  {
+    "text": "Anton gets a girl.",
+    "tag": "CS4",
+    "image": "anton_girl.png"
+  },
+  {
+    "text": "Rufus pulls out the real Lapis Rosenberg amongst the copies.",
+    "tag": "REV",
+    "image": "rufus_lapis.png"
+  },
+  {
+    "text": "Aida's death",
+    "tag": "DB1",
+    "image": "aida_death.png"
+  },
+  {
+    "text": "Cross takes over Renne's body on Nemeth Island",
+    "tag": "DB2",
+    "image": "renne_cross.png"
   }
 ]
