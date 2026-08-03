@@ -5,6 +5,13 @@ body {
 }
 .screen { display: none; max-width: 720px; margin: 0 auto; padding: 24px 16px; position: relative; }
 #screen-game, #screen-lobby, #screen-ended, #screen-spectate { padding-bottom: 8px; }
+/* The game/spectate/ended screens get real breathing room on desktop so the
+   bigger avatars and item cards (see .board-avatar/.item-bubble below) have
+   somewhere to go instead of wrapping into a tall single column the moment
+   there's more than 2-3 players. */
+@media (min-width: 900px) {
+  #screen-game.screen, #screen-spectate.screen, #screen-ended.screen { max-width: 1100px; }
+}
 .screen.active { display: block; }
 h1 { text-align: center; font-size: 1.6rem; margin-bottom: 4px; }
 .subtitle { text-align: center; color: #9fb3d1; margin-bottom: 24px; font-size: 0.9rem; }
@@ -94,6 +101,17 @@ input[type=text] {
   font-weight: bold; padding: 8px 16px; border-radius: 20px; cursor: pointer;
 }
 
+/* Scoped to the game screen specifically -- shrinks the reveal button down
+   to its own content width instead of spanning the full screen edge to
+   edge, since it now also carries the live ready-count text (see app.js)
+   and doesn't need that much horizontal room to say it. Every other
+   button.primary elsewhere (Create Room, Lock In, Start Game, etc.) is
+   untouched. */
+#screen-game button.primary#revealBtn {
+  width: auto; min-width: 220px; display: block; margin-left: auto; margin-right: auto;
+  padding: 10px 22px; font-size: 0.95rem;
+}
+
 button.primary {
   width: 100%; padding: 14px; border-radius: 12px; border: none;
   font-size: 1.05rem; font-weight: bold; cursor: pointer; margin-top: 8px;
@@ -137,16 +155,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 /* ---- Game board ---- */
-.board { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 24px; }
+.board { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; margin-bottom: 24px; }
 .board-player {
-  display: flex; flex-direction: column; align-items: center; width: 150px;
+  display: flex; flex-direction: column; align-items: center; width: 210px;
 }
-.board-avatar { width: 90px; height: 90px; position: relative; }
+/* Avatars and cards were reading as an afterthought next to everything
+   else on the page -- scaled up significantly (roughly +45%) so they're
+   the clear focal point of the game screen. */
+.board-avatar { width: 130px; height: 130px; position: relative; }
 .board-avatar img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; image-rendering: pixelated; }
 .item-bubble {
-  cursor: pointer; background: #fff; color: #14213d; border-radius: 10px;
-  padding: 6px 8px; margin-bottom: 6px; width: 140px; height: 170px; text-align: center;
-  font-size: 0.75rem; font-weight: 600; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  cursor: pointer; background: #fff; color: #14213d; border-radius: 14px;
+  padding: 10px 12px; margin-bottom: 8px; width: 200px; height: 240px; text-align: center;
+  font-size: 0.95rem; font-weight: 600; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   overflow: hidden;
 }
@@ -171,11 +192,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .item-bubble.self-hidden { background: #333f5e; color: #7f8db3; font-style: italic; }
 .board-name-wrap { display: flex; flex-direction: column; align-items: center; }
-.board-name { margin-top: 6px; font-size: 0.85rem; font-weight: 600; text-align: center; width: 100%; }
+.board-name { margin-top: 8px; font-size: 1rem; font-weight: 600; text-align: center; width: 100%; }
 
 /* ---- redraw request icon ---- */
 .redraw-btn {
-  display: block; margin: 0 auto 6px; width: 30px; height: 30px; border-radius: 50%;
+  display: block; margin: 0 auto 6px; width: 36px; height: 36px; border-radius: 50%;
   border: 2px solid #14213d; background: #fff; color: #14213d;
   font-size: 0.75rem; font-weight: bold; cursor: pointer; line-height: 1;
   padding: 0 4px; white-space: nowrap;
@@ -213,6 +234,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     flex-direction: row; justify-content: flex-start; align-items: flex-start;
     text-align: left; gap: 8px;
   }
+  /* The "it's a secret to you" placeholder has no image next to it (unlike
+     every other card), so the row-layout/left-align rules meant to line
+     captions up next to a thumbnail were instead leaving its lone line of
+     text stuck in the top-left corner of the box. Centers it back for this
+     variant specifically. */
+  .item-bubble.self-hidden {
+    justify-content: center; align-items: center; text-align: center;
+  }
   .item-bubble img {
     max-width: 44px; max-height: 44px; width: 44px; height: 44px;
     object-fit: cover; margin-bottom: 0; flex-shrink: 0;
@@ -248,24 +277,23 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .pixel-eye-btn.active { background: #ffd166; color: #14213d; border-color: #ffb703; }
 
 /* Fade-UI mode: a stricter, separate toggle from focus mode -- everything
-   fades to invisible except the board (cards + names) and the reveal
-   button, including the redraw button which focus mode deliberately leaves
-   alone. Real opacity transition rather than display:none so it actually
-   fades instead of popping away; pointer-events:none keeps faded elements
-   from still being clickable while invisible. */
+   fades to invisible except the board itself (cards + names), including the
+   reveal button and the redraw button. Real opacity transition rather than
+   display:none so it actually fades instead of popping away;
+   pointer-events:none keeps faded elements from still being clickable while
+   invisible. */
 body.card-fade-mode .mode-switcher,
 body.card-fade-mode #noticeBar,
-body.card-fade-mode #screen-game > h1,
 body.card-fade-mode #gameTimer,
 body.card-fade-mode #redrawHint,
-body.card-fade-mode #revealCounter,
 body.card-fade-mode #spectatorCountGame,
 body.card-fade-mode #bottomBar,
+body.card-fade-mode #revealBtn,
 body.card-fade-mode .redraw-btn {
   opacity: 0; pointer-events: none; transition: opacity 0.35s ease;
 }
-.mode-switcher, #noticeBar, #screen-game > h1, #gameTimer, #redrawHint,
-#revealCounter, #spectatorCountGame, #bottomBar, .redraw-btn {
+.mode-switcher, #noticeBar, #gameTimer, #redrawHint,
+#spectatorCountGame, #bottomBar, #revealBtn, .redraw-btn {
   transition: opacity 0.35s ease;
 }
 
@@ -358,11 +386,15 @@ body.card-fade-mode .redraw-btn {
 /* ---- bottom bar ---- */
 .bottom-bar {
   max-width: 720px; margin: 4px auto 0; padding: 0 16px calc(40px + env(safe-area-inset-bottom, 0px));
-  display: flex; flex-direction: row; gap: 10px;
+  display: flex; flex-direction: row; gap: 10px; justify-content: center;
 }
+/* Leave Room / End Game used to stretch to fill the entire bottom bar
+   between them (flex:1) -- sized to their own content instead now, which
+   is a lot less horizontal real estate for two buttons that are really
+   just occasional escape hatches, not the main action on the screen. */
 .bar-btn {
-  flex: 1 1 0; width: 0; border: none; padding: 14px; border-radius: 12px;
-  font-weight: bold; cursor: pointer; font-size: 1rem; text-align: center;
+  flex: 0 1 auto; border: none; padding: 10px 20px; border-radius: 10px;
+  font-weight: bold; cursor: pointer; font-size: 0.9rem; text-align: center;
 }
 .bar-leave { background: #eb5757; color: #fff; }
 .bar-endgame { background: #2f80ed; color: #fff; }

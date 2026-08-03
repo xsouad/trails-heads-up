@@ -102,7 +102,13 @@ function tickRedrawWindow(startedAt, windowMs) {
   if (remaining > 0) {
     if (hint) hint.textContent = `You have ${Math.ceil(remaining / 1000)}s to redraw a card`;
   } else {
-    if (hint) hint.textContent = 'Redraw window closed';
+    // This only needs to be said once, not left sitting on screen taking up
+    // space for the rest of the round -- a toast (same as "player left"
+    // etc) instead of a permanent line, and this branch only ever runs once
+    // per timer (it's cleared right after), so there's no risk of it firing
+    // repeatedly.
+    if (hint) hint.textContent = '';
+    showNotice('Redraw window closed');
     document.querySelectorAll('.redraw-btn').forEach(btn => {
       btn.disabled = true;
       btn.classList.add('expired');
@@ -139,7 +145,7 @@ function showScreen(id) {
     const fadeBtn = document.getElementById('cardFadeBtn');
     if (fadeBtn) {
       fadeBtn.classList.remove('active');
-      fadeBtn.title = 'Fade out everything but the cards and the reveal button';
+      fadeBtn.title = 'Fade out everything but the cards';
     }
   }
 }
@@ -485,7 +491,7 @@ document.getElementById('revealBtn').addEventListener('click', (e) => {
   function setCardFade(on) {
     document.body.classList.toggle('card-fade-mode', on);
     btn.classList.toggle('active', on);
-    btn.title = on ? 'Show everything again' : 'Fade out everything but the cards and the reveal button';
+    btn.title = on ? 'Show everything again' : 'Fade out everything but the cards';
   }
   btn.addEventListener('click', () => {
     setCardFade(!document.body.classList.contains('card-fade-mode'));
@@ -745,16 +751,19 @@ socket.on('roomState', (state) => {
     renderBoard(document.getElementById('gameBoard'), state.players, {
       allowRedraw: true, startedAt: state.startedAt, redrawWindowMs: state.redrawWindowMs
     });
-    document.getElementById('revealCounter').textContent = `${state.revealedCount}/${state.totalPlayers} ready to reveal`;
     document.getElementById('spectatorCountGame').textContent = state.spectatorCount ? `${state.spectatorCount} spectator(s) watching` : '';
     const me = state.players.find(p => p.id === mySocketId);
     const revealBtn = document.getElementById('revealBtn');
+    // The ready count now lives right on the button itself (it used to be a
+    // separate line above it) so it's one less thing taking up vertical
+    // space, and it's obvious at a glance which state you're in.
+    const readyCount = `${state.revealedCount}/${state.totalPlayers}`;
     if (me && me.revealed) {
       revealBtn.disabled = true;
-      revealBtn.textContent = 'Waiting on others…';
+      revealBtn.textContent = `Waiting on others… - ${readyCount}`;
     } else {
       revealBtn.disabled = false;
-      revealBtn.textContent = "I'm Ready to Reveal";
+      revealBtn.textContent = `I'm Ready to Reveal - ${readyCount}`;
     }
   } else if (state.phase === 'ended') {
     showScreen('screen-ended');
