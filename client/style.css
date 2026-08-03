@@ -107,9 +107,12 @@ input[type=text] {
    and doesn't need that much horizontal room to say it. Every other
    button.primary elsewhere (Create Room, Lock In, Start Game, etc.) is
    untouched. */
+/* Matched exactly to .bar-btn's own padding/font-size/radius below so this
+   button reads as the same size/weight as Leave Room and End Game, not a
+   bigger "main" button sitting above two smaller ones. */
 #screen-game button.primary#revealBtn {
-  width: auto; min-width: 220px; display: block; margin-left: auto; margin-right: auto;
-  padding: 10px 22px; font-size: 0.95rem;
+  width: auto; display: block; margin-left: auto; margin-right: auto;
+  padding: 10px 20px; font-size: 0.9rem; border-radius: 10px;
 }
 
 button.primary {
@@ -155,18 +158,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 /* ---- Game board ---- */
-.board { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; margin-bottom: 24px; }
+.board { display: flex; flex-wrap: wrap; gap: 30px; justify-content: center; margin-bottom: 24px; }
 .board-player {
-  display: flex; flex-direction: column; align-items: center; width: 210px;
+  display: flex; flex-direction: column; align-items: center; width: 225px;
 }
 /* Avatars and cards were reading as an afterthought next to everything
-   else on the page -- scaled up significantly (roughly +45%) so they're
-   the clear focal point of the game screen. */
-.board-avatar { width: 130px; height: 130px; position: relative; }
+   else on the page -- scaled up significantly (roughly +45%), then bumped
+   another notch on top of that, so they're the clear focal point of the
+   game screen. */
+.board-avatar { width: 145px; height: 145px; position: relative; }
 .board-avatar img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; image-rendering: pixelated; }
 .item-bubble {
   cursor: pointer; background: #fff; color: #14213d; border-radius: 14px;
-  padding: 10px 12px; margin-bottom: 8px; width: 200px; height: 240px; text-align: center;
+  padding: 10px 12px; margin-bottom: 8px; width: 215px; height: 255px; text-align: center;
   font-size: 0.95rem; font-weight: 600; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   overflow: hidden;
@@ -255,14 +259,15 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   }
 }
 
-/* Eye-fade mode: a desktop-only "just show me the cards" view. The button
-   sits in the corner of the game screen; clicking it fades every other page
-   chrome element to invisible via body.card-fade-mode below. Hidden
-   entirely on narrow/touch screens since there's no spare chrome to fade
-   away there anyway -- everything's already minimal on mobile. (An earlier
-   version of this used the real browser Fullscreen API too, but that
-   rendered with an ugly black backdrop and broke the reveal button's max
-   width, so it's just this CSS fade now.) */
+/* Eye-fade mode: "just show me the cards" view. The button sits in the
+   corner of the game screen; clicking it fades every other page chrome
+   element to invisible via body.card-fade-mode below. Used to be hidden on
+   narrow/touch screens on the assumption there was nothing worth fading
+   there -- turns out it's wanted on mobile too (for streaming/screen-share
+   setups same as desktop), so it's shown everywhere now. (An earlier version
+   of this used the real browser Fullscreen API too, but that rendered with
+   an ugly black backdrop and broke the reveal button's max width, so it's
+   just this CSS fade now.) */
 .focus-mode-btn {
   position: absolute; top: 8px; right: 8px; z-index: 5;
   width: 34px; height: 34px; border-radius: 8px; border: 1px solid #3a4a75;
@@ -270,9 +275,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex; align-items: center; justify-content: center;
 }
 .focus-mode-btn:hover { background: #2a3a63; }
-@media (max-width: 700px) {
-  .focus-mode-btn { display: none; }
-}
 .pixel-eye-btn svg { image-rendering: pixelated; }
 .pixel-eye-btn.active { background: #ffd166; color: #14213d; border-color: #ffb703; }
 
@@ -282,8 +284,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
    display:none so it actually fades instead of popping away;
    pointer-events:none keeps faded elements from still being clickable while
    invisible. */
+/* #noticeBar is deliberately NOT in this list -- it was here before, and the
+   "Redraw window closed" toast (and any other toast) firing while faded
+   would sit invisible in the DOM for its full 4.5s life, then suddenly
+   appear the moment you un-fade and look like it was stuck/lingering.
+   Toasts are transient alerts, not page chrome, so they should always be
+   visible regardless of fade mode. */
 body.card-fade-mode .mode-switcher,
-body.card-fade-mode #noticeBar,
 body.card-fade-mode #gameTimer,
 body.card-fade-mode #redrawHint,
 body.card-fade-mode #spectatorCountGame,
@@ -292,7 +299,7 @@ body.card-fade-mode #revealBtn,
 body.card-fade-mode .redraw-btn {
   opacity: 0; pointer-events: none; transition: opacity 0.35s ease;
 }
-.mode-switcher, #noticeBar, #gameTimer, #redrawHint,
+.mode-switcher, #gameTimer, #redrawHint,
 #spectatorCountGame, #bottomBar, #revealBtn, .redraw-btn {
   transition: opacity 0.35s ease;
 }
@@ -332,6 +339,15 @@ body.card-fade-mode .redraw-btn {
   max-width: 480px; width: 100%; text-align: center; position: relative;
   border: 1px solid rgba(255,255,255,0.15);
 }
+/* Generic (unscoped) fallback for the "opponent left" popups -- they reuse
+   .how-to-play-card as their modal shell and .gameover-title/.hint for the
+   text, but those two classes are otherwise defined per-game (scoped under
+   #app-guesswho / #app-wavelength .results-card), which doesn't reach a
+   modal that lives outside those containers. Text still inherits readable
+   white from .how-to-play-card without this, this just restores the
+   intended size/weight/muted-color styling. */
+.how-to-play-card .gameover-title { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+.how-to-play-card .hint { font-size: 12.5px; color: #b9c2de; margin-top: 4px; }
 .how-to-play-close {
   position: absolute; top: 10px; right: 10px; margin-top: 0;
   background: #eb5757; color: #fff; border: none;
@@ -440,11 +456,23 @@ body.card-fade-mode .redraw-btn {
   font-size: 1.15rem;
   text-align: center;
   text-decoration: none;
-  display: block;
+  /* display:flex + centering here (rather than relying on text-align alone)
+     so the label is genuinely centered both ways regardless of line-height
+     quirks -- this is also what was making the label look off-center. */
+  display: flex; align-items: center; justify-content: center;
   font-weight: 700;
   cursor: pointer;
+  line-height: 1.2;
 }
 .mode-switcher .mode-btn.active {
   background: #2a3a6a;
   color: #fff;
+}
+/* Full-size version above is sized for desktop -- on an actual phone it was
+   sitting flush against the edges of the screen (padding alone was almost
+   as wide as a phone's safe margin). Dialed back down here; kept big on
+   anything wider than a phone. */
+@media (max-width: 480px) {
+  .mode-switcher { max-width: 100%; margin: 12px auto 0; border-radius: 12px; }
+  .mode-switcher .mode-btn { padding: 10px 4px; font-size: 0.8rem; }
 }

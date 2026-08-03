@@ -279,7 +279,7 @@ async function confirmJoinModal(){
     const code = (state.joinCodeDraft || '').trim().toUpperCase();
     if(!code){ errEl.textContent = 'Enter a room code'; return; }
     if(intent === 'join' && name.toUpperCase() === code){
-      errEl.textContent = "That's the room code, not a name -- put your actual name in the name field above.";
+      errEl.textContent = "That's the room code, not a name - put your actual name in the name field above.";
       return;
     }
     state.playerName = name;
@@ -809,7 +809,7 @@ function renderWheelSvg(){
       <span id="wlPairLeftLabel" class="wl-pair-flank-word left"></span>
       <span id="wlPairRightLabel" class="wl-pair-flank-word right"></span>
     </div>
-    <svg id="wlSvg" viewBox="0 0 400 230" style="width:100%; height:auto; display:block;">
+    <svg id="wlSvg" viewBox="0 0 400 230" style="width:100%; height:auto; display:block; touch-action:none;">
       <defs><clipPath id="wlHoodClip"><path id="wlHoodClipPath"></path></clipPath></defs>
       <g id="wlWedges"></g>
       <path id="wlHoodBase" fill="#3a3260"></path>
@@ -818,7 +818,7 @@ function renderWheelSvg(){
       <g id="wlNotches"></g>
       <line id="wlNeedle" x1="200" y1="200" x2="200" y2="30" stroke="#14213d" stroke-width="4" stroke-linecap="round"></line>
       <circle cx="200" cy="200" r="8" fill="#14213d"></circle>
-      <circle id="wlNeedleHandle" cx="200" cy="30" r="9" fill="${TEAL}" stroke="white" stroke-width="2" style="cursor:grab; display:none;"></circle>
+      <circle id="wlNeedleHandle" cx="200" cy="30" r="9" fill="${TEAL}" stroke="white" stroke-width="2" style="cursor:grab; display:none; touch-action:none;"></circle>
       <circle id="wlHoodHandle" cx="15" cy="200" r="12" fill="${ORANGE}" stroke="#fff" stroke-width="2" style="cursor:grab; touch-action:none;"></circle>
     </svg>
   `;
@@ -1212,7 +1212,7 @@ function syncPlayingScreen(){
     // round." with the number buried in a separate line above was the
     // "wordy/unclear" complaint this is addressing.
     const label = pts===4 ? "Bullseye!" : pts===3 ? "So close!" : pts===2 ? "Close enough!" : "Not this time.";
-    resultPanel.innerHTML = `<p class="wl-result-pts">+${pts} point${pts===1?'':'s'} -- ${label}</p><p class="wl-result-countdown" id="wlCountdownText"></p>`;
+    resultPanel.innerHTML = `<p class="wl-result-pts">+${pts} point${pts===1?'':'s'} - ${label}</p><p class="wl-result-countdown" id="wlCountdownText"></p>`;
     resultPanel.classList.add('show');
     stopCountdown();
     const tick = ()=>{

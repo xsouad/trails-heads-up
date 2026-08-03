@@ -99,10 +99,60 @@ let state = {
   error:'',
   watchError:'',
   loading:false,
-  hadFullRoom:false
+  hadFullRoom:false,
+  // Popup instead of a separate screen -- true just overlays
+  // #gwOpponentLeftOverlay on top of whatever's currently showing (lobby,
+  // pick, game...) rather than navigating away from it.
+  opponentLeftModal:false,
+  // Liveness tracking for "opponent left" detection -- see startHeartbeat/
+  // the staleness check below. Firebase's own onDisconnect() cleanup only
+  // fires once it decides the socket is truly gone, which on a flaky wifi/
+  // mobile connection (or just a backgrounded tab) can take a long time --
+  // this gives a much faster, app-level signal instead of waiting on that.
+  lastSeenLocal: {},
+  lastHeartbeatValue: {}
 };
 
 let roomRef = null;
+
+// Each player writes their own heartbeat timestamp on an interval while
+// they're actually in a room; the staleness check below watches the OTHER
+// player's heartbeat and flags "opponent left" the moment it goes quiet for
+// too long, instead of waiting on Firebase's own onDisconnect cleanup.
+// STALE_MS is generous (matching Wavelength's own fix) because browsers
+// throttle setInterval/setTimeout heavily in a backgrounded tab -- a player
+// who's just switched tabs or whose phone screen locked is still fully
+// connected, their heartbeat write just lands late. A lower threshold here
+// would flag that as "left" when nothing's actually wrong.
+const HEARTBEAT_INTERVAL_MS = 5000;
+const HEARTBEAT_STALE_MS = 75000;
+let heartbeatTimer = null;
+function startHeartbeat(){
+  stopHeartbeat();
+  const beat = () => {
+    if(state.code && !state.isSpectator){
+      db.ref('rooms/' + state.code + '/players/' + state.playerId + '/heartbeat').set(Date.now());
+    }
+  };
+  beat();
+  heartbeatTimer = setInterval(beat, HEARTBEAT_INTERVAL_MS);
+}
+function stopHeartbeat(){
+  if(heartbeatTimer){ clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+setInterval(()=>{
+  if(state.isSpectator || !state.room) return;
+  if(state.screen==='home' || state.opponentLeftModal) return;
+  const opp = oppPlayer();
+  const oppEntry = state.room && state.room.players ? Object.entries(state.room.players).find(([id])=>id!==state.playerId) : null;
+  if(!opp || !oppEntry) return;
+  const oppId = oppEntry[0];
+  const lastSeen = state.lastSeenLocal[oppId];
+  if(lastSeen && (Date.now()-lastSeen) > HEARTBEAT_STALE_MS){
+    state.opponentLeftModal = true;
+    render();
+  }
+}, 3000);
 
 function attachRoomListener(code){
   if(roomRef) roomRef.off();
@@ -111,13 +161,26 @@ function attachRoomListener(code){
     const room = snap.val();
     const playerCount = room && room.players ? Object.keys(room.players).length : 0;
     if(playerCount>=2) state.hadFullRoom = true;
+    // Track when we last actually heard from each player, using our OWN
+    // clock at receipt time (not the stored timestamp, which could be off
+    // due to clock skew) -- first sighting counts as "seen" so a player
+    // doesn't get flagged stale before their first heartbeat write lands.
+    if(room && room.players){
+      Object.entries(room.players).forEach(([pid,p])=>{
+        if(state.lastSeenLocal[pid]===undefined) state.lastSeenLocal[pid] = Date.now();
+        if(p && p.heartbeat!==undefined && state.lastHeartbeatValue[pid]!==p.heartbeat){
+          state.lastHeartbeatValue[pid] = p.heartbeat;
+          state.lastSeenLocal[pid] = Date.now();
+        }
+      });
+    }
     // Someone who was there is gone -- either they hit Leave Room or their
     // connection dropped (onDisconnect cleans up their slot automatically in
     // that case too). Only fire once, and not while just sitting on the home
     // screen or already looking at this same notice.
-    if(state.hadFullRoom && playerCount<2 && state.screen!=='home' && state.screen!=='opponentLeft'){
+    if(state.hadFullRoom && playerCount<2 && state.screen!=='home' && !state.opponentLeftModal){
       state.room = room;
-      state.screen = 'opponentLeft';
+      state.opponentLeftModal = true;
       render();
       return;
     }
@@ -186,6 +249,7 @@ async function createRoom(){
   db.ref('rooms/' + code + '/players/' + state.playerId).onDisconnect().remove();
   state.code=code; state.room=room; state.screen='lobby'; state.loading=false;
   attachRoomListener(code);
+  startHeartbeat();
   render();
 }
 
@@ -199,7 +263,7 @@ async function joinRoom(codeInput){
   // once). Blocks the exact case where the two match instead of guessing at
   // what a "real" name looks like.
   if(state.playerName.trim().toUpperCase() === code){
-    state.error = "That's the room code, not a name -- put your actual name in the name field above.";
+    state.error = "That's the room code, not a name - put your actual name in the name field above.";
     render();
     return;
   }
@@ -226,6 +290,7 @@ async function joinRoom(codeInput){
   state.screen='lobby';
   syncScreen();
   attachRoomListener(code);
+  startHeartbeat();
   render();
 }
 
@@ -378,6 +443,7 @@ async function leaveRoom(){
     } catch(e) { /* best effort -- if this fails, onDisconnect still cleans it up */ }
   }
   detachRoomListener();
+  stopHeartbeat();
   // The eye-fade toggle sets a class on <body> (global, not scoped to the
   // game screen), which would otherwise keep the home screen's own
   // title/nav faded out too after leaving -- and with no fade button on the
@@ -387,7 +453,8 @@ async function leaveRoom(){
     screen:'home', code:null, playerId:genId(), playerName:state.playerName,
     room:null, isSpectator:false, eliminated:new Set(), search:'', pickSelection:null,
     guessMode:false,
-    error:'', watchError:'', loading:false, hadFullRoom:false
+    error:'', watchError:'', loading:false, hadFullRoom:false,
+    opponentLeftModal:false, lastSeenLocal:{}, lastHeartbeatValue:{}
   };
   render();
 }
@@ -406,15 +473,9 @@ function filteredBoardChars(searchVal){
   return board.filter(c=>c.name.toLowerCase().includes(q));
 }
 
-function renderOpponentLeft(){
-  return `
-    <div class="card center">
-      <p class="gameover-title" style="margin-top:0;">Your opponent left the room</p>
-      <p class="hint" style="margin-bottom:18px;">The match can't continue without them.</p>
-      <button type="button" class="secondary" id="leaveBtn">Return to Main Menu</button>
-    </div>
-  `;
-}
+// The opponent-left message itself is now a static overlay in
+// guesswho.html (#gwOpponentLeftOverlay), toggled by render() -- no render
+// function needed for it anymore.
 
 function renderHome(){
   // Avatar + name now live in a modal (see #gwJoinModal, static in
@@ -697,7 +758,7 @@ function renderGame(){
           </div>
           <div class="flank-meta">
             <span class="pill you">You</span>
-            <div class="strikes-row-mini" title="Wrong guesses -- three and you're out">
+            <div class="strikes-row-mini" title="Wrong guesses - three and you're out">
               ${[1,2,3].map(n=>`<span class="strike ${myStrikes>=n?'used':''}">X</span>`).join('')}
             </div>
           </div>
@@ -725,7 +786,7 @@ function renderGame(){
           </div>
           <div class="flank-meta">
             <span class="pill opp">${opp ? opp.name : 'opponent'}</span>
-            <div class="strikes-row-mini" title="Their wrong guesses -- three and they're out">
+            <div class="strikes-row-mini" title="Their wrong guesses - three and they're out">
               ${[1,2,3].map(n=>`<span class="strike ${oppStrikes>=n?'used':''}">X</span>`).join('')}
             </div>
           </div>
@@ -765,10 +826,16 @@ function render(){
   else if(state.screen==='lobby') html = renderLobby();
   else if(state.screen==='pick') html = renderPick();
   else if(state.screen==='game') html = renderGame();
-  else if(state.screen==='opponentLeft') html = renderOpponentLeft();
 
   gwRoot.innerHTML = html;
   attachHandlers();
+
+  // Popup instead of a separate screen -- toggled here so it's always in
+  // sync regardless of which branch above just rendered. The screen
+  // underneath keeps rendering exactly as it was; this just overlays on
+  // top of it.
+  const gwOpponentLeftOverlay = document.getElementById('gwOpponentLeftOverlay');
+  if(gwOpponentLeftOverlay) gwOpponentLeftOverlay.classList.toggle('active', !!state.opponentLeftModal);
 
   // Belt-and-suspenders alongside the explicit reset in leaveRoom(): the
   // eye-fade class lives on <body> (global, not scoped to the game screen),
@@ -1094,5 +1161,10 @@ document.getElementById('gwJoinModalConfirmBtn').addEventListener('click', confi
 document.getElementById('gwJoinModal').addEventListener('click', (e)=>{
   if(e.target.id==='gwJoinModal') closeGwJoinModal();
 });
+
+// "Your opponent left" popup -- Return to Main Menu just runs the normal
+// leaveRoom() flow, same as any other Leave button.
+const gwOpponentLeftBtn = document.getElementById('gwOpponentLeftBtn');
+if(gwOpponentLeftBtn) gwOpponentLeftBtn.addEventListener('click', leaveRoom);
 
 loadCharacters().then(render);

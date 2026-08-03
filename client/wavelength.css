@@ -43,12 +43,15 @@ body { background: var(--wl-bg-orange); }
    fades the nav and page header out of the way, leaving the round card
    (round/role line, scoreboard, wheel, status) as the only thing visible.
    Real opacity transition, not display:none, so it actually fades. */
+/* #wlNoticeBar deliberately excluded -- see the matching note in style.css.
+   Toasts should always be visible regardless of fade mode, not sit
+   invisible until you un-fade. */
 body.wl-card-fade-mode .mode-switcher,
 body.wl-card-fade-mode #app-wavelength h1,
-body.wl-card-fade-mode #wlNoticeBar {
+body.wl-card-fade-mode #leaveBtn {
   opacity: 0; pointer-events: none; transition: opacity 0.35s ease;
 }
-.mode-switcher, #app-wavelength h1, #wlNoticeBar {
+.mode-switcher, #app-wavelength h1 {
   transition: opacity 0.35s ease;
 }
 
@@ -137,7 +140,11 @@ body.wl-card-fade-mode #wlNoticeBar {
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px; font-size: 1.3rem; font-weight: 600; color: #fff;
 }
-.wl-topbar-player { flex: 1 1 0; }
+/* The wrapping card has .card.center on it (text-align:center, see above),
+   which was overriding this player name's natural left alignment and making
+   it read as drifted toward the middle instead of hugging the left edge.
+   Explicit text-align here beats that. */
+.wl-topbar-player { flex: 1 1 0; text-align: left; }
 .wl-topbar-player:last-child { text-align: right; }
 .wl-topbar-round { flex: 0 0 auto; color: var(--wl-orange); font-weight: 700; }
 @media (max-width: 480px) {
@@ -171,7 +178,13 @@ body.wl-card-fade-mode #wlNoticeBar {
 }
 
 .wl-wheel-wrap { max-width: 420px; width: 100%; margin: 0 auto; overflow: visible; }
-.wl-wheel-wrap svg { width: 100%; height: auto; display: block; }
+/* touch-action:none is the actual fix for "can't spin the wheel on mobile" --
+   without it, a touch drag on the wheel gets claimed by the browser as a
+   page-scroll/pan gesture before our own pointermove drag logic gets a
+   chance, which is exactly why it looked like it was "moving slightly but
+   not registering." The hood handle already had this; the wheel itself and
+   the needle handle didn't. */
+.wl-wheel-wrap svg { width: 100%; height: auto; display: block; touch-action: none; }
 
 /* The wheel only used a fraction of the available width on desktop before --
    this lets the card and the wheel inside it grow a bit wider once there's

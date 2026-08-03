@@ -183,12 +183,9 @@ body { background:#2e2a49; margin:0; }
    to .game itself, which put it directly on top of the opponent's name pill
    in the top-right corner of the id-row. Reserving real space above the row
    -- rather than nudging the button around -- means it can never overlap
-   whatever happens to be in that corner. Scoped to the same min-width the
-   button itself uses (it's display:none below 700px), so mobile doesn't
-   carry the extra gap for a button that isn't even shown there. */
-@media (min-width: 701px) {
-  #app-guesswho .game { padding-top: 44px; }
-}
+   whatever happens to be in that corner. Now applies at every width since
+   the button itself is shown on mobile too (it used to be hidden there). */
+#app-guesswho .game { padding-top: 44px; }
 
 /* Eye-fade mode: desktop-only "just show me the boards" view. Reuses the
    generic .focus-mode-btn/.pixel-eye-btn look from style.css (shared across
@@ -209,13 +206,16 @@ body { background:#2e2a49; margin:0; }
 }
 #app-guesswho button.pixel-eye-btn:hover { background: #2a3a63; }
 #app-guesswho button.pixel-eye-btn.active { background: #ffd166; color: #14213d; border-color: #ffb703; }
+/* #gwNoticeBar deliberately excluded -- see the matching note in style.css.
+   Toasts (e.g. "Redraw window closed", "opponent left") should always be
+   visible regardless of fade mode, not sit invisible until you un-fade. */
 body.gw-card-fade-mode .mode-switcher,
-body.gw-card-fade-mode #gwNoticeBar,
 body.gw-card-fade-mode #gwScreen > h1,
-body.gw-card-fade-mode #gwTopBlurb {
+body.gw-card-fade-mode #gwTopBlurb,
+body.gw-card-fade-mode #leaveBtn {
   opacity: 0; pointer-events: none; transition: opacity 0.35s ease;
 }
-.mode-switcher, #gwNoticeBar, #gwScreen > h1, #gwTopBlurb {
+.mode-switcher, #gwScreen > h1, #gwTopBlurb {
   transition: opacity 0.35s ease;
 }
 #app-guesswho .panel-title { font-size:14px; color:var(--muted); margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
@@ -313,18 +313,21 @@ body.gw-card-fade-mode #gwTopBlurb {
    ID-card look they're going for. Fixed width/height (equal, so it's an
    actual square) plus flex:0 0 auto keeps them the same size regardless of
    how much room the row has. */
+/* Shrunk a notch from 150px -- the request was smaller character/guess-who
+   boxes (and, to match, smaller avatars) so more of the board underneath is
+   visible without scrolling. */
 #app-guesswho .id-card {
-  flex:0 0 auto; width:150px; height:150px; box-sizing:border-box;
+  flex:0 0 auto; width:130px; height:130px; box-sizing:border-box;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   background:var(--panel2); border:1px solid var(--border); border-radius:12px;
-  padding:12px; text-align:center;
+  padding:10px; text-align:center;
 }
 #app-guesswho .id-card.guess-card { cursor:pointer; transition:border-color .15s; }
 #app-guesswho .id-card.guess-card:hover { border-color:var(--accent); }
-#app-guesswho .id-photo { width:84px; height:84px; border-radius:8px; object-fit:cover; margin:0 auto 8px; display:block; background:var(--bg); }
+#app-guesswho .id-photo { width:72px; height:72px; border-radius:8px; object-fit:cover; margin:0 auto 8px; display:block; background:var(--bg); }
 #app-guesswho .id-silhouette {
-    width:84px; height:84px; border-radius:8px; margin:0 auto 8px; display:flex;
-    align-items:center; justify-content:center; background:var(--bg); font-size:32px;
+    width:72px; height:72px; border-radius:8px; margin:0 auto 8px; display:flex;
+    align-items:center; justify-content:center; background:var(--bg); font-size:28px;
     font-weight:700; color:var(--accent);
   }
 #app-guesswho .id-label { font-size:13px; font-weight:600; margin:0; }
@@ -340,26 +343,34 @@ body.gw-card-fade-mode #gwTopBlurb {
    below it taller than the cards overall. */
 #app-guesswho .id-flank {
   flex:0 0 auto; display:flex; flex-direction:column; align-items:center;
-  justify-content:flex-end; gap:6px; height:150px; box-sizing:border-box;
+  justify-content:flex-end; gap:6px; height:130px; box-sizing:border-box;
   /* Caps how wide a flank can grow -- without this, a long opponent name
      could push the pill wider than the avatar/strikes above it, which was
      the actual cause of the id-row overflowing and clipping off the edge of
      a phone screen (the fixed-width avatars/cards alone weren't the whole
-     story). */
-  max-width: 110px; min-width: 0;
+     story). Bumped up from 110px -- that width, combined with flank-meta
+     being a horizontal row (name pill fighting the strikes row for the same
+     110px), was squeezing real names down to a single letter plus an
+     ellipsis. Stacking name above strikes (below) fixes the actual squeeze;
+     this wider cap gives the name itself more breathing room on top of that. */
+  max-width: 132px; min-width: 0;
 }
 #app-guesswho .avatar-freeform {
-  width:112px; height:112px; display:flex; align-items:center; justify-content:center;
+  width:98px; height:98px; display:flex; align-items:center; justify-content:center;
   flex:0 0 auto;
 }
-#app-guesswho .avatar-stage-idbox { width:104px; height:104px; }
+#app-guesswho .avatar-stage-idbox { width:90px; height:90px; }
+/* Name pill stacked above the strikes row (not side by side) -- side by side
+   was the actual cause of names truncating to a single letter: the pill and
+   the fixed-width strikes row were both squeezed into the same ~110px, and
+   the pill (the one allowed to shrink) lost almost all of it. Stacked, the
+   pill gets the flank's full width to itself. */
 #app-guesswho .flank-meta {
-  display:flex; align-items:center; gap:8px; flex:0 0 auto;
-  max-width: 100%; min-width: 0;
+  display:flex; flex-direction:column; align-items:center; gap:4px; flex:0 0 auto;
+  max-width: 100%; min-width: 0; width:100%;
 }
-/* Long names (either your own or a longer opponent name) truncate instead of
-   forcing the flank -- and therefore the whole id-row -- wider than it has
-   room for. */
+/* Long names still truncate with an ellipsis rather than overflowing the
+   flank/id-row, they just have much more room to do it in now. */
 #app-guesswho .id-flank .pill {
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -383,7 +394,7 @@ body.gw-card-fade-mode #gwTopBlurb {
    getting clipped against the edge of the board. */
 #app-guesswho .id-card.guess-card { position:relative; overflow:hidden; }
 #app-guesswho .guess-mark {
-  width:100%; height:100%; margin:0; font-size:56px;
+  width:100%; height:100%; margin:0; font-size:46px;
 }
 #app-guesswho .guess-tooltip {
   position:absolute; left:0; right:0; bottom:0;
