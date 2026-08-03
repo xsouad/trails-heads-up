@@ -88,7 +88,15 @@ let state = {
   // nobody actually peeked at.
   psychicPeeked: false,
   guesserPeeked: false,
-  notchesTarget: null // set once the psychic locks, so the reference marks survive
+  notchesTarget: null, // set once the psychic locks, so the reference marks survive
+  // Liveness tracking for "opponent left" detection -- see startHeartbeat/
+  // the staleness check below. Firebase's own onDisconnect() cleanup only
+  // fires once it decides the socket is truly gone, which on a flaky wifi/
+  // mobile connection can take a long time (well past what feels instant to
+  // a player watching the screen) -- this gives a much faster, app-level
+  // signal instead of waiting on that.
+  lastSeenLocal: {},
+  lastHeartbeatValue: {}
 };
 
 let roomRef = null;
@@ -105,6 +113,41 @@ function forceSet(path, value){
   db.ref(path).set(value);
 }
 
+// Each player writes their own heartbeat timestamp on an interval while
+// they're actually in a room; the staleness check below watches the OTHER
+// player's heartbeat and flips to the "opponent left" screen the moment it
+// goes quiet for too long, instead of waiting on Firebase's own onDisconnect
+// cleanup (which only fires once it's sure the socket is gone -- fine for a
+// clean tab close, but can take a long time to notice on a flaky connection,
+// a phone getting backgrounded, a laptop lid closing, etc).
+const HEARTBEAT_INTERVAL_MS = 5000;
+const HEARTBEAT_STALE_MS = 14000;
+let heartbeatTimer = null;
+function startHeartbeat(){
+  stopHeartbeat();
+  const beat = () => {
+    if(state.code && !state.isSpectator){
+      db.ref('wavelength_rooms/' + state.code + '/players/' + state.playerId + '/heartbeat').set(Date.now());
+    }
+  };
+  beat();
+  heartbeatTimer = setInterval(beat, HEARTBEAT_INTERVAL_MS);
+}
+function stopHeartbeat(){
+  if(heartbeatTimer){ clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+setInterval(()=>{
+  if(state.isSpectator || !state.room) return;
+  if(state.screen==='home' || state.screen==='opponentLeft') return;
+  const opp = opponentEntry();
+  if(!opp) return;
+  const lastSeen = state.lastSeenLocal[opp.id];
+  if(lastSeen && (Date.now()-lastSeen) > HEARTBEAT_STALE_MS){
+    state.screen = 'opponentLeft';
+    render();
+  }
+}, 3000);
+
 function attachRoomListener(code){
   if(roomRef) roomRef.off();
   roomRef = db.ref('wavelength_rooms/' + code);
@@ -112,6 +155,19 @@ function attachRoomListener(code){
     const room = snap.val();
     const playerCount = room && room.players ? Object.keys(room.players).length : 0;
     if(playerCount>=2) state.hadFullRoom = true;
+    // Track when we last actually heard from each player, using our OWN
+    // clock at receipt time (not the stored timestamp, which could be off
+    // due to clock skew) -- first sighting counts as "seen" so a player
+    // doesn't get flagged stale before their first heartbeat write lands.
+    if(room && room.players){
+      Object.entries(room.players).forEach(([pid,p])=>{
+        if(state.lastSeenLocal[pid]===undefined) state.lastSeenLocal[pid] = Date.now();
+        if(p && p.heartbeat!==undefined && state.lastHeartbeatValue[pid]!==p.heartbeat){
+          state.lastHeartbeatValue[pid] = p.heartbeat;
+          state.lastSeenLocal[pid] = Date.now();
+        }
+      });
+    }
     if(state.hadFullRoom && playerCount<2 && !state.isSpectator && state.screen!=='home' && state.screen!=='opponentLeft'){
       state.room = room;
       state.screen = 'opponentLeft';
@@ -233,6 +289,7 @@ async function createRoom(){
   db.ref('wavelength_rooms/' + code + '/players/' + state.playerId).onDisconnect().remove();
   state.code = code; state.room = room; state.screen = 'lobby';
   attachRoomListener(code);
+  startHeartbeat();
   render();
 }
 
@@ -259,6 +316,7 @@ async function joinRoom(code){
   db.ref('wavelength_rooms/' + code + '/players/' + state.playerId).onDisconnect().remove();
   state.code = code; state.room = room; state.screen = room.status;
   attachRoomListener(code);
+  startHeartbeat();
   render();
 }
 
@@ -279,12 +337,14 @@ async function leaveRoom(){
     try { await playerRef.onDisconnect().cancel(); await playerRef.remove(); } catch(e){}
   }
   detachRoomListener();
+  stopHeartbeat();
   stopCountdown();
   mountedPlayingKey = null;
   state = Object.assign({}, state, {
     screen:'home', code:null, playerId: genId(), room:null, isSpectator:false,
     joinIntent:null, error:'', hadFullRoom:false, localRotation:90, localNeedle:90,
-    hoodOpen:0, guesserHoodOpen:0, psychicPeeked:false, guesserPeeked:false, notchesTarget:null
+    hoodOpen:0, guesserHoodOpen:0, psychicPeeked:false, guesserPeeked:false, notchesTarget:null,
+    lastSeenLocal:{}, lastHeartbeatValue:{}
   });
   render();
 }

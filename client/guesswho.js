@@ -513,40 +513,47 @@ function renderPick(){
   `;
 }
 
+// Spectators keep a dedicated, self-contained summary screen (they never see
+// a live board mid-game to peek back to, so there's nothing for the results
+// to sit "on top of").
 function renderGameOver(){
   const room = state.room;
-  const players = room.players ? Object.values(room.players) : [];
+  const winnerEntry = room.players ? Object.entries(room.players).find(([id])=>id===room.winner) : null;
+  const winnerName = winnerEntry ? winnerEntry[1].name : 'Someone';
+  return `
+    <div class="card gameover-screen">
+      <div class="gameover-icon">🏆</div>
+      <p class="gameover-title">${winnerName} wins!</p>
+      <div class="reveal-row">
+        ${Object.entries(room.players||{}).map(([pid,p])=>{
+          const c = p.secret ? CHARACTERS.find(x=>x.id===p.secret) : null;
+          const lost = room.winner && pid !== room.winner;
+          return `
+            <div class="reveal-item">
+              <p class="reveal-label">${p.name}'s character</p>
+              ${c ? `<img class="${lost?'result-loser-img':''}" src="${imgUrl(c)}" alt="${c.name}" />` : ''}
+              <p class="reveal-name">${c ? c.name : ''}</p>
+            </div>
+          `;
+        }).join('')}
+      </div>
+      <div style="margin-top:14px;"><button type="button" class="secondary" id="leaveBtn">Stop Watching</button></div>
+    </div>
+  `;
+}
+
+// The win/lose summary used to fully replace the screen and sit in a card as
+// wide as the live board -- way too much empty width for a couple lines of
+// text. It's now a compact floating modal (like the how-to-play/avatar
+// modals) layered on top of the still-rendered live board underneath, with
+// an eye button you can HOLD to fade the modal out and see the board as it
+// was left, releasing brings the results back.
+function renderResultsOverlay(){
+  const room = state.room;
   const me = myPlayer();
   const opp = oppPlayer();
-
-  if(state.isSpectator){
-    const winnerEntry = room.players ? Object.entries(room.players).find(([id])=>id===room.winner) : null;
-    const winnerName = winnerEntry ? winnerEntry[1].name : 'Someone';
-    return `
-      <div class="card gameover-screen">
-        <div class="gameover-icon">🏆</div>
-        <p class="gameover-title">${winnerName} wins!</p>
-        <div class="reveal-row">
-          ${players.map(p=>{
-            const c = p.secret ? CHARACTERS.find(x=>x.id===p.secret) : null;
-            return `
-              <div class="reveal-item">
-                <p class="reveal-label">${p.name}'s character</p>
-                ${c ? `<img src="${imgUrl(c)}" alt="${c.name}" />` : ''}
-                <p class="reveal-name">${c ? c.name : ''}</p>
-              </div>
-            `;
-          }).join('')}
-        </div>
-        <div style="margin-top:14px;"><button type="button" class="secondary" id="leaveBtn">Stop Watching</button></div>
-      </div>
-    `;
-  }
-
   const iWon = room.winner===state.playerId;
   const strikeout = room.winReason==='strikeout';
-  const mySecretChar = me && me.secret ? CHARACTERS.find(c=>c.id===me.secret) : null;
-  const oppSecretChar = opp && opp.secret ? CHARACTERS.find(c=>c.id===opp.secret) : null;
   const rematch = room.rematch;
   const iRequested = rematch && rematch.requestedBy===state.playerId;
   const theyRequested = rematch && opp && rematch.requestedBy!==state.playerId;
@@ -576,24 +583,27 @@ function renderGameOver(){
   }
 
   return `
-    <div class="card gameover-screen">
-      <div class="gameover-icon">${iWon ? '🏆' : '😢'}</div>
-      <p class="gameover-title">${title}</p>
-      <p class="gameover-sub">${sub}</p>
-      <div class="reveal-row">
-        <div class="reveal-item">
-          <p class="reveal-label">Your character</p>
-          ${mySecretChar ? `<img src="${imgUrl(mySecretChar)}" alt="${mySecretChar.name}" />` : ''}
-          <p class="reveal-name">${mySecretChar ? mySecretChar.name : ''}</p>
-        </div>
-        <div class="reveal-item">
-          <p class="reveal-label">${opp ? opp.name+"'s character" : "Opponent's character"}</p>
-          ${oppSecretChar ? `<img src="${imgUrl(oppSecretChar)}" alt="${oppSecretChar.name}" />` : ''}
-          <p class="reveal-name">${oppSecretChar ? oppSecretChar.name : ''}</p>
-        </div>
+    <div class="results-overlay" id="resultsOverlay">
+      <div class="results-card">
+        <button type="button" id="resultsPeekBtn" class="focus-mode-btn pixel-eye-btn results-peek-btn" title="Hold to see the board">
+          <svg width="16" height="16" viewBox="0 0 8 8" shape-rendering="crispEdges">
+            <rect x="2" y="1" width="4" height="1" fill="currentColor"/>
+            <rect x="1" y="2" width="1" height="1" fill="currentColor"/>
+            <rect x="6" y="2" width="1" height="1" fill="currentColor"/>
+            <rect x="0" y="3" width="1" height="2" fill="currentColor"/>
+            <rect x="7" y="3" width="1" height="2" fill="currentColor"/>
+            <rect x="1" y="5" width="1" height="1" fill="currentColor"/>
+            <rect x="6" y="5" width="1" height="1" fill="currentColor"/>
+            <rect x="2" y="6" width="4" height="1" fill="currentColor"/>
+            <rect x="3" y="3" width="2" height="2" fill="currentColor"/>
+          </svg>
+        </button>
+        <div class="gameover-icon">${iWon ? '🏆' : '😢'}</div>
+        <p class="gameover-title">${title}</p>
+        <p class="gameover-sub">${sub}</p>
+        ${rematchSection}
+        <div style="margin-top:14px;"><button type="button" class="secondary gameover-btn" id="leaveBtn">Leave Room</button></div>
       </div>
-      ${rematchSection}
-      <div style="margin-top:14px; margin-bottom:20px;"><button type="button" class="secondary gameover-btn" id="leaveBtn">Leave Room</button></div>
     </div>
   `;
 }
@@ -601,7 +611,8 @@ function renderGameOver(){
 function renderGame(){
   const room = state.room;
   const over = room && room.status==='over';
-  if(over) return renderGameOver();
+  // Spectators keep their own dedicated end screen -- see renderGameOver.
+  if(over && state.isSpectator) return renderGameOver();
 
   // Always the full 32-character board now -- there's no search box on this
   // screen anymore, so nothing should ever come through filtered here even if
@@ -649,7 +660,15 @@ function renderGame(){
   const me = myPlayer();
   const opp = oppPlayer();
   const myStrikes = me && me.strikes ? me.strikes : 0;
+  const oppStrikes = opp && opp.strikes ? opp.strikes : 0;
   const mySecretChar = me && me.secret ? CHARACTERS.find(c=>c.id===me.secret) : null;
+  // Once the round is over, the "guess who?" box becomes a real reveal of
+  // the opponent's actual character instead of the mystery "?" -- and
+  // whichever side lost gets its portrait grayed out right on the card, so
+  // the win/loss result reads at a glance without a separate side-by-side
+  // reveal section.
+  const oppSecretChar = over && opp && opp.secret ? CHARACTERS.find(c=>c.id===opp.secret) : null;
+  const iWon = over && room.winner===state.playerId;
 
   return `
     <div class="game">
@@ -667,30 +686,48 @@ function renderGame(){
         </svg>
       </button>
       <div class="id-row">
-        <div class="id-flank" title="Wrong guesses -- three and you're out">
-          <div class="strikes-row">
-            ${[1,2,3].map(n=>`<span class="strike ${myStrikes>=n?'used':''}">X</span>`).join('')}
+        <div class="id-flank">
+          <div class="id-avatar-card">
+            <div class="avatar-stage avatar-stage-idbox" id="gwMyAvatar"></div>
           </div>
-          <span class="pill you">You</span>
+          <div class="flank-side">
+            <div class="strikes-col" title="Wrong guesses -- three and you're out">
+              ${[1,2,3].map(n=>`<span class="strike ${myStrikes>=n?'used':''}">X</span>`).join('')}
+            </div>
+            <span class="pill you">You</span>
+          </div>
         </div>
-        <div class="id-card">
+        <div class="id-card ${over && !iWon ? 'result-loser' : ''}">
           ${mySecretChar ? `<img class="id-photo" src="${imgUrl(mySecretChar)}" alt="${mySecretChar.name}" />` : `<div class="id-silhouette">?</div>`}
           <p class="id-label">${mySecretChar ? mySecretChar.name : ''}</p>
           <p class="id-sub">Your character</p>
         </div>
-        <div class="id-card guess-card ${state.guessMode?'guessing':''}" id="openGuessBtn">
-          <div class="id-silhouette">?</div>
-          <p class="id-label">?????</p>
-          <p class="id-sub">${state.guessMode ? 'Tap a character below' : 'Guess who?'}</p>
+        ${over ? `
+        <div class="id-card ${!iWon ? '' : 'result-loser'}">
+          ${oppSecretChar ? `<img class="id-photo" src="${imgUrl(oppSecretChar)}" alt="${oppSecretChar.name}" />` : `<div class="id-silhouette">?</div>`}
+          <p class="id-label">${oppSecretChar ? oppSecretChar.name : ''}</p>
+          <p class="id-sub">${opp ? opp.name+"'s character" : "Opponent's character"}</p>
         </div>
+        ` : `
+        <div class="id-card guess-card ${state.guessMode?'guessing':''}" id="openGuessBtn">
+          <div class="id-silhouette guess-mark">?</div>
+          <span class="guess-tooltip">Click to guess who</span>
+        </div>
+        `}
         <div class="id-flank">
-          <span class="avatar-stage avatar-stage-mini" id="gwOppAvatar"></span>
-          <span class="pill opp">${opp ? opp.name : 'opponent'}</span>
+          <div class="flank-side">
+            <div class="strikes-col" title="Their wrong guesses -- three and they're out">
+              ${[1,2,3].map(n=>`<span class="strike ${oppStrikes>=n?'used':''}">X</span>`).join('')}
+            </div>
+            <span class="pill opp">${opp ? opp.name : 'opponent'}</span>
+          </div>
+          <div class="id-avatar-card">
+            <div class="avatar-stage avatar-stage-idbox" id="gwOppAvatar"></div>
+          </div>
         </div>
       </div>
 
       <div class="card board-card">
-        <p class="panel-title"><span>${opp ? opp.name+"'s character" : "Opponent's character"}</span></p>
         <div class="grid grid-wide">
           ${board.map(c=>`
             <div class="card-tile ${state.eliminated.has(c.id)?'eliminated':''}" data-flip="${c.id}">
@@ -704,9 +741,11 @@ function renderGame(){
         </div>
       </div>
 
+      ${over ? renderResultsOverlay() : `
       <div class="center">
         <button type="button" class="secondary" id="leaveBtn">Leave Game</button>
       </div>
+      `}
     </div>
   `;
 }
@@ -801,6 +840,15 @@ function attachHandlers(){
   const leaveBtn = document.getElementById('leaveBtn');
   if(leaveBtn) leaveBtn.addEventListener('click', leaveRoom);
 
+  // Hold-to-peek: pointerdown on the eye fades the results modal out (see
+  // .results-overlay.peeking in guesswho.css) so the live board underneath
+  // is visible; releasing anywhere brings it back (the release listeners are
+  // bound once, at the bottom of this file, not here -- see startPeek/endPeek).
+  const resultsPeekBtn = document.getElementById('resultsPeekBtn');
+  if(resultsPeekBtn){
+    resultsPeekBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); startPeek(); });
+  }
+
   const searchNode = document.getElementById('searchInput');
   if(searchNode){
     searchNode.addEventListener('input', e=>{
@@ -852,7 +900,12 @@ function attachHandlers(){
     });
   }
 
-  // Mini avatar next to the opponent's name badge during the game itself.
+  // Avatar-sized boxes flanking the two ID cards during the game itself --
+  // yours on the far left, the opponent's on the far right.
+  const gwMyAvatar = document.getElementById('gwMyAvatar');
+  if(gwMyAvatar && typeof renderAvatarStage === 'function'){
+    renderAvatarStage(gwMyAvatar, avatar);
+  }
   const gwOppAvatar = document.getElementById('gwOppAvatar');
   if(gwOppAvatar){
     const opp = oppPlayer();
@@ -905,6 +958,25 @@ if(gwHowToPlayOverlay){
     if(e.target === gwHowToPlayOverlay) gwHowToPlayOverlay.classList.remove('active');
   });
 }
+
+// Hold-to-peek on the game-over results modal (#resultsOverlay, rebuilt
+// every render() -- see renderResultsOverlay). The button's own pointerdown
+// is bound fresh each render in attachHandlers (safe, since the old button
+// node is discarded with the rest of the HTML each time), but the "release"
+// side is bound ONCE here at window level so it always fires no matter where
+// the pointer lets go or leaves to, instead of needing to stay exactly over
+// a button that visually disappears out from under the cursor the instant
+// the peek starts.
+function startPeek(){
+  const overlay = document.getElementById('resultsOverlay');
+  if(overlay) overlay.classList.add('peeking');
+}
+function endPeek(){
+  const overlay = document.getElementById('resultsOverlay');
+  if(overlay) overlay.classList.remove('peeking');
+}
+window.addEventListener('pointerup', endPeek);
+window.addEventListener('pointercancel', endPeek);
 
 // Avatar + name modal (#gwJoinModal, static in guesswho.html) -- wired once
 // here, same as the how-to-play viewer above, rather than inside

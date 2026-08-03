@@ -38,6 +38,18 @@ function cancelPendingRemoval(clientId) {
   if (timer) { clearTimeout(timer); pendingRemovals.delete(clientId); }
 }
 
+// Character/event/avatar images almost never change once uploaded, but were
+// being served with no caching headers at all -- every single navigation
+// that touches a new image (a game-over reveal, a fresh avatar layer, etc)
+// paid a full network round-trip even on a fine connection, which is exactly
+// the "images take a moment to load even on the same wifi" symptom. Only
+// /assets gets the long cache lifetime (registered before the general static
+// handler below, so it wins for this path) -- app.js/*.css/*.html stay
+// uncached so a fresh deploy is picked up immediately instead of players
+// needing a hard refresh to see code changes.
+app.use('/assets', express.static(path.join(__dirname, '../client/assets'), {
+  maxAge: '7d', immutable: true
+}));
 app.use(express.static(path.join(__dirname, '../client')));
 // Guess Who's frontend fetches the shared character list directly
 // (fetch('data/characters.json')) so it always matches Heads Up's data

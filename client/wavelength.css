@@ -118,23 +118,26 @@ body { background: var(--wl-bg-orange); }
 .wl-wheel-wrap svg { width: 100%; height: auto; display: block; }
 
 /* The wheel only used a fraction of the available width on desktop before --
-   this lets the card and the wheel inside it grow substantially wider once
-   there's actually room for it, while leaving phones (which were already
-   sized right) untouched. The card itself was still getting clipped to
-   720px even after being told to grow, because it sits inside the shared
-   .screen wrapper (used by all three games) which caps out at 720px --
-   that outer cap has to widen too, not just the card inside it. */
+   this lets the card and the wheel inside it grow a bit wider once there's
+   actually room for it, while leaving phones (which were already sized
+   right) untouched. The card itself was still getting clipped to 720px even
+   after being told to grow, because it sits inside the shared .screen
+   wrapper (used by all three games) which caps out at 720px -- that outer
+   cap has to widen too, not just the card inside it.
+   NOTE: an earlier pass over-corrected this (1100px/1300px breakpoints) and
+   made the wheel too large on desktop -- these are dialed back down to a
+   more moderate size. */
 @media (min-width: 700px) {
-  #app-wavelength #wlScreen.screen { max-width: 1100px; }
-  #app-wavelength .wl-playing-card { max-width: 1040px; }
+  #app-wavelength #wlScreen.screen { max-width: 820px; }
+  #app-wavelength .wl-playing-card { max-width: 760px; }
   .wl-playing-card .wl-wheel-wrap,
-  .wl-playing-card .wl-pair-flank { max-width: 920px; }
+  .wl-playing-card .wl-pair-flank { max-width: 640px; }
 }
 @media (min-width: 1300px) {
-  #app-wavelength #wlScreen.screen { max-width: 1300px; }
-  #app-wavelength .wl-playing-card { max-width: 1220px; }
+  #app-wavelength #wlScreen.screen { max-width: 900px; }
+  #app-wavelength .wl-playing-card { max-width: 840px; }
   .wl-playing-card .wl-wheel-wrap,
-  .wl-playing-card .wl-pair-flank { max-width: 1100px; }
+  .wl-playing-card .wl-pair-flank { max-width: 720px; }
 }
 
 /* The two clue words sit above the wheel, one per side, rather than inside
@@ -146,6 +149,15 @@ body { background: var(--wl-bg-orange); }
 .wl-pair-flank-word { font-size: 15px; font-weight: 700; }
 .wl-pair-flank-word.left { color: var(--wl-orange); text-align: left; }
 .wl-pair-flank-word.right { color: #ffffff; text-align: right; }
+/* Bumped up on desktop specifically -- these were staying phone-sized even
+   once the wheel itself had room to grow, making the two clue words hard to
+   read at a glance compared to everything else on the wider layout. */
+@media (min-width: 700px) {
+  .wl-pair-flank-word { font-size: 22px; }
+}
+@media (min-width: 1300px) {
+  .wl-pair-flank-word { font-size: 26px; }
+}
 
 /* Now an SVG circle that rides along the rim (see setHoodHandlePosition in
    wavelength.js) rather than a fixed HTML element -- this just handles its
