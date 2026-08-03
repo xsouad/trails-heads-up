@@ -687,14 +687,14 @@ function renderGame(){
       </button>
       <div class="id-row">
         <div class="id-flank">
-          <div class="id-avatar-card">
+          <div class="avatar-freeform">
             <div class="avatar-stage avatar-stage-idbox" id="gwMyAvatar"></div>
           </div>
-          <div class="flank-side">
-            <div class="strikes-col" title="Wrong guesses -- three and you're out">
+          <div class="flank-meta">
+            <span class="pill you">You</span>
+            <div class="strikes-row-mini" title="Wrong guesses -- three and you're out">
               ${[1,2,3].map(n=>`<span class="strike ${myStrikes>=n?'used':''}">X</span>`).join('')}
             </div>
-            <span class="pill you">You</span>
           </div>
         </div>
         <div class="id-card ${over && !iWon ? 'result-loser' : ''}">
@@ -715,13 +715,13 @@ function renderGame(){
         </div>
         `}
         <div class="id-flank">
-          <div class="flank-side">
-            <div class="strikes-col" title="Their wrong guesses -- three and they're out">
+          <div class="flank-meta">
+            <span class="pill opp">${opp ? opp.name : 'opponent'}</span>
+            <div class="strikes-row-mini" title="Their wrong guesses -- three and they're out">
               ${[1,2,3].map(n=>`<span class="strike ${oppStrikes>=n?'used':''}">X</span>`).join('')}
             </div>
-            <span class="pill opp">${opp ? opp.name : 'opponent'}</span>
           </div>
-          <div class="id-avatar-card">
+          <div class="avatar-freeform">
             <div class="avatar-stage avatar-stage-idbox" id="gwOppAvatar"></div>
           </div>
         </div>

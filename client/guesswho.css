@@ -317,26 +317,25 @@ body.gw-card-fade-mode #gwTopBlurb {
 #app-guesswho .id-label { font-size:13px; font-weight:600; margin:0; }
 #app-guesswho .id-sub { font-size:11px; color:var(--muted); margin:2px 0 0; }
 
-/* Each flank is now the player's avatar (sized to match the ID cards next to
-   it) plus a "side" strip of the vertical XXX strikes and the name pill,
-   sitting right up against the middle cards -- "parallel to the box" rather
-   than the old horizontal row of X's floating above a tiny avatar. */
+/* Each flank is the player's avatar, shown freeform (no card/border around
+   it -- deliberately NOT another square panel, so the row isn't four
+   identical boxes in a line) plus their name and attempts stacked below it:
+   name pill and the XXX row sit side by side, underneath the avatar. */
 #app-guesswho .id-flank {
-  flex:0 0 auto; display:flex; align-items:center; gap:8px;
-}
-#app-guesswho .id-avatar-card {
-  flex:0 0 auto; width:150px; height:150px; box-sizing:border-box;
-  display:flex; align-items:center; justify-content:center;
-  background:var(--panel2); border:1px solid var(--border); border-radius:12px;
-  overflow:hidden;
-}
-#app-guesswho .avatar-stage-idbox { width:130px; height:130px; }
-#app-guesswho .flank-side {
   flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:8px;
 }
-/* Vertical, not horizontal -- runs top-to-bottom alongside the box next to
-   it, and the circles themselves are bigger for legibility. */
-#app-guesswho .strikes-col { display:flex; flex-direction:column; gap:6px; }
+#app-guesswho .avatar-freeform {
+  width:150px; height:150px; display:flex; align-items:center; justify-content:center;
+}
+#app-guesswho .avatar-stage-idbox { width:140px; height:140px; }
+#app-guesswho .flank-meta {
+  display:flex; align-items:center; gap:8px;
+}
+/* Horizontal now (name pill next to the attempts), not the old vertical
+   stack -- and a smaller/tighter version of .strike since these sit inline
+   with a name pill instead of running the full height of a box. */
+#app-guesswho .strikes-row-mini { display:flex; gap:4px; }
+#app-guesswho .strikes-row-mini .strike { width:22px; height:22px; font-size:11px; }
 #app-guesswho .strike {
   display:inline-flex; align-items:center; justify-content:center;
   width:32px; height:32px; border-radius:50%; font-weight:700; font-size:16px;
@@ -346,41 +345,40 @@ body.gw-card-fade-mode #gwTopBlurb {
 #app-guesswho #openGuessBtn.guessing { background:#17C3B2; color:#fff; }
 
 /* Guess-who box: just a big "?" now, no more "????? / Guess who?" text
-   underneath it -- a custom-styled tooltip (native title attributes can't be
-   made bold) explains what it does on hover instead. */
-#app-guesswho .id-card.guess-card { position:relative; }
+   underneath it -- hovering shows "Click to guess who" as a label INSIDE
+   the box itself (overlaid on the bottom of the "?"), rather than a speech
+   bubble popping up outside/above the card, which ended up floating and
+   getting clipped against the edge of the board. */
+#app-guesswho .id-card.guess-card { position:relative; overflow:hidden; }
 #app-guesswho .guess-mark {
   width:100%; height:100%; margin:0; font-size:56px;
 }
 #app-guesswho .guess-tooltip {
-  position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%);
-  background:#14213d; color:#fff; font-weight:700; font-size:12.5px;
-  padding:6px 10px; border-radius:8px; white-space:nowrap;
+  position:absolute; left:0; right:0; bottom:0;
+  background:rgba(20,33,61,.92); color:#fff; font-weight:700; font-size:11.5px;
+  padding:8px 6px; text-align:center; line-height:1.2;
   opacity:0; pointer-events:none; transition:opacity .15s;
-  box-shadow:0 4px 12px rgba(0,0,0,.35);
-}
-#app-guesswho .guess-tooltip::after {
-  content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%);
-  border:5px solid transparent; border-top-color:#14213d;
 }
 #app-guesswho .id-card.guess-card:hover .guess-tooltip { opacity:1; }
 
 @media (max-width: 480px) {
   #app-guesswho .id-row { gap:6px; }
   #app-guesswho .id-flank { gap:4px; }
-  #app-guesswho .flank-side { gap:4px; }
+  #app-guesswho .flank-meta { gap:4px; }
   #app-guesswho .id-flank .pill { font-size:10px; padding:2px 6px; }
   /* The fixed 150px squares are sized for desktop -- shrink them (and the
-     photo/silhouette inside) so both cards plus both flanks still fit on a
-     phone-width screen without wrapping or overflowing. */
-  #app-guesswho .id-card, #app-guesswho .id-avatar-card { width:88px; height:88px; padding:8px; }
-  #app-guesswho .avatar-stage-idbox { width:70px; height:70px; }
+     photo/silhouette/avatar inside) so both cards plus both flanks still fit
+     on a phone-width screen without wrapping or overflowing. */
+  #app-guesswho .id-card, #app-guesswho .avatar-freeform { width:88px; height:88px; padding:8px; }
+  #app-guesswho .avatar-stage-idbox { width:80px; height:80px; }
   #app-guesswho .id-photo, #app-guesswho .id-silhouette { width:56px; height:56px; }
   #app-guesswho .id-silhouette { font-size:22px; }
   #app-guesswho .guess-mark { font-size:34px; }
+  #app-guesswho .guess-tooltip { font-size:9.5px; padding:5px 4px; }
   #app-guesswho .id-label { font-size:11px; }
   #app-guesswho .id-sub { font-size:9px; }
   #app-guesswho .strike { width:24px; height:24px; font-size:12px; }
+  #app-guesswho .strikes-row-mini .strike { width:18px; height:18px; font-size:9px; }
 }
 /* Mini avatar previews used in the lobby player list and next to the
    opponent's name badge during a game. Reuses Heads Up's own .avatar-stage
