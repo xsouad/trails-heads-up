@@ -3,23 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Trails Wavelength</title>
+<title>Wavelength</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="wavelength.css">
 </head>
 <body>
 
 <div class="mode-switcher">
-  <a class="mode-btn" href="/">Trails Heads Up</a>
-  <a class="mode-btn" href="/guesswho">Trails Guess Who</a>
-  <a class="mode-btn active" href="/wavelength">Trails Wavelength</a>
+  <a class="mode-btn" href="/">Heads Up</a>
+  <a class="mode-btn" href="/guesswho">Guess Who</a>
+  <a class="mode-btn active" href="/wavelength">Wavelength</a>
 </div>
 
 <div id="app-wavelength">
   <div id="wlNoticeBar"></div>
 
   <div class="screen active" id="wlScreen">
-    <h1>Trails Wavelength</h1>
+    <h1>Wavelength</h1>
     <div id="wlTopBlurb">
       <p class="subtitle">One of you is the psychic. Spin the wheel, peek at the target, then give your partner a clue between the two words. They guess where the needle should land.</p>
       <button type="button" id="wlHowToPlayBtn" class="how-to-play-link">How to Play</button>
@@ -56,6 +56,17 @@
     <input id="wlNameInput" type="text" placeholder="Your name" maxlength="20" style="margin-top:14px;" />
     <p class="error-text" id="wlJoinError"></p>
     <button type="button" class="primary" id="wlJoinConfirmBtn" style="margin-top:12px;">Create Room</button>
+  </div>
+</div>
+
+<!-- Popup instead of a separate screen -- overlays whatever was on screen
+     rather than navigating away from it, matching the how-to-play/avatar
+     modals' own pattern. -->
+<div class="zoom-overlay" id="wlOpponentLeftOverlay">
+  <div class="how-to-play-card wl-join-card" style="text-align:center;">
+    <p class="gameover-title" style="margin-top:0;">Your opponent left the room</p>
+    <p class="hint" style="margin-bottom:18px;">The match can't continue without them.</p>
+    <button type="button" class="secondary" id="wlOpponentLeftBtn">Return to Main Menu</button>
   </div>
 </div>
 

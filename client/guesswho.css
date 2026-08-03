@@ -5,7 +5,6 @@
    before. */
 .mode-switcher {
   border-color: #6a5fa8;
-  max-width: 420px;
 }
 .mode-switcher .mode-btn {
   background: #3a3260;
@@ -47,6 +46,10 @@ body { background:#2e2a49; margin:0; }
 #app-guesswho .board-card {
     background:#4a4078; border:1px solid #7f6fd6;
     box-shadow:0 0 0 1px rgba(159,139,244,.15), 0 8px 30px rgba(0,0,0,.35);
+    /* Tightened ~3px off the top/bottom of the outer rectangle specifically
+       (left/right unchanged) so the board itself sits a little more compact
+       for streaming. */
+    padding-top:17px; padding-bottom:17px;
   }
 #app-guesswho * {box-sizing:border-box;}
 /* Pick/game screens get real room to spread the character grid out on
@@ -176,6 +179,16 @@ body { background:#2e2a49; margin:0; }
   }
 #app-guesswho .cname { font-size:10.5px; line-height:1.2; }
 #app-guesswho .game { display:flex; flex-direction:column; gap:18px; position:relative; }
+/* The eye-fade button is absolutely positioned (top:8px; right:8px) relative
+   to .game itself, which put it directly on top of the opponent's name pill
+   in the top-right corner of the id-row. Reserving real space above the row
+   -- rather than nudging the button around -- means it can never overlap
+   whatever happens to be in that corner. Scoped to the same min-width the
+   button itself uses (it's display:none below 700px), so mobile doesn't
+   carry the extra gap for a button that isn't even shown there. */
+@media (min-width: 701px) {
+  #app-guesswho .game { padding-top: 44px; }
+}
 
 /* Eye-fade mode: desktop-only "just show me the boards" view. Reuses the
    generic .focus-mode-btn/.pixel-eye-btn look from style.css (shared across
@@ -293,7 +306,7 @@ body.gw-card-fade-mode #gwTopBlurb {
    (id-flank) instead of living in their own separate full-width row below --
    that old row was the "strikes look weird floating on their own" and ate an
    extra line of vertical space for no reason. */
-#app-guesswho .id-row { display:flex; gap:10px; align-items:center; justify-content:center; margin-bottom:16px; }
+#app-guesswho .id-row { display:flex; gap:10px; align-items:center; justify-content:center; margin-bottom:10px; }
 /* These used to be flex:1, which stretched them to fill whatever horizontal
    space the two flanks left over -- fine on a narrow phone screen, but on
    anything wider it turned them into long rectangles instead of the square
@@ -328,6 +341,12 @@ body.gw-card-fade-mode #gwTopBlurb {
 #app-guesswho .id-flank {
   flex:0 0 auto; display:flex; flex-direction:column; align-items:center;
   justify-content:flex-end; gap:6px; height:150px; box-sizing:border-box;
+  /* Caps how wide a flank can grow -- without this, a long opponent name
+     could push the pill wider than the avatar/strikes above it, which was
+     the actual cause of the id-row overflowing and clipping off the edge of
+     a phone screen (the fixed-width avatars/cards alone weren't the whole
+     story). */
+  max-width: 110px; min-width: 0;
 }
 #app-guesswho .avatar-freeform {
   width:112px; height:112px; display:flex; align-items:center; justify-content:center;
@@ -336,6 +355,13 @@ body.gw-card-fade-mode #gwTopBlurb {
 #app-guesswho .avatar-stage-idbox { width:104px; height:104px; }
 #app-guesswho .flank-meta {
   display:flex; align-items:center; gap:8px; flex:0 0 auto;
+  max-width: 100%; min-width: 0;
+}
+/* Long names (either your own or a longer opponent name) truncate instead of
+   forcing the flank -- and therefore the whole id-row -- wider than it has
+   room for. */
+#app-guesswho .id-flank .pill {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 /* Horizontal now (name pill next to the attempts), not the old vertical
    stack -- and a smaller/tighter version of .strike since these sit inline
@@ -369,6 +395,12 @@ body.gw-card-fade-mode #gwTopBlurb {
 
 @media (max-width: 480px) {
   #app-guesswho .id-row { gap:6px; }
+  /* Belt-and-suspenders on top of the max-width cap above: on an actual
+     phone the row also gets a horizontal scroll fallback so a name that's
+     STILL too long to fully ellipsis-fit never clips content off-screen
+     with no way to see it. */
+  #app-guesswho .id-row { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  #app-guesswho .id-flank { max-width: 70px; }
   /* The avatars were the thing pushing this row past the edge of a phone
      screen -- dropping them here (keeping the name + XXX attempts, which is
      the info that actually matters) is enough on its own to bring the whole

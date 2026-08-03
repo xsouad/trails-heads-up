@@ -794,6 +794,12 @@ function render(){
   if(gwTopBlurb){
     gwTopBlurb.style.display = state.screen === 'home' ? '' : 'none';
   }
+  // Same for the page's own "Guess Who" title -- it was staying up the
+  // whole time you were actually in a room, not just on the home screen.
+  const gwTitle = document.querySelector('#gwScreen > h1');
+  if(gwTitle){
+    gwTitle.style.display = state.screen === 'home' ? '' : 'none';
+  }
 
   const newGrid = document.querySelector('.grid');
   if(newGrid) newGrid.scrollTop = prevScroll;
@@ -853,13 +859,27 @@ function attachHandlers(){
   const leaveBtn = document.getElementById('leaveBtn');
   if(leaveBtn) leaveBtn.addEventListener('click', leaveRoom);
 
-  // Hold-to-peek: pointerdown on the eye fades the results modal out (see
-  // .results-overlay.peeking in guesswho.css) so the live board underneath
-  // is visible; releasing anywhere brings it back (the release listeners are
-  // bound once, at the bottom of this file, not here -- see startPeek/endPeek).
+  // Hold-to-peek on mouse/trackpad: pointerdown on the eye fades the results
+  // modal out (see .results-overlay.peeking in guesswho.css) so the live
+  // board underneath is visible; releasing anywhere brings it back (the
+  // release listeners are bound once, at the bottom of this file, not here --
+  // see startPeek/endPeek).
+  // On touch, "hold" doesn't translate -- there's no real press-and-release
+  // gesture distinct from a tap, so the button was getting stuck showing the
+  // board with no way to close it. Touch instead gets a plain tap-to-toggle:
+  // pointerType is checked here so this is real touch input, not just a
+  // narrow-screen mouse/trackpad, and the shared pointerup/pointercancel
+  // listeners below explicitly ignore touch so they don't immediately
+  // re-close what the tap just opened.
   const resultsPeekBtn = document.getElementById('resultsPeekBtn');
   if(resultsPeekBtn){
-    resultsPeekBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); startPeek(); });
+    const isTouchLike = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    resultsPeekBtn.title = isTouchLike ? 'Tap to see the board' : 'Hold to see the board';
+    resultsPeekBtn.addEventListener('pointerdown', (e)=>{
+      e.preventDefault();
+      if(e.pointerType === 'touch') togglePeek();
+      else startPeek();
+    });
   }
 
   const searchNode = document.getElementById('searchInput');
@@ -988,8 +1008,19 @@ function endPeek(){
   const overlay = document.getElementById('resultsOverlay');
   if(overlay) overlay.classList.remove('peeking');
 }
-window.addEventListener('pointerup', endPeek);
-window.addEventListener('pointercancel', endPeek);
+// Touch tap-to-toggle (see attachHandlers' resultsPeekBtn binding above) --
+// just flips the same 'peeking' class on/off, independent of any
+// press-and-release timing.
+function togglePeek(){
+  const overlay = document.getElementById('resultsOverlay');
+  if(overlay) overlay.classList.toggle('peeking');
+}
+// These are the release side of the mouse/trackpad hold-to-peek gesture.
+// Explicitly skip touch pointers here -- a tap fires pointerdown then
+// pointerup almost instantly, and without this check that pointerup would
+// immediately undo the toggle the tap just set.
+window.addEventListener('pointerup', e=>{ if(e.pointerType !== 'touch') endPeek(); });
+window.addEventListener('pointercancel', e=>{ if(e.pointerType !== 'touch') endPeek(); });
 
 // Avatar + name modal (#gwJoinModal, static in guesswho.html) -- wired once
 // here, same as the how-to-play viewer above, rather than inside

@@ -126,16 +126,23 @@ body.wl-card-fade-mode #wlNoticeBar {
 .wl-scoreboard { font-size: 0.95rem; color: #d8d2f5; margin-bottom: 10px; }
 .wl-score-toast { color: var(--wl-orange); font-weight: 600; }
 
-/* One strip -- your score, the round counter, their score -- instead of
-   three separate stacked lines competing for the same space above the
-   wheel. */
+/* Its own separate rectangle above the wheel card now, instead of being the
+   top section of the same card -- keeps it visually distinct as its own
+   strip of info, and means the eye-fade button (anchored to the wheel card
+   below) no longer sits in the same corner as a player's name. */
+#app-wavelength .wl-topbar-card {
+  padding: 16px 22px; margin-bottom: 14px;
+}
 .wl-topbar {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; margin-bottom: 10px; font-size: 0.9rem; color: #d8d2f5;
+  gap: 10px; font-size: 1.3rem; font-weight: 600; color: #fff;
 }
 .wl-topbar-player { flex: 1 1 0; }
 .wl-topbar-player:last-child { text-align: right; }
-.wl-topbar-round { flex: 0 0 auto; color: var(--wl-orange); font-weight: 600; }
+.wl-topbar-round { flex: 0 0 auto; color: var(--wl-orange); font-weight: 700; }
+@media (max-width: 480px) {
+  .wl-topbar { font-size: 1rem; gap: 6px; }
+}
 
 /* "YOU'RE THE PSYCHIC" / "YOU'RE GUESSING" as a real boxed badge instead of
    a plain line of colored text, so it reads as the single most important
@@ -178,13 +185,13 @@ body.wl-card-fade-mode #wlNoticeBar {
    more moderate size. */
 @media (min-width: 700px) {
   #app-wavelength #wlScreen.screen { max-width: 820px; }
-  #app-wavelength .wl-playing-card { max-width: 760px; }
+  #app-wavelength .wl-playing-card, #app-wavelength .wl-topbar-card { max-width: 760px; }
   .wl-playing-card .wl-wheel-wrap,
   .wl-playing-card .wl-pair-flank { max-width: 640px; }
 }
 @media (min-width: 1300px) {
   #app-wavelength #wlScreen.screen { max-width: 900px; }
-  #app-wavelength .wl-playing-card { max-width: 840px; }
+  #app-wavelength .wl-playing-card, #app-wavelength .wl-topbar-card { max-width: 840px; }
   .wl-playing-card .wl-wheel-wrap,
   .wl-playing-card .wl-pair-flank { max-width: 720px; }
 }

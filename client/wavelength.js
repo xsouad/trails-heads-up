@@ -67,7 +67,7 @@ function genId(){ return 'p_'+Math.random().toString(36).slice(2,10); }
 function randomPair(){ return WORD_PAIRS[Math.floor(Math.random()*WORD_PAIRS.length)]; }
 
 let state = {
-  screen: 'home', // home, lobby, pairing, playing, complete, opponentLeft
+  screen: 'home', // home, lobby, pairing, playing, complete
   code: null,
   playerId: genId(),
   playerName: '',
@@ -77,6 +77,11 @@ let state = {
   joinCodeDraft: '',
   error: '',
   hadFullRoom: false,
+  // Popup instead of a separate screen -- true just overlays
+  // #wlOpponentLeftOverlay on top of whatever's currently showing (see
+  // render()), it doesn't touch state.screen at all, so the frozen board
+  // underneath stays exactly as it was instead of navigating away from it.
+  opponentLeftModal: false,
   // local-only drag state, never written straight to Firebase on every frame
   localRotation: 90,
   localNeedle: 90,
@@ -120,8 +125,21 @@ function forceSet(path, value){
 // cleanup (which only fires once it's sure the socket is gone -- fine for a
 // clean tab close, but can take a long time to notice on a flaky connection,
 // a phone getting backgrounded, a laptop lid closing, etc).
+//
+// STALE_MS was originally 14s, which sounded safely generous -- except
+// browsers throttle setInterval/setTimeout HEAVILY in a backgrounded tab
+// (Chrome, for one, drops background timers to firing at most once every
+// ~60s). A player who's just sitting there reading chat in another tab, or
+// whose phone screen locked, is still fully connected -- their heartbeat
+// write just gets delayed by the browser itself, not by anything actually
+// going wrong. At 14s that looked identical to them having left, which is
+// exactly the false "opponent left" bug this fixes: bumping the threshold
+// comfortably past that ~60s worst case so a merely-backgrounded tab is
+// never mistaken for a dropped connection. Detection is slower now (up to
+// ~75s instead of ~14s) but a false positive was actively worse than a slow
+// true positive.
 const HEARTBEAT_INTERVAL_MS = 5000;
-const HEARTBEAT_STALE_MS = 14000;
+const HEARTBEAT_STALE_MS = 75000;
 let heartbeatTimer = null;
 function startHeartbeat(){
   stopHeartbeat();
@@ -138,12 +156,12 @@ function stopHeartbeat(){
 }
 setInterval(()=>{
   if(state.isSpectator || !state.room) return;
-  if(state.screen==='home' || state.screen==='opponentLeft') return;
+  if(state.screen==='home' || state.opponentLeftModal) return;
   const opp = opponentEntry();
   if(!opp) return;
   const lastSeen = state.lastSeenLocal[opp.id];
   if(lastSeen && (Date.now()-lastSeen) > HEARTBEAT_STALE_MS){
-    state.screen = 'opponentLeft';
+    state.opponentLeftModal = true;
     render();
   }
 }, 3000);
@@ -168,9 +186,9 @@ function attachRoomListener(code){
         }
       });
     }
-    if(state.hadFullRoom && playerCount<2 && !state.isSpectator && state.screen!=='home' && state.screen!=='opponentLeft'){
+    if(state.hadFullRoom && playerCount<2 && !state.isSpectator && state.screen!=='home' && !state.opponentLeftModal){
       state.room = room;
-      state.screen = 'opponentLeft';
+      state.opponentLeftModal = true;
       render();
       return;
     }
@@ -178,7 +196,7 @@ function attachRoomListener(code){
       const prevStatus = state.room && state.room.status;
       const prevRound = state.room && state.room.round;
       state.room = room;
-      if(state.screen!=='home' && state.screen!=='opponentLeft'){
+      if(state.screen!=='home' && !state.opponentLeftModal){
         state.screen = room.status;
       }
       // A fresh round (or a fresh pair, in custom mode) means the persistent
@@ -340,11 +358,12 @@ async function leaveRoom(){
   stopHeartbeat();
   stopCountdown();
   mountedPlayingKey = null;
+  mountedPairingKey = null;
   state = Object.assign({}, state, {
     screen:'home', code:null, playerId: genId(), room:null, isSpectator:false,
     joinIntent:null, error:'', hadFullRoom:false, localRotation:90, localNeedle:90,
     hoodOpen:0, guesserHoodOpen:0, psychicPeeked:false, guesserPeeked:false, notchesTarget:null,
-    lastSeenLocal:{}, lastHeartbeatValue:{}
+    lastSeenLocal:{}, lastHeartbeatValue:{}, opponentLeftModal:false
   });
   render();
 }
@@ -622,10 +641,21 @@ function render(){
   // games already do with their own intro text.
   const wlTopBlurb = document.getElementById('wlTopBlurb');
   if(wlTopBlurb) wlTopBlurb.style.display = state.screen === 'home' ? '' : 'none';
+  // Same for the page's own "Wavelength" title -- was staying up through
+  // lobby/pairing/playing/complete instead of only showing on the home
+  // screen like the other games' own headers do.
+  const wlTitle = document.querySelector('#wlScreen > h1');
+  if(wlTitle) wlTitle.style.display = state.screen === 'home' ? '' : 'none';
   // Same fade-mode leak fixed in the other two games: the eye-fade class
   // lives on <body> (global), so landing back on the home screen always
   // clears it, regardless of which path got you there.
   if(state.screen==='home') document.body.classList.remove('wl-card-fade-mode');
+  // Popup instead of a separate screen -- toggled here, ahead of every
+  // screen branch below (several of which return early), so it's always in
+  // sync regardless of which branch actually renders. The screen underneath
+  // keeps rendering exactly as it was; this just overlays on top of it.
+  const opponentLeftOverlay = document.getElementById('wlOpponentLeftOverlay');
+  if(opponentLeftOverlay) opponentLeftOverlay.classList.toggle('active', !!state.opponentLeftModal);
   // "complete" (the whole match's final results) now stays on the SAME
   // mounted wheel shell as "playing" instead of navigating to a separate
   // screen -- advanceRound() never changes room.round when the match ends
@@ -670,7 +700,6 @@ function render(){
   stopCountdown();
   if(state.screen==='home') root.innerHTML = renderHome();
   else if(state.screen==='lobby') root.innerHTML = renderLobby();
-  else if(state.screen==='opponentLeft') root.innerHTML = renderOpponentLeft();
   attachStaticHandlers();
 }
 
@@ -790,7 +819,6 @@ function renderWheelSvg(){
       <line id="wlNeedle" x1="200" y1="200" x2="200" y2="30" stroke="#14213d" stroke-width="4" stroke-linecap="round"></line>
       <circle cx="200" cy="200" r="8" fill="#14213d"></circle>
       <circle id="wlNeedleHandle" cx="200" cy="30" r="9" fill="${TEAL}" stroke="white" stroke-width="2" style="cursor:grab; display:none;"></circle>
-      <text id="wlSpinHint" x="200" y="215" text-anchor="middle" font-size="12" fill="var(--text-secondary)">Drag the wheel to spin</text>
       <circle id="wlHoodHandle" cx="15" cy="200" r="12" fill="${ORANGE}" stroke="#fff" stroke-width="2" style="cursor:grab; touch-action:none;"></circle>
     </svg>
   `;
@@ -802,6 +830,13 @@ function renderWheelSvg(){
 // drag never gets its listeners yanked out from under it.
 function renderPlaying(){
   return `
+    <div class="card center wl-topbar-card">
+      <div class="wl-topbar">
+        <span class="wl-topbar-player" id="wlTopbarLeft"></span>
+        <span class="wl-topbar-round" id="wlRoundLine"></span>
+        <span class="wl-topbar-player" id="wlTopbarRight"></span>
+      </div>
+    </div>
     <div class="card center wl-playing-card" style="position:relative;">
       <button type="button" id="wlCardFadeBtn" class="focus-mode-btn pixel-eye-btn" title="Fade out everything but the wheel">
         <svg width="16" height="16" viewBox="0 0 8 8" shape-rendering="crispEdges">
@@ -816,11 +851,6 @@ function renderPlaying(){
           <rect x="3" y="3" width="2" height="2" fill="currentColor"/>
         </svg>
       </button>
-      <div class="wl-topbar">
-        <span class="wl-topbar-player" id="wlTopbarLeft"></span>
-        <span class="wl-topbar-round" id="wlRoundLine"></span>
-        <span class="wl-topbar-player" id="wlTopbarRight"></span>
-      </div>
       <div class="wl-role-pill" id="wlRoleLine"></div>
       <div class="wl-wheel-wrap" style="position:relative;">
         ${renderWheelSvg()}
@@ -862,15 +892,9 @@ function renderCompleteCard(){
   `;
 }
 
-function renderOpponentLeft(){
-  return `
-    <div class="card center">
-      <p class="gameover-title" style="margin-top:0;">Your opponent left the room</p>
-      <p class="hint" style="margin-bottom:18px;">The match can't continue without them.</p>
-      <button type="button" class="secondary" id="leaveBtn">Return to Main Menu</button>
-    </div>
-  `;
-}
+// The opponent-left message itself is now a static overlay in wavelength.html
+// (#wlOpponentLeftOverlay), toggled by render() -- no render function needed
+// for it anymore.
 
 // ---------- wiring ----------
 
@@ -972,8 +996,6 @@ function mountWheel(){
       // left for any hood-rendering edge case (a seam at the sector
       // boundary, a stale clip path, etc) to expose a peek of.
       drawWedges(effectiveTarget(state.localRotation), false);
-      const hint = document.getElementById('wlSpinHint');
-      if(hint) hint.style.display = 'none';
       throttledSet('wavelength_rooms/' + state.code + '/rotation', state.localRotation, 70);
     }
   });
@@ -1148,8 +1170,6 @@ function syncPlayingScreen(){
 
   const handle = document.getElementById('wlNeedleHandle');
   handle.style.display = (!psychic && !state.isSpectator) ? 'block' : 'none';
-  const hint = document.getElementById('wlSpinHint');
-  hint.style.display = (psychic && !room.spun) ? 'block' : 'none';
 
   // Shortened across the board -- these were reading like instruction-manual
   // paragraphs when they only need to be a single quick nudge of what to do
@@ -1281,5 +1301,10 @@ document.getElementById('wlHowToPlayNextBtn').addEventListener('click', ()=>{
 document.getElementById('wlHowToPlayOverlay').addEventListener('click', e=>{
   if(e.target.id==='wlHowToPlayOverlay') e.target.classList.remove('active');
 });
+
+// "Your opponent left" popup -- Return to Main Menu just runs the normal
+// leaveRoom() flow, same as any other Leave Room button.
+const wlOpponentLeftBtn = document.getElementById('wlOpponentLeftBtn');
+if(wlOpponentLeftBtn) wlOpponentLeftBtn.addEventListener('click', leaveRoom);
 
 render();

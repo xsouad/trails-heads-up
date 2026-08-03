@@ -418,27 +418,30 @@ body.card-fade-mode .redraw-btn {
   color: #ffb703; margin-bottom: 4px; font-variant-numeric: tabular-nums;
 }
 
-/* Top-of-page switcher between Trails Heads Up and Trails Guess Who. */
+/* Top-of-page switcher between the three games -- sized up noticeably
+   (bigger box, bigger text) since this is the primary way to move between
+   games and was reading as an afterthought compared to everything else on
+   the page. */
 .mode-switcher {
   display: flex;
   gap: 0;
-  max-width: 480px;
+  max-width: 640px;
   margin: 20px auto 0;
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
   border: 1px solid #3a4a7a;
 }
 .mode-switcher .mode-btn {
   flex: 1;
-  padding: 12px 10px;
+  padding: 18px 10px;
   background: #16213e;
   color: #8a94b8;
   border: none;
-  font-size: 14px;
+  font-size: 1.15rem;
   text-align: center;
   text-decoration: none;
   display: block;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
 }
 .mode-switcher .mode-btn.active {
