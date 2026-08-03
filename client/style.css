@@ -151,11 +151,23 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   overflow: hidden;
 }
 .item-card-content {
-  display: flex; flex-direction: column; align-items: center; width: 100%;
+  display: flex; flex-direction: column; align-items: center; width: 100%; height: 100%;
 }
 .item-bubble img {
-  max-width: 100%; max-height: 115px; width: auto; height: auto; object-fit: contain;
-  border-radius: 6px; display: block; margin: 0 auto 4px;
+  /* flex:1 1 auto + min-height:0 lets the image actually shrink to whatever
+     room the caption below it leaves -- without min-height:0 a flex item
+     won't shrink past its own content size, which combined with the card's
+     overflow:hidden is what made long captions crop the top of the image
+     off instead of just making it a bit smaller. */
+  max-width: 100%; flex: 1 1 auto; min-height: 0; width: auto; height: auto;
+  object-fit: contain; border-radius: 6px; display: block; margin: 0 auto 4px;
+}
+/* Caption itself is capped to 2 lines with an ellipsis so it can never grow
+   tall enough to push the image out in the first place, regardless of how
+   long the event/character name is. */
+.item-card-content > div {
+  flex: 0 0 auto; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; text-overflow: ellipsis; line-height: 1.2; max-height: 2.4em;
 }
 .item-bubble.self-hidden { background: #333f5e; color: #7f8db3; font-style: italic; }
 .board-name-wrap { display: flex; flex-direction: column; align-items: center; }
@@ -212,6 +224,64 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     white-space: normal; overflow-wrap: break-word; word-break: break-word;
     min-width: 0;
   }
+}
+
+/* Focus mode: a desktop-only "just show me the cards" view. The button
+   itself sits in the corner of the game screen; clicking it hides every
+   other page chrome element via body.focus-mode below and requests real
+   browser fullscreen at the same time. Hidden entirely on narrow/touch
+   screens -- fullscreen on a phone browser is unreliable and there's no
+   spare chrome to hide there anyway. */
+.focus-mode-btn {
+  position: absolute; top: 8px; right: 8px; z-index: 5;
+  width: 34px; height: 34px; border-radius: 8px; border: 1px solid #3a4a75;
+  background: #1f2b4d; color: #fff; font-size: 1rem; cursor: pointer; line-height: 1;
+}
+.focus-mode-btn:hover { background: #2a3a63; }
+@media (max-width: 700px) {
+  .focus-mode-btn { display: none; }
+}
+body.focus-mode .mode-switcher,
+body.focus-mode #noticeBar,
+body.focus-mode #screen-game > h1,
+body.focus-mode #gameTimer,
+body.focus-mode #redrawHint,
+body.focus-mode #revealCounter,
+body.focus-mode #spectatorCountGame,
+body.focus-mode #bottomBar {
+  display: none !important;
+}
+body.focus-mode #screen-game {
+  min-height: 100vh; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+body.focus-mode .focus-mode-btn { position: fixed; }
+
+/* Second button sits right next to the fullscreen one. */
+#cardFadeBtn { right: 48px; display: flex; align-items: center; justify-content: center; }
+.pixel-eye-btn svg { image-rendering: pixelated; }
+.pixel-eye-btn.active { background: #ffd166; color: #14213d; border-color: #ffb703; }
+
+/* Fade-UI mode: a stricter, separate toggle from focus mode -- everything
+   fades to invisible except the board (cards + names) and the reveal
+   button, including the redraw button which focus mode deliberately leaves
+   alone. Real opacity transition rather than display:none so it actually
+   fades instead of popping away; pointer-events:none keeps faded elements
+   from still being clickable while invisible. */
+body.card-fade-mode .mode-switcher,
+body.card-fade-mode #noticeBar,
+body.card-fade-mode #screen-game > h1,
+body.card-fade-mode #gameTimer,
+body.card-fade-mode #redrawHint,
+body.card-fade-mode #revealCounter,
+body.card-fade-mode #spectatorCountGame,
+body.card-fade-mode #bottomBar,
+body.card-fade-mode .redraw-btn {
+  opacity: 0; pointer-events: none; transition: opacity 0.35s ease;
+}
+.mode-switcher, #noticeBar, #screen-game > h1, #gameTimer, #redrawHint,
+#revealCounter, #spectatorCountGame, #bottomBar, .redraw-btn {
+  transition: opacity 0.35s ease;
 }
 
 .game-timer {

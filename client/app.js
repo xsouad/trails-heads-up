@@ -428,6 +428,57 @@ document.getElementById('revealBtn').addEventListener('click', (e) => {
   e.target.textContent = 'Waiting on others…';
 });
 
+// ---------- focus mode (desktop-only "just show me the cards" view) ----------
+// Two independent layers: a CSS class that hides everything on the page
+// except the board and reveal button (works everywhere, including if the
+// browser refuses real fullscreen), and the actual Fullscreen API on top of
+// that when it's available, so it's a real distraction-free fullscreen and
+// not just a CSS trick. The button itself is hidden on narrow/touch screens
+// via CSS since this is explicitly a desktop feature.
+(function () {
+  const btn = document.getElementById('focusModeBtn');
+  const gameScreen = document.getElementById('screen-game');
+  function setFocusMode(on) {
+    document.body.classList.toggle('focus-mode', on);
+    btn.textContent = on ? '⤢' : '⛶';
+    btn.title = on ? 'Exit focus mode' : 'Focus mode: hide everything but the cards';
+  }
+  btn.addEventListener('click', () => {
+    const turningOn = !document.body.classList.contains('focus-mode');
+    setFocusMode(turningOn);
+    if (turningOn && gameScreen.requestFullscreen) {
+      gameScreen.requestFullscreen().catch(() => {});
+    } else if (!turningOn && document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+  });
+  // Pressing Esc (or any other way the browser exits fullscreen) should drop
+  // the CSS focus mode too, so the button doesn't get stuck showing "exit"
+  // when there's nothing left to exit.
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) setFocusMode(false);
+  });
+})();
+
+// ---------- fade-UI mode (pixel eye icon) ----------
+// A stricter, separate toggle from focus mode above -- this one isn't tied
+// to real browser fullscreen at all, it just fades everything except the
+// board and the reveal button, INCLUDING the redraw button (focus mode
+// deliberately keeps that visible/usable; this one hides it too). Plain
+// opacity transition rather than display:none so it actually fades instead
+// of snapping away.
+(function () {
+  const btn = document.getElementById('cardFadeBtn');
+  function setCardFade(on) {
+    document.body.classList.toggle('card-fade-mode', on);
+    btn.classList.toggle('active', on);
+    btn.title = on ? 'Show everything again' : 'Fade out everything but the cards and the reveal button';
+  }
+  btn.addEventListener('click', () => {
+    setCardFade(!document.body.classList.contains('card-fade-mode'));
+  });
+})();
+
 // ---------- leave room (with confirmation) ----------
 document.getElementById('leaveRoomBtn').addEventListener('click', () => {
   document.getElementById('leaveConfirmOverlay').classList.add('active');

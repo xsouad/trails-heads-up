@@ -683,6 +683,7 @@ function renderGame(){
 
   return `
     <div class="game">
+      <button type="button" id="gwFocusModeBtn" class="focus-mode-btn" title="Focus mode: hide everything but the boards">⛶</button>
       <div class="id-row">
         <div class="id-flank" title="Wrong guesses -- three and you're out">
           <div class="strikes-row">
@@ -773,9 +774,42 @@ function render(){
   }
 }
 
+// Same desktop-only "just show me the boards" idea as Heads Up's focus
+// mode: a CSS class hides the page chrome (nav, header, blurb), and the
+// Fullscreen API layers real browser fullscreen on top where available.
+// Since the whole #gwRoot gets replaced with fresh HTML on every render(),
+// this button is rebuilt each time too -- rebinding its click handler here
+// in attachHandlers() (which already runs after every render) keeps it
+// working without needing its own persistent mount.
+function setGwFocusMode(on){
+  document.body.classList.toggle('gw-focus-mode', on);
+  const btn = document.getElementById('gwFocusModeBtn');
+  if(btn){
+    btn.textContent = on ? '⤢' : '⛶';
+    btn.title = on ? 'Exit focus mode' : 'Focus mode: hide everything but the boards';
+  }
+}
+document.addEventListener('fullscreenchange', ()=>{
+  if(!document.fullscreenElement) setGwFocusMode(false);
+});
+
 function attachHandlers(){
   const nameInput = document.getElementById('nameInput');
   if(nameInput) nameInput.addEventListener('input', e=>{ state.playerName = e.target.value; });
+
+  const gwFocusModeBtn = document.getElementById('gwFocusModeBtn');
+  if(gwFocusModeBtn){
+    gwFocusModeBtn.addEventListener('click', ()=>{
+      const turningOn = !document.body.classList.contains('gw-focus-mode');
+      setGwFocusMode(turningOn);
+      const gwScreen = document.getElementById('gwScreen');
+      if(turningOn && gwScreen && gwScreen.requestFullscreen){
+        gwScreen.requestFullscreen().catch(()=>{});
+      } else if(!turningOn && document.fullscreenElement){
+        document.exitFullscreen().catch(()=>{});
+      }
+    });
+  }
 
   const createBtn = document.getElementById('createBtn');
   if(createBtn) createBtn.addEventListener('click', createRoom);

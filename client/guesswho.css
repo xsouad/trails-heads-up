@@ -175,7 +175,22 @@ body { background:#2e2a49; margin:0; }
     display:block; background:#111;
   }
 #app-guesswho .cname { font-size:10.5px; line-height:1.2; }
-#app-guesswho .game { display:flex; flex-direction:column; gap:18px; }
+#app-guesswho .game { display:flex; flex-direction:column; gap:18px; position:relative; }
+
+/* Focus mode: desktop-only "just show me the boards" view. Reuses the
+   generic .focus-mode-btn look from style.css (shared across both games);
+   this just handles what gets hidden here specifically -- the nav, page
+   header/blurb, and notice bar, leaving the ID cards and the character grid
+   itself as the only things on screen. */
+body.gw-focus-mode .mode-switcher,
+body.gw-focus-mode #gwNoticeBar,
+body.gw-focus-mode #gwScreen > h1,
+body.gw-focus-mode #gwTopBlurb {
+  display: none !important;
+}
+body.gw-focus-mode #gwScreen {
+  min-height: 100vh; display: flex; flex-direction: column; justify-content: center;
+}
 #app-guesswho .panel-title { font-size:14px; color:var(--muted); margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
 #app-guesswho .pill {
     display:inline-block; font-size:12px; padding:3px 10px; border-radius:999px;
@@ -231,8 +246,19 @@ body { background:#2e2a49; margin:0; }
    (id-flank) instead of living in their own separate full-width row below --
    that old row was the "strikes look weird floating on their own" and ate an
    extra line of vertical space for no reason. */
-#app-guesswho .id-row { display:flex; gap:10px; align-items:center; margin-bottom:16px; }
-#app-guesswho .id-card { flex:1; background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:12px; text-align:center; }
+#app-guesswho .id-row { display:flex; gap:10px; align-items:center; justify-content:center; margin-bottom:16px; }
+/* These used to be flex:1, which stretched them to fill whatever horizontal
+   space the two flanks left over -- fine on a narrow phone screen, but on
+   anything wider it turned them into long rectangles instead of the square
+   ID-card look they're going for. Fixed width/height (equal, so it's an
+   actual square) plus flex:0 0 auto keeps them the same size regardless of
+   how much room the row has. */
+#app-guesswho .id-card {
+  flex:0 0 auto; width:150px; height:150px; box-sizing:border-box;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:var(--panel2); border:1px solid var(--border); border-radius:12px;
+  padding:12px; text-align:center;
+}
 #app-guesswho .id-card.guess-card { cursor:pointer; transition:border-color .15s; }
 #app-guesswho .id-card.guess-card:hover { border-color:var(--accent); }
 #app-guesswho .id-photo { width:84px; height:84px; border-radius:8px; object-fit:cover; margin:0 auto 8px; display:block; background:var(--bg); }
@@ -261,6 +287,14 @@ body { background:#2e2a49; margin:0; }
   #app-guesswho .id-row { gap:6px; }
   #app-guesswho .id-flank { width:48px; }
   #app-guesswho .id-flank .pill { font-size:10px; padding:2px 6px; }
+  /* The fixed 150px squares are sized for desktop -- shrink them (and the
+     photo/silhouette inside) so both cards plus both flanks still fit on a
+     phone-width screen without wrapping or overflowing. */
+  #app-guesswho .id-card { width:104px; height:104px; padding:8px; }
+  #app-guesswho .id-photo, #app-guesswho .id-silhouette { width:56px; height:56px; }
+  #app-guesswho .id-silhouette { font-size:22px; }
+  #app-guesswho .id-label { font-size:11px; }
+  #app-guesswho .id-sub { font-size:9px; }
 }
 /* Mini avatar previews used in the lobby player list and next to the
    opponent's name badge during a game. Reuses Heads Up's own .avatar-stage
