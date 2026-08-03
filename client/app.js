@@ -127,6 +127,21 @@ function stopRedrawHintTimer() {
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  // The eye-fade toggle (see the cardFadeBtn IIFE below) sets a class on
+  // <body>, which is global -- if it was left on when you leave the game,
+  // the home screen's own title/nav/etc match the exact same faded
+  // selectors and stay invisible there too, with no way to turn it back off
+  // since the fade button itself only exists on the game screen. Landing on
+  // the home screen always clears it, so leaving a faded game never carries
+  // the effect anywhere it shouldn't.
+  if (id === 'screen-home') {
+    document.body.classList.remove('card-fade-mode');
+    const fadeBtn = document.getElementById('cardFadeBtn');
+    if (fadeBtn) {
+      fadeBtn.classList.remove('active');
+      fadeBtn.title = 'Fade out everything but the cards and the reveal button';
+    }
+  }
 }
 
 // ---------- notices/toasts ----------

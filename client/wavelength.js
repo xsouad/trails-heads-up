@@ -373,7 +373,7 @@ async function startFirstRound(){
   await db.ref('wavelength_rooms/' + state.code).update({
     status: 'playing', round: 1, psychicId: state.room.hostId,
     rotation: 90, needleAngle: 90, spun: false, locked: false, revealed: false,
-    lastScore: null, revealedAt: null, needleLocked: false, guesserPeeking: false
+    lastScore: null, revealedAt: null, needleLocked: false, guesserPeeking: false, wheelLocked: false
   });
 }
 async function startNextRoundFromPairing(){
@@ -382,7 +382,7 @@ async function startNextRoundFromPairing(){
   if(!pair || !pair.left || !pair.right) return;
   await db.ref('wavelength_rooms/' + state.code).update({
     status:'playing', rotation:90, needleAngle:90, spun:false, locked:false, revealed:false,
-    lastScore: null, revealedAt: null, needleLocked: false, guesserPeeking: false
+    lastScore: null, revealedAt: null, needleLocked: false, guesserPeeking: false, wheelLocked: false
   });
 }
 
@@ -582,7 +582,7 @@ async function advanceRound(){
   await db.ref('wavelength_rooms/' + state.code).update({
     status:'playing', round: nextRound, psychicId: nextPsychic,
     rotation:90, needleAngle:90, spun:false, locked:false, revealed:false,
-    lastScore: null, revealedAt: null, needleLocked: false, guesserPeeking: false
+    lastScore: null, revealedAt: null, needleLocked: false, guesserPeeking: false, wheelLocked: false
   });
 }
 // Play Again now needs both players to agree, not just the host -- either
@@ -612,10 +612,27 @@ async function maybeStartNextMatch(){
 // ---------- rendering ----------
 
 let mountedPlayingKey = null;
+let mountedPairingKey = null;
 
 function render(){
   const root = document.getElementById('wlRoot');
-  if(state.screen==='playing' && state.room){
+  // The "how it works" blurb is only useful before you've actually started
+  // a room -- once you're in a lobby/pairing/playing/complete, it just eats
+  // space above the thing you're actually looking at, same as the other two
+  // games already do with their own intro text.
+  const wlTopBlurb = document.getElementById('wlTopBlurb');
+  if(wlTopBlurb) wlTopBlurb.style.display = state.screen === 'home' ? '' : 'none';
+  // Same fade-mode leak fixed in the other two games: the eye-fade class
+  // lives on <body> (global), so landing back on the home screen always
+  // clears it, regardless of which path got you there.
+  if(state.screen==='home') document.body.classList.remove('wl-card-fade-mode');
+  // "complete" (the whole match's final results) now stays on the SAME
+  // mounted wheel shell as "playing" instead of navigating to a separate
+  // screen -- advanceRound() never changes room.round when the match ends
+  // (it only flips status to 'complete'), so the mount key below is
+  // unaffected and nothing gets torn down; syncPlayingScreen just shows the
+  // results as a modal on top (see the wlCompleteOverlay it manages).
+  if((state.screen==='playing' || state.screen==='complete') && state.room){
     const key = state.code + '|' + state.room.round;
     if(mountedPlayingKey !== key){
       root.innerHTML = renderPlaying();
@@ -627,13 +644,58 @@ function render(){
     return;
   }
   mountedPlayingKey = null;
+  // The pairing screen has the same "don't rebuild out from under an
+  // in-progress interaction" problem the playing screen already solved --
+  // the host's custom word inputs (#wlPairLeft/#wlPairRight) were getting
+  // wiped mid-keystroke every time a heartbeat write (see startHeartbeat,
+  // added for the "opponent left" fix) landed and triggered a fresh
+  // room-listener render(), which previously rebuilt this screen's whole
+  // innerHTML unconditionally on every single snapshot -- not just on
+  // actual pairing changes. Only rebuild when the round, pair mode, or
+  // host-ness actually changes; anything else just leaves the existing
+  // DOM (and whatever the host is mid-typing) alone.
+  if(state.screen==='pairing' && state.room){
+    const mode = state.room.pairMode || 'random';
+    const key = state.code + '|' + state.room.round + '|' + mode + '|' + isHost();
+    if(mountedPairingKey !== key){
+      root.innerHTML = renderPairing();
+      mountedPairingKey = key;
+      attachStaticHandlers();
+    } else {
+      syncPairingScreen();
+    }
+    return;
+  }
+  mountedPairingKey = null;
   stopCountdown();
   if(state.screen==='home') root.innerHTML = renderHome();
   else if(state.screen==='lobby') root.innerHTML = renderLobby();
-  else if(state.screen==='pairing') root.innerHTML = renderPairing();
-  else if(state.screen==='complete') root.innerHTML = renderComplete();
   else if(state.screen==='opponentLeft') root.innerHTML = renderOpponentLeft();
   attachStaticHandlers();
+}
+
+// Lightweight update for the pairing screen once it's already mounted (see
+// render() above) -- only touches things that are safe to change without
+// disturbing focus: the random-mode word display (nobody types there) and
+// the Start/Use-this-pair button's disabled state. Never touches the custom
+// input fields' values here; those are only ever set from the DOM's own
+// typing, not re-driven from Firebase, so a stray snapshot can't stomp them.
+function syncPairingScreen(){
+  const room = state.room;
+  if(!room) return;
+  const mode = room.pairMode || 'random';
+  const pair = room.pair || {left:'',right:''};
+  if(mode==='random'){
+    const display = document.querySelector('.wl-pair-display');
+    if(display){
+      const spans = display.querySelectorAll('span:not(.wl-pair-vs)');
+      if(spans[0]) spans[0].textContent = pair.left || '...';
+      if(spans[1]) spans[1].textContent = pair.right || '...';
+    }
+  } else {
+    const startBtn = document.getElementById('wlStartRoundBtn');
+    if(startBtn) startBtn.disabled = !pair.left || !pair.right;
+  }
 }
 
 function renderHome(){
@@ -740,21 +802,46 @@ function renderWheelSvg(){
 // drag never gets its listeners yanked out from under it.
 function renderPlaying(){
   return `
-    <div class="card center wl-playing-card">
-      <p class="hint" id="wlRoundLine"></p>
-      <p class="wl-role-label" id="wlRoleLine"></p>
-      <div class="wl-scoreboard" id="wlScoreboard"></div>
+    <div class="card center wl-playing-card" style="position:relative;">
+      <button type="button" id="wlCardFadeBtn" class="focus-mode-btn pixel-eye-btn" title="Fade out everything but the wheel">
+        <svg width="16" height="16" viewBox="0 0 8 8" shape-rendering="crispEdges">
+          <rect x="2" y="1" width="4" height="1" fill="currentColor"/>
+          <rect x="1" y="2" width="1" height="1" fill="currentColor"/>
+          <rect x="6" y="2" width="1" height="1" fill="currentColor"/>
+          <rect x="0" y="3" width="1" height="2" fill="currentColor"/>
+          <rect x="7" y="3" width="1" height="2" fill="currentColor"/>
+          <rect x="1" y="5" width="1" height="1" fill="currentColor"/>
+          <rect x="6" y="5" width="1" height="1" fill="currentColor"/>
+          <rect x="2" y="6" width="4" height="1" fill="currentColor"/>
+          <rect x="3" y="3" width="2" height="2" fill="currentColor"/>
+        </svg>
+      </button>
+      <div class="wl-topbar">
+        <span class="wl-topbar-player" id="wlTopbarLeft"></span>
+        <span class="wl-topbar-round" id="wlRoundLine"></span>
+        <span class="wl-topbar-player" id="wlTopbarRight"></span>
+      </div>
+      <div class="wl-role-pill" id="wlRoleLine"></div>
       <div class="wl-wheel-wrap" style="position:relative;">
         ${renderWheelSvg()}
       </div>
-      <p class="status" id="wlStatusLine"></p>
-      <div id="wlResultPanel" class="wl-result-panel"></div>
+      <div class="wl-info-box">
+        <p class="status" id="wlStatusLine"></p>
+        <div id="wlResultPanel" class="wl-result-panel"></div>
+      </div>
     </div>
     ${state.isSpectator ? '' : '<div class="center" style="margin-top:14px;"><button type="button" class="secondary" id="leaveBtn">Leave Room</button></div>'}
+    <div class="results-overlay" id="wlCompleteOverlay" style="display:none;">
+      <div class="results-card" id="wlCompleteCard"></div>
+    </div>
   `;
 }
 
-function renderComplete(){
+// Content for the match-complete modal (see wlCompleteOverlay above) -- kept
+// as its own function since it needs to be rebuilt on demand from
+// syncPlayingScreen, not just once at mount, so the ready checkmarks and
+// "waiting on the other player" text stay live.
+function renderCompleteCard(){
   const room = state.room;
   const entries = Object.entries(room.players||{});
   const winnerLine = entries.length===2
@@ -762,18 +849,16 @@ function renderComplete(){
     : '';
   const ready = room.playAgainReady || {};
   const iAmReady = !!ready[state.playerId];
-  const waitingText = (!state.isSpectator && iAmReady) ? '<p class="hint">Waiting for the other player to be ready...</p>' : '';
+  const waitingText = (!state.isSpectator && iAmReady) ? '<p class="hint">Waiting for the other player...</p>' : '';
   return `
-    <div class="card center">
-      <p class="gameover-title">Match complete</p>
-      <div class="wl-scoreboard">
-        ${entries.map(([pid,p])=>`<span>${p.name}: ${p.score||0}${ready[pid] ? ' ✓' : ''}</span>`).join(' &nbsp; ')}
-      </div>
-      <p class="hint">${winnerLine}</p>
-      ${waitingText}
-      ${state.isSpectator ? '' : `<button type="button" class="primary" id="wlPlayAgainBtn" ${iAmReady ? 'disabled' : ''}>${iAmReady ? 'Ready!' : 'Play again'}</button>`}
-      ${state.isSpectator ? '' : '<button type="button" class="secondary" id="leaveBtn">Leave Room</button>'}
+    <p class="gameover-title">Match complete</p>
+    <div class="wl-scoreboard">
+      ${entries.map(([pid,p])=>`<span>${p.name}: ${p.score||0}${ready[pid] ? ' ✓' : ''}</span>`).join(' &nbsp; ')}
     </div>
+    <p class="hint">${winnerLine}</p>
+    ${waitingText}
+    ${state.isSpectator ? '' : `<button type="button" class="primary" id="wlPlayAgainBtn" ${iAmReady ? 'disabled' : ''}>${iAmReady ? 'Ready!' : 'Play again'}</button>`}
+    ${state.isSpectator ? '' : '<button type="button" class="secondary gameover-btn" id="wlCompleteLeaveBtn">Leave Room</button>'}
   `;
 }
 
@@ -792,6 +877,15 @@ function renderOpponentLeft(){
 // Handlers for whatever screen is currently mounted (everything except the
 // in-round wheel itself, which mountWheel binds separately and only once per
 // round -- see render()'s mount/sync split above).
+function setWlCardFade(on){
+  document.body.classList.toggle('wl-card-fade-mode', on);
+  const btn = document.getElementById('wlCardFadeBtn');
+  if(btn){
+    btn.classList.toggle('active', on);
+    btn.title = on ? 'Show everything again' : 'Fade out everything but the wheel';
+  }
+}
+
 function attachStaticHandlers(){
   const createBtn = document.getElementById('wlCreateBtn');
   if(createBtn) createBtn.addEventListener('click', ()=>openJoinModal('create'));
@@ -806,6 +900,18 @@ function attachStaticHandlers(){
 
   const leaveBtn = document.getElementById('leaveBtn');
   if(leaveBtn) leaveBtn.addEventListener('click', leaveRoom);
+
+  // Same eye-fade pattern as Heads Up/Guess Who: fades the page chrome
+  // (nav, header, intro blurb/notice bar) so the wheel is the only thing
+  // left on screen. Rebuilt fresh each time the playing screen mounts (see
+  // renderPlaying), so binding it here is safe -- the old button node (and
+  // its old listener) is discarded along with the rest of the round shell.
+  const wlCardFadeBtn = document.getElementById('wlCardFadeBtn');
+  if(wlCardFadeBtn){
+    wlCardFadeBtn.addEventListener('click', ()=>{
+      setWlCardFade(!document.body.classList.contains('wl-card-fade-mode'));
+    });
+  }
 
   if(state.room && state.room.players){
     Object.entries(state.room.players).forEach(([pid,p])=>{
@@ -847,7 +953,7 @@ function mountWheel(){
     // place for the needle handle below), grabbing the hood handle would
     // ALSO start spinning the wheel at the same time, fighting the hood's
     // own drag for every subsequent move and up event.
-    if(!isPsychic() || state.isSpectator || state.room.locked || e.target.id==='wlNeedleHandle' || e.target.id==='wlHoodHandle') return;
+    if(!isPsychic() || state.isSpectator || state.room.locked || state.room.wheelLocked || e.target.id==='wlNeedleHandle' || e.target.id==='wlHoodHandle') return;
     draggingWheel=true; lastRaw=rawAngleFromEvent(svg,e); svg.setPointerCapture(e.pointerId); svg.style.cursor='grabbing';
     e.preventDefault();
   });
@@ -858,7 +964,14 @@ function mountWheel(){
       state.localRotation += delta;
       lastRaw = raw;
       setHoodRotation(state.localRotation);
-      drawWedges(effectiveTarget(state.localRotation), true);
+      // Numbers should never be visible yet at this point -- the hood hasn't
+      // even been touched, let alone peeked under, so this was relying
+      // entirely on the opaque hood cover to hide them, with nothing else
+      // backing that up. Passing false here means the numbers simply don't
+      // exist in the DOM at all while spinning, so there's no wedge label
+      // left for any hood-rendering edge case (a seam at the sector
+      // boundary, a stale clip path, etc) to expose a peek of.
+      drawWedges(effectiveTarget(state.localRotation), false);
       const hint = document.getElementById('wlSpinHint');
       if(hint) hint.style.display = 'none';
       throttledSet('wavelength_rooms/' + state.code + '/rotation', state.localRotation, 70);
@@ -924,6 +1037,14 @@ function mountWheel(){
       // close it back up unrevealed, and quietly adjust their guess.
       forceSet('wavelength_rooms/' + state.code + '/needleLocked', true);
       forceSet('wavelength_rooms/' + state.code + '/guesserPeeking', true);
+    } else {
+      // Same idea for the psychic's own side: touching the cover at all is
+      // their one shot at a peek for this spin. Without this, they could
+      // crack the hood partway, see enough to not like this target, let go
+      // before reaching the lock threshold, and re-spin for a different one
+      // -- the wheel stays locked from the moment they first grab the cover,
+      // not just once they've fully locked a target.
+      forceSet('wavelength_rooms/' + state.code + '/wheelLocked', true);
     }
   });
   hoodHandle.addEventListener('pointermove', e=>{
@@ -998,8 +1119,20 @@ function syncPlayingScreen(){
   // floating above the whole wheel.
   document.getElementById('wlPairLeftLabel').textContent = pair.left;
   document.getElementById('wlPairRightLabel').textContent = pair.right;
-  document.getElementById('wlRoleLine').textContent = state.isSpectator ? 'Spectating' : (psychic ? "You're the psychic" : "You're guessing");
-  document.getElementById('wlScoreboard').innerHTML = Object.entries(room.players||{}).map(([pid,p])=>`<span>${p.name}: ${p.score||0}</span>`).join(' &nbsp; ');
+  document.getElementById('wlRoleLine').textContent = state.isSpectator ? 'SPECTATING' : (psychic ? "YOU'RE THE PSYCHIC" : "YOU'RE GUESSING");
+  // Top bar: you on the left, your partner on the right, round in the
+  // middle -- one strip instead of three separate stacked lines. Spectators
+  // don't have a "you" side, so they just get both players in room order.
+  const me = !state.isSpectator ? (room.players ? room.players[state.playerId] : null) : null;
+  const opp = opponentEntry();
+  if(state.isSpectator){
+    const entries = Object.values(room.players||{});
+    document.getElementById('wlTopbarLeft').textContent = entries[0] ? `${entries[0].name}: ${entries[0].score||0}` : '';
+    document.getElementById('wlTopbarRight').textContent = entries[1] ? `${entries[1].name}: ${entries[1].score||0}` : '';
+  } else {
+    document.getElementById('wlTopbarLeft').textContent = me ? `${me.name}: ${me.score||0}` : '';
+    document.getElementById('wlTopbarRight').textContent = opp ? `${opp.name}: ${opp.score||0}` : '';
+  }
 
   // The guesser's own hood cover already hides the numbers wherever it's
   // still closed -- gating the numbers themselves behind room.revealed (only
@@ -1018,26 +1151,29 @@ function syncPlayingScreen(){
   const hint = document.getElementById('wlSpinHint');
   hint.style.display = (psychic && !room.spun) ? 'block' : 'none';
 
+  // Shortened across the board -- these were reading like instruction-manual
+  // paragraphs when they only need to be a single quick nudge of what to do
+  // right now.
   const statusLine = document.getElementById('wlStatusLine');
-  if(room.revealed){
+  if(room.revealed || room.status==='complete'){
     statusLine.textContent = '';
   } else if(state.isSpectator){
     statusLine.textContent = 'Watching this match.';
   } else if(psychic && room.guesserPeeking){
     const guesser = opponentEntry();
-    statusLine.textContent = (guesser ? guesser.name : 'Your partner') + ' is moving the cover...';
+    statusLine.textContent = (guesser ? guesser.name : 'Your partner') + ' is checking the target...';
   } else if(psychic){
     statusLine.textContent = room.locked
       ? (state.hoodOpen <= 0.02
-          ? 'Target locked. The tick marks around the rim still show roughly where the zones were.'
-          : 'Locked in! Drag the handle back to close the hood.')
-      : (room.spun ? 'Drag the hood open to peek -- it locks in as soon as you reach the other side.' : 'Drag anywhere on the wheel to spin it all the way around.');
+          ? 'Target locked. Give your partner a clue!'
+          : 'Close the hood to finish.')
+      : (room.spun ? 'Open the hood to peek at the target.' : 'Spin the wheel to set a target.');
   } else {
     statusLine.textContent = !room.locked
-      ? 'Waiting for the psychic to spin and lock a target.'
+      ? 'Waiting for the psychic to lock a target.'
       : room.needleLocked
-        ? 'Needle locked in -- drag your hood fully open to confirm your guess.'
-        : 'Drag the needle, then drag your own hood fully open to lock in your guess.';
+        ? 'Open your hood fully to confirm your guess.'
+        : 'Set the needle, then open your hood to lock it in.';
   }
 
   const frac = psychic ? state.hoodOpen : state.guesserHoodOpen;
@@ -1051,8 +1187,12 @@ function syncPlayingScreen(){
   const resultPanel = document.getElementById('wlResultPanel');
   if(room.revealed && room.lastScore != null){
     const pts = room.lastScore;
-    const label = pts===4 ? "Bullseye!" : pts===3 ? "So close!" : pts===2 ? "Close enough!" : "No points that round.";
-    resultPanel.innerHTML = `<p class="wl-result-title">${label}</p><p class="wl-result-pts">+${pts} point${pts===1?'':'s'}</p><p class="wl-result-countdown" id="wlCountdownText"></p>`;
+    // Leads with the actual points (what people scan for first), the flavor
+    // label second -- "you got 0 points" reading as a bare "No points that
+    // round." with the number buried in a separate line above was the
+    // "wordy/unclear" complaint this is addressing.
+    const label = pts===4 ? "Bullseye!" : pts===3 ? "So close!" : pts===2 ? "Close enough!" : "Not this time.";
+    resultPanel.innerHTML = `<p class="wl-result-pts">+${pts} point${pts===1?'':'s'} -- ${label}</p><p class="wl-result-countdown" id="wlCountdownText"></p>`;
     resultPanel.classList.add('show');
     stopCountdown();
     const tick = ()=>{
@@ -1068,6 +1208,25 @@ function syncPlayingScreen(){
     resultPanel.classList.remove('show');
     resultPanel.innerHTML = '';
     stopCountdown();
+  }
+
+  // Match-complete modal (see renderPlaying's wlCompleteOverlay) -- rebuilt
+  // fresh every sync so the ready checkmarks stay live; harmless to rebuild
+  // repeatedly since there's no input field in here to lose focus/keystrokes
+  // (that's specifically what made the pairing screen's equivalent unsafe).
+  const completeOverlay = document.getElementById('wlCompleteOverlay');
+  if(completeOverlay){
+    if(room.status==='complete'){
+      completeOverlay.style.display = 'flex';
+      const card = document.getElementById('wlCompleteCard');
+      card.innerHTML = renderCompleteCard();
+      const playAgainBtn = document.getElementById('wlPlayAgainBtn');
+      if(playAgainBtn) playAgainBtn.addEventListener('click', markPlayAgainReady);
+      const completeLeaveBtn = document.getElementById('wlCompleteLeaveBtn');
+      if(completeLeaveBtn) completeLeaveBtn.addEventListener('click', leaveRoom);
+    } else {
+      completeOverlay.style.display = 'none';
+    }
   }
 }
 

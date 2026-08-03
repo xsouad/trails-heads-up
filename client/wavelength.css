@@ -39,6 +39,19 @@ body { background: var(--wl-bg-orange); }
   background: var(--wl-orange-dark);
 }
 
+/* Eye-fade mode: same pattern as Heads Up/Guess Who's pixel-eye toggle --
+   fades the nav and page header out of the way, leaving the round card
+   (round/role line, scoreboard, wheel, status) as the only thing visible.
+   Real opacity transition, not display:none, so it actually fades. */
+body.wl-card-fade-mode .mode-switcher,
+body.wl-card-fade-mode #app-wavelength h1,
+body.wl-card-fade-mode #wlNoticeBar {
+  opacity: 0; pointer-events: none; transition: opacity 0.35s ease;
+}
+.mode-switcher, #app-wavelength h1, #wlNoticeBar {
+  transition: opacity 0.35s ease;
+}
+
 #app-wavelength .card {
   background: var(--wl-purple-panel);
   border: 1px solid var(--wl-purple-border);
@@ -110,9 +123,45 @@ body { background: var(--wl-bg-orange); }
   background: #14213d; color: #fff; width: 160px;
 }
 
-.wl-role-label { font-weight: 600; color: var(--wl-orange); margin: 2px 0 10px; }
 .wl-scoreboard { font-size: 0.95rem; color: #d8d2f5; margin-bottom: 10px; }
 .wl-score-toast { color: var(--wl-orange); font-weight: 600; }
+
+/* One strip -- your score, the round counter, their score -- instead of
+   three separate stacked lines competing for the same space above the
+   wheel. */
+.wl-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 10px; font-size: 0.9rem; color: #d8d2f5;
+}
+.wl-topbar-player { flex: 1 1 0; }
+.wl-topbar-player:last-child { text-align: right; }
+.wl-topbar-round { flex: 0 0 auto; color: var(--wl-orange); font-weight: 600; }
+
+/* "YOU'RE THE PSYCHIC" / "YOU'RE GUESSING" as a real boxed badge instead of
+   a plain line of colored text, so it reads as the single most important
+   thing on the card at a glance. */
+.wl-role-pill {
+  display: inline-block; margin: 0 auto 14px; padding: 8px 20px;
+  border: 1px solid var(--wl-orange); border-radius: 10px;
+  background: rgba(240, 153, 123, 0.12);
+  color: #fff; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.5px;
+}
+
+/* Status text and the score-result panel now live in one shared box instead
+   of two separately-styled elements stacked on top of each other -- only
+   one of the two ever has content at a time (the result panel replaces the
+   status line the moment a round resolves), so visually it's always just
+   one message in one place. */
+.wl-info-box {
+  margin-top: 14px; padding: 12px 16px; min-height: 20px;
+  border-radius: 12px; background: #3a3260; border: 1px solid var(--wl-purple-border);
+}
+.wl-info-box .status { margin: 0; }
+.wl-info-box .wl-result-panel {
+  /* Overrides the standalone panel look (its own background/border/margin)
+     now that it's nested inside .wl-info-box, which already provides that. */
+  margin: 0; padding: 0; border: none; background: none; max-width: none;
+}
 
 .wl-wheel-wrap { max-width: 420px; width: 100%; margin: 0 auto; overflow: visible; }
 .wl-wheel-wrap svg { width: 100%; height: auto; display: block; }
@@ -178,6 +227,26 @@ body { background: var(--wl-bg-orange); }
 .wl-result-title { font-size: 1.15rem; font-weight: 700; margin: 0 0 4px; color: #fff; }
 .wl-result-pts { font-size: 1rem; font-weight: 700; color: var(--wl-orange); margin: 0 0 8px; }
 .wl-result-countdown { font-size: 0.85rem; color: #cfc8f2; margin: 0; }
+
+/* Match-complete modal -- same "floating card over a dim backdrop" pattern
+   used for Guess Who's game-over screen, so the final scores/Play Again
+   appear on top of the wheel instead of navigating away to a separate
+   screen (the wheel behind stays exactly as the match left it). */
+#app-wavelength .results-overlay {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(20, 15, 35, .72);
+  padding: 20px;
+}
+#app-wavelength .results-card {
+  width: 100%; max-width: 340px;
+  background: #4a2a17; border: 1px solid var(--wl-orange); border-radius: 16px;
+  padding: 26px 22px 22px; text-align: center;
+  box-shadow: 0 12px 40px rgba(0,0,0,.5);
+}
+#app-wavelength .results-card .gameover-title { font-size: 22px; font-weight: 600; margin: 0 0 10px; color: var(--wl-orange); }
+#app-wavelength .results-card .gameover-btn { width: 200px; display: inline-block; padding: 10px 0; margin-top: 8px; }
+#app-wavelength .results-card .wl-scoreboard { margin-bottom: 10px; }
 
 /* Join and Watch are both .secondary now (one was missing a class entirely
    before, which is why it looked like a bare unstyled browser button), but

@@ -321,15 +321,21 @@ body.gw-card-fade-mode #gwTopBlurb {
    it -- deliberately NOT another square panel, so the row isn't four
    identical boxes in a line) plus their name and attempts stacked below it:
    name pill and the XXX row sit side by side, underneath the avatar. */
+/* The whole flank (avatar + name/attempts row underneath) is sized to land
+   at the same total height as the 150px ID cards next to it -- the avatar
+   alone was set to the full 150px before, which pushed the name/XXX row
+   below it taller than the cards overall. */
 #app-guesswho .id-flank {
-  flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:8px;
+  flex:0 0 auto; display:flex; flex-direction:column; align-items:center;
+  justify-content:flex-end; gap:6px; height:150px; box-sizing:border-box;
 }
 #app-guesswho .avatar-freeform {
-  width:150px; height:150px; display:flex; align-items:center; justify-content:center;
+  width:112px; height:112px; display:flex; align-items:center; justify-content:center;
+  flex:0 0 auto;
 }
-#app-guesswho .avatar-stage-idbox { width:140px; height:140px; }
+#app-guesswho .avatar-stage-idbox { width:104px; height:104px; }
 #app-guesswho .flank-meta {
-  display:flex; align-items:center; gap:8px;
+  display:flex; align-items:center; gap:8px; flex:0 0 auto;
 }
 /* Horizontal now (name pill next to the attempts), not the old vertical
    stack -- and a smaller/tighter version of .strike since these sit inline
@@ -363,14 +369,18 @@ body.gw-card-fade-mode #gwTopBlurb {
 
 @media (max-width: 480px) {
   #app-guesswho .id-row { gap:6px; }
-  #app-guesswho .id-flank { gap:4px; }
-  #app-guesswho .flank-meta { gap:4px; }
+  /* The avatars were the thing pushing this row past the edge of a phone
+     screen -- dropping them here (keeping the name + XXX attempts, which is
+     the info that actually matters) is enough on its own to bring the whole
+     row back within a phone-width viewport without needing to shrink
+     anything else further. */
+  #app-guesswho .avatar-freeform { display:none; }
+  #app-guesswho .id-flank { gap:4px; height:auto; justify-content:center; }
+  #app-guesswho .flank-meta { gap:4px; flex-direction:column; }
   #app-guesswho .id-flank .pill { font-size:10px; padding:2px 6px; }
-  /* The fixed 150px squares are sized for desktop -- shrink them (and the
-     photo/silhouette/avatar inside) so both cards plus both flanks still fit
-     on a phone-width screen without wrapping or overflowing. */
-  #app-guesswho .id-card, #app-guesswho .avatar-freeform { width:88px; height:88px; padding:8px; }
-  #app-guesswho .avatar-stage-idbox { width:80px; height:80px; }
+  /* The fixed 150px squares are sized for desktop -- shrink them so both
+     cards still fit on a phone-width screen without wrapping or overflowing. */
+  #app-guesswho .id-card { width:88px; height:88px; padding:8px; }
   #app-guesswho .id-photo, #app-guesswho .id-silhouette { width:56px; height:56px; }
   #app-guesswho .id-silhouette { font-size:22px; }
   #app-guesswho .guess-mark { font-size:34px; }

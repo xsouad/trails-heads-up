@@ -378,6 +378,11 @@ async function leaveRoom(){
     } catch(e) { /* best effort -- if this fails, onDisconnect still cleans it up */ }
   }
   detachRoomListener();
+  // The eye-fade toggle sets a class on <body> (global, not scoped to the
+  // game screen), which would otherwise keep the home screen's own
+  // title/nav faded out too after leaving -- and with no fade button on the
+  // home screen, there'd be no way to turn it back off either.
+  document.body.classList.remove('gw-card-fade-mode');
   state = {
     screen:'home', code:null, playerId:genId(), playerName:state.playerName,
     room:null, isSpectator:false, eliminated:new Set(), search:'', pickSelection:null,
@@ -715,14 +720,14 @@ function renderGame(){
         </div>
         `}
         <div class="id-flank">
+          <div class="avatar-freeform">
+            <div class="avatar-stage avatar-stage-idbox" id="gwOppAvatar"></div>
+          </div>
           <div class="flank-meta">
             <span class="pill opp">${opp ? opp.name : 'opponent'}</span>
             <div class="strikes-row-mini" title="Their wrong guesses -- three and they're out">
               ${[1,2,3].map(n=>`<span class="strike ${oppStrikes>=n?'used':''}">X</span>`).join('')}
             </div>
-          </div>
-          <div class="avatar-freeform">
-            <div class="avatar-stage avatar-stage-idbox" id="gwOppAvatar"></div>
           </div>
         </div>
       </div>
@@ -764,6 +769,14 @@ function render(){
 
   gwRoot.innerHTML = html;
   attachHandlers();
+
+  // Belt-and-suspenders alongside the explicit reset in leaveRoom(): the
+  // eye-fade class lives on <body> (global, not scoped to the game screen),
+  // so any path that lands back on the home screen should clear it, not just
+  // the one "Leave Room" click handles today.
+  if(state.screen==='home'){
+    document.body.classList.remove('gw-card-fade-mode');
+  }
 
   // The pick and live-game screens get a wider container on desktop so the
   // character grid can actually spread across the screen instead of
