@@ -750,16 +750,22 @@ socket.on('roomState', (state) => {
     }
     renderBoard(document.getElementById('endedBoard'), state.players, {});
 
+    const idleCard = document.getElementById('rematchIdleCard');
     const askBtn = document.getElementById('askRematchBtn');
     const waitingMsg = document.getElementById('rematchWaitingHost');
     const voteCard = document.getElementById('rematchVoteCard');
     const acceptBtn = document.getElementById('acceptRematchBtn');
 
     if (!state.rematchRequested) {
+      idleCard.style.display = 'block';
       voteCard.style.display = 'none';
       askBtn.style.display = isHost ? 'block' : 'none';
       waitingMsg.style.display = isHost ? 'none' : 'block';
     } else {
+      // Once a rematch vote is underway, the idle card (Ask for Rematch /
+      // waiting text) has nothing left to show -- hide it entirely instead of
+      // leaving it on screen as an empty box above the vote card.
+      idleCard.style.display = 'none';
       askBtn.style.display = 'none';
       waitingMsg.style.display = 'none';
       voteCard.style.display = 'block';

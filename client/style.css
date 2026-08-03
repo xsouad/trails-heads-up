@@ -372,6 +372,9 @@ body.card-fade-mode .redraw-btn {
 /* ---- rematch checkmarks ---- */
 .player-chip.rematch-yes .mini-avatar { box-shadow: 0 0 0 3px #4caf50; border-radius: 10px; }
 .player-chip .rematch-tick { color: #4caf50; font-weight: bold; font-size: 0.8rem; }
+/* Breathing room between the rematch avatar row and the accept button below
+   it -- they used to sit flush against each other. */
+#rematchAvatarList { margin-bottom: 18px; }
 
 .kick-btn {
   margin-top: 4px; background: #eb5757; color: #fff; border: none;

@@ -35,7 +35,16 @@ function createRoom(hostSocketId, hostName, hostAvatar, visibility, clientId) {
     rematchResponses: new Set(),
     // targetPlayerId -> Set of voter socket ids who've approved redrawing that
     // player's card (see requestRedraw below).
-    redrawVotes: new Map()
+    redrawVotes: new Map(),
+    // Cards already dealt out in this room since it was created, tracked as
+    // itemKey strings (see itemKey below). startGame() excludes these from the
+    // pool so nothing repeats until literally every card in the current
+    // cutoff/category pool has been seen once -- previously each round did a
+    // fully independent shuffle of the WHOLE pool with no memory of what had
+    // already come up, so with a narrow spoiler cutoff or events-only pool the
+    // real pool size could be small enough that the same card kept resurfacing
+    // many times in a single session even though the shuffle itself was fair.
+    usedItems: new Set()
   };
   room.players.set(hostSocketId, {
     id: hostSocketId, name: hostName, avatar: hostAvatar,
@@ -213,11 +222,22 @@ function startGame(room) {
   if (pool.length < playerIds.length) {
     return { error: `Not enough content for ${playerIds.length} players with the current cutoff/category settings (only ${pool.length} available). Pick a later cutoff or add a category.` };
   }
-  const shuffled = shuffleArray(pool);
+  // Deal from the "unseen" slice of the pool first (see room.usedItems above).
+  // Once fewer cards remain unseen than there are players, the deck has been
+  // fully cycled through, so reshuffle in everything -- this guarantees every
+  // card in the pool gets used exactly once before anything repeats, instead
+  // of a card being able to show up again after just one or two rounds.
+  let available = pool.filter(item => !room.usedItems.has(itemKey(item)));
+  if (available.length < playerIds.length) {
+    room.usedItems.clear();
+    available = pool;
+  }
+  const shuffled = shuffleArray(available);
   playerIds.forEach((id, i) => {
     const player = room.players.get(id);
     player.item = shuffled[i];
     player.revealed = false;
+    room.usedItems.add(itemKey(shuffled[i]));
   });
   room.phase = 'playing';
   room.startedAt = Date.now();
@@ -271,7 +291,13 @@ function requestRedraw(room, targetId, voterId) {
   // currently held by anyone else in the room (including their own old item).
   const pool = buildPool(room.settings.cutoffTag, room.settings.categories);
   const heldKeys = new Set(Array.from(room.players.values()).map(p => itemKey(p.item)));
-  const candidates = pool.filter(item => !heldKeys.has(itemKey(item)));
+  // Prefer cards nobody's holding AND that haven't been used yet this room; if
+  // that's empty (deck nearly exhausted), fall back to just avoiding what's
+  // currently held so a redraw never hard-fails unnecessarily.
+  let candidates = pool.filter(item => !heldKeys.has(itemKey(item)) && !room.usedItems.has(itemKey(item)));
+  if (candidates.length === 0) {
+    candidates = pool.filter(item => !heldKeys.has(itemKey(item)));
+  }
   room.redrawVotes.delete(targetId);
   if (candidates.length === 0) {
     return { error: 'No unique items left to redraw into.', approved: false };
@@ -279,6 +305,7 @@ function requestRedraw(room, targetId, voterId) {
   const shuffled = shuffleArray(candidates);
   target.item = shuffled[0];
   target.revealed = false;
+  room.usedItems.add(itemKey(target.item));
   return { votes: 0, needed, approved: true, targetName: target.name };
 }
 
@@ -325,6 +352,11 @@ function voteEndGame(room, socketId) {
 function requestRematch(room) {
   room.rematchRequested = true;
   room.rematchResponses.clear();
+  // The host is the one asking, so they've implicitly already said yes --
+  // without this they'd see their own name with no checkmark on the vote
+  // screen they themselves just opened.
+  room.rematchResponses.add(room.hostId);
+  return maybeResolveRematch(room);
 }
 
 function respondRematch(room, socketId) {
