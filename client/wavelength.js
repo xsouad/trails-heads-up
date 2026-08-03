@@ -352,7 +352,10 @@ async function watchRoom(code){
 async function leaveRoom(){
   if(state.code && !state.isSpectator){
     const playerRef = db.ref('wavelength_rooms/' + state.code + '/players/' + state.playerId);
-    try { await playerRef.onDisconnect().cancel(); await playerRef.remove(); } catch(e){}
+    // remove() first -- that's the write the opponent's listener is actually
+    // waiting on; cancelling our own onDisconnect hook doesn't need to
+    // happen before that.
+    try { await playerRef.remove(); await playerRef.onDisconnect().cancel(); } catch(e){}
   }
   detachRoomListener();
   stopHeartbeat();
@@ -874,9 +877,20 @@ function renderPlaying(){
 function renderCompleteCard(){
   const room = state.room;
   const entries = Object.entries(room.players||{});
-  const winnerLine = entries.length===2
-    ? (entries[0][1].score===entries[1][1].score ? "It's a tie!" : (entries[0][1].score>entries[1][1].score ? entries[0][1].name+' wins!' : entries[1][1].name+' wins!'))
-    : '';
+  // Whoever's actually looking at this screen gets "You win!" instead of
+  // seeing their own name -- the loser (and any spectator) still sees
+  // "<name> wins!" naming whoever actually won.
+  let winnerLine = '';
+  if(entries.length===2){
+    const [aId,aP] = entries[0], [bId,bP] = entries[1];
+    if(aP.score===bP.score){
+      winnerLine = "It's a tie!";
+    } else {
+      const winnerId = aP.score>bP.score ? aId : bId;
+      const winnerName = aP.score>bP.score ? aP.name : bP.name;
+      winnerLine = (!state.isSpectator && winnerId===state.playerId) ? 'You win!' : winnerName+' wins!';
+    }
+  }
   const ready = room.playAgainReady || {};
   const iAmReady = !!ready[state.playerId];
   const waitingText = (!state.isSpectator && iAmReady) ? '<p class="hint">Waiting for the other player...</p>' : '';

@@ -438,8 +438,13 @@ async function leaveRoom(){
   if(state.code && !state.isSpectator){
     const playerRef = db.ref('rooms/' + state.code + '/players/' + state.playerId);
     try {
-      await playerRef.onDisconnect().cancel();
+      // remove() first -- that's the write the opponent's listener is
+      // actually waiting on to notice we're gone. Cancelling our own
+      // onDisconnect hook only matters for cleaning up after ourselves and
+      // doesn't need to happen before the opponent gets notified, so it's
+      // no longer sequenced ahead of (and potentially delaying) the removal.
       await playerRef.remove();
+      await playerRef.onDisconnect().cancel();
     } catch(e) { /* best effort -- if this fails, onDisconnect still cleans it up */ }
   }
   detachRoomListener();
