@@ -412,42 +412,12 @@ function renderOpponentLeft(){
 }
 
 function renderHome(){
-  // Reuses Heads Up's own card/avatar-stage/arrow-row/dice-btn/button classes
-  // (defined, unscoped, in style.css) so this looks and behaves exactly like
-  // Heads Up's home screen -- same sprites, same shared avatar state, same
-  // rounded colorful buttons -- just recolored to the purple Guess Who theme
-  // via #app-guesswho overrides in guesswho.css.
-  // Missing the .avatar-builder wrapper here was the actual bug behind the
-  // avatar never centering -- that class is what gives it
-  // display:flex/flex-direction:column/align-items:center (see style.css).
-  // Without it, the fixed-width avatar-stage box just sits at the left edge
-  // of the card like any other block element would.
+  // Avatar + name now live in a modal (see #gwJoinModal, static in
+  // guesswho.html) that opens right before Create/Join/Watch actually
+  // fires, matching Wavelength's flow -- the home screen itself only offers
+  // the three entry points.
   return `
     <div class="card">
-      <label style="display:block; text-align:center;">Your avatar</label>
-      <div class="avatar-builder">
-        <div class="avatar-stage" id="gwAvatarStage"></div>
-        <div class="arrow-row">
-          <button type="button" data-gwlayer="hat" data-gwdir="-1">&lt;</button>
-          <span class="layer-label">Accessories</span>
-          <button type="button" data-gwlayer="hat" data-gwdir="1">&gt;</button>
-        </div>
-        <div class="arrow-row">
-          <button type="button" data-gwlayer="face" data-gwdir="-1">&lt;</button>
-          <span class="layer-label">Face</span>
-          <button type="button" data-gwlayer="face" data-gwdir="1">&gt;</button>
-        </div>
-        <div class="arrow-row">
-          <button type="button" data-gwlayer="base" data-gwdir="-1">&lt;</button>
-          <span class="layer-label">Color</span>
-          <button type="button" data-gwlayer="base" data-gwdir="1">&gt;</button>
-        </div>
-        <button type="button" class="dice-btn" id="gwDiceBtn">Randomize</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <input id="nameInput" type="text" placeholder="Your name" value="${state.playerName.replace(/"/g,'&quot;')}" maxlength="20" />
       <button type="button" class="primary" id="createBtn">Create a Room</button>
       <div class="error-msg">${state.error}</div>
     </div>
@@ -683,7 +653,19 @@ function renderGame(){
 
   return `
     <div class="game">
-      <button type="button" id="gwFocusModeBtn" class="focus-mode-btn" title="Focus mode: hide everything but the boards">⛶</button>
+      <button type="button" id="gwCardFadeBtn" class="focus-mode-btn pixel-eye-btn" title="Fade out everything but the boards">
+        <svg width="16" height="16" viewBox="0 0 8 8" shape-rendering="crispEdges">
+          <rect x="2" y="1" width="4" height="1" fill="currentColor"/>
+          <rect x="1" y="2" width="1" height="1" fill="currentColor"/>
+          <rect x="6" y="2" width="1" height="1" fill="currentColor"/>
+          <rect x="0" y="3" width="1" height="2" fill="currentColor"/>
+          <rect x="7" y="3" width="1" height="2" fill="currentColor"/>
+          <rect x="1" y="5" width="1" height="1" fill="currentColor"/>
+          <rect x="6" y="5" width="1" height="1" fill="currentColor"/>
+          <rect x="2" y="6" width="4" height="1" fill="currentColor"/>
+          <rect x="3" y="3" width="2" height="2" fill="currentColor"/>
+        </svg>
+      </button>
       <div class="id-row">
         <div class="id-flank" title="Wrong guesses -- three and you're out">
           <div class="strikes-row">
@@ -774,55 +756,47 @@ function render(){
   }
 }
 
-// Same desktop-only "just show me the boards" idea as Heads Up's focus
-// mode: a CSS class hides the page chrome (nav, header, blurb), and the
-// Fullscreen API layers real browser fullscreen on top where available.
-// Since the whole #gwRoot gets replaced with fresh HTML on every render(),
-// this button is rebuilt each time too -- rebinding its click handler here
-// in attachHandlers() (which already runs after every render) keeps it
-// working without needing its own persistent mount.
-function setGwFocusMode(on){
-  document.body.classList.toggle('gw-focus-mode', on);
-  const btn = document.getElementById('gwFocusModeBtn');
+// Same desktop-only "just show me the boards" idea as Heads Up's eye-fade
+// button: a CSS class fades the page chrome (nav, header, blurb) to
+// invisible. (An earlier version used the real Fullscreen API, but that
+// rendered with a black backdrop and broke button widths -- dropped in
+// favor of this plain CSS fade, matching what Heads Up settled on.) Since
+// the whole #gwRoot gets replaced with fresh HTML on every render(), this
+// button is rebuilt each time too -- rebinding its click handler here in
+// attachHandlers() (which already runs after every render) keeps it working
+// without needing its own persistent mount.
+function setGwCardFade(on){
+  document.body.classList.toggle('gw-card-fade-mode', on);
+  const btn = document.getElementById('gwCardFadeBtn');
   if(btn){
-    btn.textContent = on ? '⤢' : '⛶';
-    btn.title = on ? 'Exit focus mode' : 'Focus mode: hide everything but the boards';
+    btn.classList.toggle('active', on);
+    btn.title = on ? 'Show everything again' : 'Fade out everything but the boards';
   }
 }
-document.addEventListener('fullscreenchange', ()=>{
-  if(!document.fullscreenElement) setGwFocusMode(false);
-});
 
 function attachHandlers(){
-  const nameInput = document.getElementById('nameInput');
-  if(nameInput) nameInput.addEventListener('input', e=>{ state.playerName = e.target.value; });
-
-  const gwFocusModeBtn = document.getElementById('gwFocusModeBtn');
-  if(gwFocusModeBtn){
-    gwFocusModeBtn.addEventListener('click', ()=>{
-      const turningOn = !document.body.classList.contains('gw-focus-mode');
-      setGwFocusMode(turningOn);
-      const gwScreen = document.getElementById('gwScreen');
-      if(turningOn && gwScreen && gwScreen.requestFullscreen){
-        gwScreen.requestFullscreen().catch(()=>{});
-      } else if(!turningOn && document.fullscreenElement){
-        document.exitFullscreen().catch(()=>{});
-      }
+  const gwCardFadeBtn = document.getElementById('gwCardFadeBtn');
+  if(gwCardFadeBtn){
+    gwCardFadeBtn.addEventListener('click', ()=>{
+      setGwCardFade(!document.body.classList.contains('gw-card-fade-mode'));
     });
   }
 
+  // Create/Join/Watch all open the avatar+name modal now instead of firing
+  // straight away -- the modal's own confirm button is what actually calls
+  // createRoom/joinRoom/watchRoom (see openGwJoinModal below).
   const createBtn = document.getElementById('createBtn');
-  if(createBtn) createBtn.addEventListener('click', createRoom);
+  if(createBtn) createBtn.addEventListener('click', ()=>openGwJoinModal('create'));
 
   const joinBtn = document.getElementById('joinBtn');
   const codeInput = document.getElementById('codeInput');
-  if(joinBtn && codeInput) joinBtn.addEventListener('click', ()=>joinRoom(codeInput.value));
-  if(codeInput) codeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') joinRoom(codeInput.value); });
+  if(joinBtn && codeInput) joinBtn.addEventListener('click', ()=>openGwJoinModal('join', codeInput.value));
+  if(codeInput) codeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') openGwJoinModal('join', codeInput.value); });
 
   const watchBtn = document.getElementById('watchBtn');
   const watchCodeInput = document.getElementById('watchCodeInput');
-  if(watchBtn && watchCodeInput) watchBtn.addEventListener('click', ()=>watchRoom(watchCodeInput.value));
-  if(watchCodeInput) watchCodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') watchRoom(watchCodeInput.value); });
+  if(watchBtn && watchCodeInput) watchBtn.addEventListener('click', ()=>openGwJoinModal('watch', watchCodeInput.value));
+  if(watchCodeInput) watchCodeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') openGwJoinModal('watch', watchCodeInput.value); });
 
   const leaveBtn = document.getElementById('leaveBtn');
   if(leaveBtn) leaveBtn.addEventListener('click', leaveRoom);
@@ -860,38 +834,11 @@ function attachHandlers(){
   const acceptRematchBtn = document.getElementById('acceptRematchBtn');
   if(acceptRematchBtn) acceptRematchBtn.addEventListener('click', ()=>respondRematch(true));
 
-  // Avatar builder on the home screen. This reuses the exact same shared
-  // `avatar` object, LAYER_COUNTS/effectiveLayerCount, and renderAvatarStage
-  // helper that app.js defines for Heads Up, so a player's look carries over
-  // between the two games automatically.
-  const gwAvatarStage = document.getElementById('gwAvatarStage');
-  if(gwAvatarStage && typeof renderAvatarStage === 'function'){
-    renderAvatarStage(gwAvatarStage, avatar);
-  }
-
-  document.querySelectorAll('[data-gwlayer]').forEach(node=>{
-    node.addEventListener('click', ()=>{
-      const layer = node.getAttribute('data-gwlayer');
-      const dir = parseInt(node.getAttribute('data-gwdir'), 10);
-      const count = effectiveLayerCount(layer);
-      avatar[layer] = ((avatar[layer] - 1 + dir + count) % count) + 1;
-      if(typeof saveAvatar === 'function') saveAvatar(avatar);
-      const stage = document.getElementById('gwAvatarStage');
-      if(stage) renderAvatarStage(stage, avatar);
-    });
-  });
-
-  const gwDiceBtn = document.getElementById('gwDiceBtn');
-  if(gwDiceBtn){
-    gwDiceBtn.addEventListener('click', ()=>{
-      avatar.hat = Math.floor(Math.random() * effectiveLayerCount('hat')) + 1;
-      avatar.face = Math.floor(Math.random() * effectiveLayerCount('face')) + 1;
-      avatar.base = Math.floor(Math.random() * effectiveLayerCount('base')) + 1;
-      if(typeof saveAvatar === 'function') saveAvatar(avatar);
-      const stage = document.getElementById('gwAvatarStage');
-      if(stage) renderAvatarStage(stage, avatar);
-    });
-  }
+  // Avatar builder now lives in the static #gwJoinModal (see bottom of this
+  // file for its one-time wiring, matching Wavelength's pattern) instead of
+  // here -- it used to be wired inside attachHandlers(), which reruns on
+  // every single render(), so every re-render was stacking another
+  // duplicate click listener onto the same buttons.
 
   // Mini avatars in the lobby, one per player, rendered from whatever avatar
   // each of them saved when they created/joined the room (their own avatar
@@ -958,5 +905,78 @@ if(gwHowToPlayOverlay){
     if(e.target === gwHowToPlayOverlay) gwHowToPlayOverlay.classList.remove('active');
   });
 }
+
+// Avatar + name modal (#gwJoinModal, static in guesswho.html) -- wired once
+// here, same as the how-to-play viewer above, rather than inside
+// attachHandlers() which reruns on every render() and would otherwise stack
+// a fresh duplicate listener onto these same buttons every time.
+let gwPendingJoin = null; // { type: 'create'|'join'|'watch', code }
+
+function refreshGwModalAvatarStage(){
+  const stage = document.getElementById('gwAvatarStage');
+  if(stage && typeof renderAvatarStage === 'function') renderAvatarStage(stage, avatar);
+}
+document.querySelectorAll('#gwJoinModal [data-gwlayer]').forEach(node=>{
+  node.addEventListener('click', ()=>{
+    const layer = node.getAttribute('data-gwlayer');
+    const dir = parseInt(node.getAttribute('data-gwdir'), 10);
+    const count = effectiveLayerCount(layer);
+    avatar[layer] = ((avatar[layer] - 1 + dir + count) % count) + 1;
+    if(typeof saveAvatar === 'function') saveAvatar(avatar);
+    refreshGwModalAvatarStage();
+  });
+});
+const gwDiceBtn = document.getElementById('gwDiceBtn');
+if(gwDiceBtn) gwDiceBtn.addEventListener('click', ()=>{
+  avatar.hat = Math.floor(Math.random() * effectiveLayerCount('hat')) + 1;
+  avatar.face = Math.floor(Math.random() * effectiveLayerCount('face')) + 1;
+  avatar.base = Math.floor(Math.random() * effectiveLayerCount('base')) + 1;
+  if(typeof saveAvatar === 'function') saveAvatar(avatar);
+  refreshGwModalAvatarStage();
+});
+refreshGwModalAvatarStage();
+
+function openGwJoinModal(type, code){
+  gwPendingJoin = { type, code: (code||'').trim() };
+  document.getElementById('gwJoinModalTitle').textContent =
+    type==='create' ? 'Create a Room' : type==='join' ? 'Join a Room' : 'Watch a Room';
+  document.getElementById('gwJoinModalConfirmBtn').textContent =
+    type==='create' ? 'Create a Room' : type==='join' ? 'Join Room' : 'Watch';
+  const nameInputEl = document.getElementById('gwModalNameInput');
+  nameInputEl.value = state.playerName || '';
+  document.getElementById('gwJoinModalError').textContent = '';
+  // Watching is read-only and never appears as a player, so there's no
+  // avatar to build for it -- same as the other two games' Watch flow.
+  const hideForWatch = type === 'watch';
+  document.querySelector('#gwJoinModal .avatar-builder').style.display = hideForWatch ? 'none' : '';
+  document.querySelector('#gwJoinModal label').style.display = hideForWatch ? 'none' : '';
+  document.getElementById('gwJoinModal').classList.add('active');
+}
+function closeGwJoinModal(){
+  document.getElementById('gwJoinModal').classList.remove('active');
+}
+async function confirmGwJoinModal(){
+  const type = gwPendingJoin && gwPendingJoin.type;
+  if(!type) return;
+  state.playerName = document.getElementById('gwModalNameInput').value.trim();
+  const errEl = document.getElementById('gwJoinModalError');
+  errEl.textContent = '';
+  if(type==='create'){
+    await createRoom();
+    if(state.error){ errEl.textContent = state.error; return; }
+  } else if(type==='join'){
+    await joinRoom(gwPendingJoin.code);
+    if(state.error){ errEl.textContent = state.error; return; }
+  } else {
+    await watchRoom(gwPendingJoin.code);
+    if(state.watchError){ errEl.textContent = state.watchError; return; }
+  }
+  closeGwJoinModal();
+}
+document.getElementById('gwJoinModalCloseBtn').addEventListener('click', closeGwJoinModal);
+document.getElementById('gwJoinModalConfirmBtn').addEventListener('click', confirmGwJoinModal);
+document.getElementById('gwJoinModal').addEventListener('click', (e)=>{
+  if(e.target.id==='gwJoinModal') closeGwJoinModal();
+});
 
 loadCharacters().then(render);

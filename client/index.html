@@ -18,36 +18,13 @@
 
 <div id="noticeBar"></div>
 
-<!-- HOME: name + avatar customization + create/join -->
+<!-- HOME: create/join, avatar+name now happen in a modal after picking one -->
 <div id="screen-home" class="screen active">
   <h1>Trails Heads Up</h1>
   <p class="subtitle">Guess what's above your head before your friends give it away.</p>
   <button type="button" id="howToPlayBtn" class="how-to-play-link">How to Play</button>
 
   <div class="card">
-    <input type="text" id="nameInput" placeholder="Your name" maxlength="20">
-
-    <div class="avatar-builder">
-      <div class="avatar-stage" id="avatarStage"></div>
-
-      <div class="arrow-row">
-        <button data-layer="hat" data-dir="-1">&lt;</button>
-        <span class="layer-label">Accessories</span>
-        <button data-layer="hat" data-dir="1">&gt;</button>
-      </div>
-      <div class="arrow-row">
-        <button data-layer="face" data-dir="-1">&lt;</button>
-        <span class="layer-label">Face</span>
-        <button data-layer="face" data-dir="1">&gt;</button>
-      </div>
-      <div class="arrow-row">
-        <button data-layer="base" data-dir="-1">&lt;</button>
-        <span class="layer-label">Color</span>
-        <button data-layer="base" data-dir="1">&gt;</button>
-      </div>
-      <button class="dice-btn" id="diceBtn">Randomize</button>
-    </div>
-
     <div class="join-row">
       <input type="text" id="joinCodeInput" placeholder="Room code" maxlength="4">
       <button class="secondary" id="joinRoomBtn">Join Room</button>
@@ -71,6 +48,41 @@
   </div>
 
   <input type="text" id="cheatInputHome" class="cheat-input" tabindex="-1" autocomplete="off" autocapitalize="off" spellcheck="false">
+</div>
+
+<!-- Avatar + name modal, opened right before Create/Join/Watch actually
+     fires -- matches Wavelength's flow instead of showing the avatar
+     builder up front on the home screen. -->
+<div class="zoom-overlay" id="joinModal">
+  <div class="how-to-play-card">
+    <button class="close-btn how-to-play-close" id="joinModalCloseBtn">Close</button>
+    <h2 id="joinModalTitle">Create Room</h2>
+    <input type="text" id="modalNameInput" placeholder="Your name" maxlength="20">
+
+    <div class="avatar-builder">
+      <div class="avatar-stage" id="avatarStage"></div>
+
+      <div class="arrow-row">
+        <button data-layer="hat" data-dir="-1">&lt;</button>
+        <span class="layer-label">Accessories</span>
+        <button data-layer="hat" data-dir="1">&gt;</button>
+      </div>
+      <div class="arrow-row">
+        <button data-layer="face" data-dir="-1">&lt;</button>
+        <span class="layer-label">Face</span>
+        <button data-layer="face" data-dir="1">&gt;</button>
+      </div>
+      <div class="arrow-row">
+        <button data-layer="base" data-dir="-1">&lt;</button>
+        <span class="layer-label">Color</span>
+        <button data-layer="base" data-dir="1">&gt;</button>
+      </div>
+      <button class="dice-btn" id="diceBtn">Randomize</button>
+    </div>
+
+    <div class="error-msg" id="joinModalError"></div>
+    <button type="button" class="primary" id="joinModalConfirmBtn" style="margin-top:12px;">Create Room</button>
+  </div>
 </div>
 
 <!-- LOBBY -->
@@ -98,7 +110,6 @@
 
 <!-- GAME -->
 <div id="screen-game" class="screen">
-  <button type="button" id="focusModeBtn" class="focus-mode-btn" title="Focus mode: hide everything but the cards">⛶</button>
   <button type="button" id="cardFadeBtn" class="focus-mode-btn pixel-eye-btn" title="Fade out everything but the cards and the reveal button">
     <svg width="16" height="16" viewBox="0 0 8 8" shape-rendering="crispEdges">
       <rect x="2" y="1" width="4" height="1" fill="currentColor"/>

@@ -29,6 +29,39 @@
   </div>
 </div>
 
+<!-- Avatar + name modal, opened right before Create/Join/Watch actually
+     fires -- matches Wavelength's flow instead of showing the avatar
+     builder up front on the home screen. -->
+<div class="zoom-overlay" id="gwJoinModal">
+  <div class="how-to-play-card">
+    <button class="close-btn how-to-play-close" id="gwJoinModalCloseBtn">Close</button>
+    <h2 id="gwJoinModalTitle">Create a Room</h2>
+    <label style="display:block; text-align:center;">Your avatar</label>
+    <div class="avatar-builder">
+      <div class="avatar-stage" id="gwAvatarStage"></div>
+      <div class="arrow-row">
+        <button type="button" data-gwlayer="hat" data-gwdir="-1">&lt;</button>
+        <span class="layer-label">Accessories</span>
+        <button type="button" data-gwlayer="hat" data-gwdir="1">&gt;</button>
+      </div>
+      <div class="arrow-row">
+        <button type="button" data-gwlayer="face" data-gwdir="-1">&lt;</button>
+        <span class="layer-label">Face</span>
+        <button type="button" data-gwlayer="face" data-gwdir="1">&gt;</button>
+      </div>
+      <div class="arrow-row">
+        <button type="button" data-gwlayer="base" data-gwdir="-1">&lt;</button>
+        <span class="layer-label">Color</span>
+        <button type="button" data-gwlayer="base" data-gwdir="1">&gt;</button>
+      </div>
+      <button type="button" class="dice-btn" id="gwDiceBtn">Randomize</button>
+    </div>
+    <input id="gwModalNameInput" type="text" placeholder="Your name" maxlength="20" style="margin-top:14px;" />
+    <div class="error-msg" id="gwJoinModalError"></div>
+    <button type="button" class="primary" id="gwJoinModalConfirmBtn" style="margin-top:12px;">Create a Room</button>
+  </div>
+</div>
+
 <div class="zoom-overlay" id="gwHowToPlayOverlay">
   <div class="how-to-play-card">
     <button class="close-btn how-to-play-close" id="gwHowToPlayCloseBtn">Close</button>

@@ -213,13 +213,10 @@ wireCheatInput('cheatInputGame', 'VANISVAN', () => {
 });
 
 // Restore the player's last-used name so they don't have to retype it every
-// time they come back.
-(function restoreName() {
-  const nameInputEl = document.getElementById('nameInput');
-  const savedName = loadName();
-  if (savedName) nameInputEl.value = savedName;
-  nameInputEl.addEventListener('input', () => saveName(nameInputEl.value));
-})();
+// time they come back. The input only exists inside the avatar/name modal
+// now, so this fills it in fresh each time the modal opens (see
+// openJoinModal below) rather than once at page load.
+document.getElementById('modalNameInput').addEventListener('input', (e) => saveName(e.target.value));
 
 // ---------- visibility toggle ----------
 document.querySelectorAll('#visibilityRow .category-chip').forEach(chip => {
@@ -230,27 +227,71 @@ document.querySelectorAll('#visibilityRow .category-chip').forEach(chip => {
   });
 });
 
+// ---------- avatar/name modal (opened right before create/join/watch) ----------
+// Matches Wavelength's flow: the home screen itself only offers Create/Join/
+// Watch, and the avatar builder + name field live in this modal instead,
+// only appearing once you've committed to one of those three actions.
+let pendingJoin = null; // { type: 'create'|'join'|'watch', code }
+
+function openJoinModal(type, code) {
+  pendingJoin = { type, code: code || '' };
+  document.getElementById('joinModalTitle').textContent =
+    type === 'create' ? 'Create Room' : type === 'join' ? 'Join Room' : 'Watch a Room';
+  document.getElementById('joinModalConfirmBtn').textContent =
+    type === 'create' ? 'Create Room' : type === 'join' ? 'Join Room' : 'Watch';
+  const nameInputEl = document.getElementById('modalNameInput');
+  nameInputEl.value = loadName() || '';
+  document.getElementById('joinModalError').textContent = '';
+  // Watching is read-only and never shows up as a player in the room, so
+  // there's no avatar to build for it -- same as Wavelength's Watch flow.
+  document.querySelector('#joinModal .avatar-builder').style.display = type === 'watch' ? 'none' : '';
+  document.getElementById('joinModal').classList.add('active');
+}
+function closeJoinModal() {
+  document.getElementById('joinModal').classList.remove('active');
+}
+function confirmJoinModal() {
+  const type = pendingJoin && pendingJoin.type;
+  if (!type) return;
+  const errEl = document.getElementById('joinModalError');
+  const name = document.getElementById('modalNameInput').value.trim() || (type === 'watch' ? 'Spectator' : 'Player');
+  saveName(name);
+  if (type === 'create') {
+    socket.emit('createRoom', { name, avatar, visibility: selectedVisibility, clientId }, (res) => {
+      if (!res.ok) { errEl.textContent = res.error; return; }
+      saveCurrentRoom(res.code, false);
+      closeJoinModal();
+      showScreen('screen-lobby');
+    });
+  } else if (type === 'join') {
+    socket.emit('joinRoom', { code: pendingJoin.code, name, avatar, clientId }, (res) => {
+      if (!res.ok) { errEl.textContent = res.error; return; }
+      saveCurrentRoom(res.code, false);
+      closeJoinModal();
+      showScreen('screen-lobby');
+    });
+  } else if (type === 'watch') {
+    socket.emit('joinAsSpectator', { code: pendingJoin.code, name }, (res) => {
+      if (!res.ok) { errEl.textContent = res.error; return; }
+      saveCurrentRoom(pendingJoin.code, true);
+      closeJoinModal();
+    });
+  }
+}
+document.getElementById('joinModalCloseBtn').addEventListener('click', closeJoinModal);
+document.getElementById('joinModalConfirmBtn').addEventListener('click', confirmJoinModal);
+wireClickAwayToClose('joinModal', closeJoinModal);
+
 // ---------- home: create / join ----------
 document.getElementById('createRoomBtn').addEventListener('click', () => {
-  const name = document.getElementById('nameInput').value.trim() || 'Player';
-  saveName(name);
-  socket.emit('createRoom', { name, avatar, visibility: selectedVisibility, clientId }, (res) => {
-    if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
-    saveCurrentRoom(res.code, false);
-    showScreen('screen-lobby');
-  });
+  openJoinModal('create');
 });
 
 document.getElementById('joinRoomBtn').addEventListener('click', () => {
-  const name = document.getElementById('nameInput').value.trim() || 'Player';
   const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
   if (!code) { document.getElementById('homeError').textContent = 'Enter a room code.'; return; }
-  saveName(name);
-  socket.emit('joinRoom', { code, name, avatar, clientId }, (res) => {
-    if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
-    saveCurrentRoom(res.code, false);
-    showScreen('screen-lobby');
-  });
+  document.getElementById('homeError').textContent = '';
+  openJoinModal('join', code);
 });
 
 // ---------- public room browser ----------
@@ -272,27 +313,12 @@ function refreshPublicRooms() {
       if (r.phase === 'lobby') {
         const joinBtn = document.createElement('button');
         joinBtn.textContent = 'Join';
-        joinBtn.addEventListener('click', () => {
-          const name = document.getElementById('nameInput').value.trim() || 'Player';
-          saveName(name);
-          socket.emit('joinRoom', { code: r.code, name, avatar, clientId }, (res) => {
-            if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
-            saveCurrentRoom(res.code, false);
-            showScreen('screen-lobby');
-          });
-        });
+        joinBtn.addEventListener('click', () => openJoinModal('join', r.code));
         row.appendChild(joinBtn);
       } else if (r.phase === 'playing' || r.phase === 'ended') {
         const watchBtn = document.createElement('button');
         watchBtn.textContent = 'Watch';
-        watchBtn.addEventListener('click', () => {
-          const name = document.getElementById('nameInput').value.trim() || 'Spectator';
-          saveName(name);
-          socket.emit('joinAsSpectator', { code: r.code, name }, (res) => {
-            if (!res.ok) { document.getElementById('homeError').textContent = res.error; return; }
-            saveCurrentRoom(r.code, true);
-          });
-        });
+        watchBtn.addEventListener('click', () => openJoinModal('watch', r.code));
         row.appendChild(watchBtn);
       }
       container.appendChild(row);
@@ -348,7 +374,11 @@ socket.on('connect', () => {
   // as a stranger. The server matches us by clientId, not socket.id.
   const saved = loadCurrentRoom();
   if (saved && saved.code && !saved.wasSpectator) {
-    const name = document.getElementById('nameInput').value.trim() || loadName() || 'Player';
+    // nameInput lives inside the (usually closed) avatar/name modal now
+    // rather than sitting permanently on the page -- for this silent
+    // background-reconnect path there's no modal open to read from anyway,
+    // so this just falls straight back to whatever was last saved.
+    const name = loadName() || 'Player';
     socket.emit('rejoin', { code: saved.code, clientId, name, avatar }, (res) => {
       if (!res || !res.ok) {
         console.log('[rejoin failed]', res && res.error);
@@ -428,45 +458,13 @@ document.getElementById('revealBtn').addEventListener('click', (e) => {
   e.target.textContent = 'Waiting on others…';
 });
 
-// ---------- focus mode (desktop-only "just show me the cards" view) ----------
-// Two independent layers: a CSS class that hides everything on the page
-// except the board and reveal button (works everywhere, including if the
-// browser refuses real fullscreen), and the actual Fullscreen API on top of
-// that when it's available, so it's a real distraction-free fullscreen and
-// not just a CSS trick. The button itself is hidden on narrow/touch screens
-// via CSS since this is explicitly a desktop feature.
-(function () {
-  const btn = document.getElementById('focusModeBtn');
-  const gameScreen = document.getElementById('screen-game');
-  function setFocusMode(on) {
-    document.body.classList.toggle('focus-mode', on);
-    btn.textContent = on ? '⤢' : '⛶';
-    btn.title = on ? 'Exit focus mode' : 'Focus mode: hide everything but the cards';
-  }
-  btn.addEventListener('click', () => {
-    const turningOn = !document.body.classList.contains('focus-mode');
-    setFocusMode(turningOn);
-    if (turningOn && gameScreen.requestFullscreen) {
-      gameScreen.requestFullscreen().catch(() => {});
-    } else if (!turningOn && document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    }
-  });
-  // Pressing Esc (or any other way the browser exits fullscreen) should drop
-  // the CSS focus mode too, so the button doesn't get stuck showing "exit"
-  // when there's nothing left to exit.
-  document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement) setFocusMode(false);
-  });
-})();
-
 // ---------- fade-UI mode (pixel eye icon) ----------
-// A stricter, separate toggle from focus mode above -- this one isn't tied
-// to real browser fullscreen at all, it just fades everything except the
-// board and the reveal button, INCLUDING the redraw button (focus mode
-// deliberately keeps that visible/usable; this one hides it too). Plain
-// opacity transition rather than display:none so it actually fades instead
-// of snapping away.
+// Fades everything except the board and the reveal button, including the
+// redraw button. Plain opacity transition rather than display:none so it
+// actually fades instead of snapping away. (The real-Fullscreen-API version
+// of this got dropped -- it rendered with an ugly black backdrop and broke
+// the max-width constraint on the reveal button, so this CSS-only fade is
+// the whole feature now.)
 (function () {
   const btn = document.getElementById('cardFadeBtn');
   function setCardFade(on) {

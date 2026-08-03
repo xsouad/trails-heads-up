@@ -226,39 +226,24 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   }
 }
 
-/* Focus mode: a desktop-only "just show me the cards" view. The button
-   itself sits in the corner of the game screen; clicking it hides every
-   other page chrome element via body.focus-mode below and requests real
-   browser fullscreen at the same time. Hidden entirely on narrow/touch
-   screens -- fullscreen on a phone browser is unreliable and there's no
-   spare chrome to hide there anyway. */
+/* Eye-fade mode: a desktop-only "just show me the cards" view. The button
+   sits in the corner of the game screen; clicking it fades every other page
+   chrome element to invisible via body.card-fade-mode below. Hidden
+   entirely on narrow/touch screens since there's no spare chrome to fade
+   away there anyway -- everything's already minimal on mobile. (An earlier
+   version of this used the real browser Fullscreen API too, but that
+   rendered with an ugly black backdrop and broke the reveal button's max
+   width, so it's just this CSS fade now.) */
 .focus-mode-btn {
   position: absolute; top: 8px; right: 8px; z-index: 5;
   width: 34px; height: 34px; border-radius: 8px; border: 1px solid #3a4a75;
   background: #1f2b4d; color: #fff; font-size: 1rem; cursor: pointer; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
 }
 .focus-mode-btn:hover { background: #2a3a63; }
 @media (max-width: 700px) {
   .focus-mode-btn { display: none; }
 }
-body.focus-mode .mode-switcher,
-body.focus-mode #noticeBar,
-body.focus-mode #screen-game > h1,
-body.focus-mode #gameTimer,
-body.focus-mode #redrawHint,
-body.focus-mode #revealCounter,
-body.focus-mode #spectatorCountGame,
-body.focus-mode #bottomBar {
-  display: none !important;
-}
-body.focus-mode #screen-game {
-  min-height: 100vh; display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-}
-body.focus-mode .focus-mode-btn { position: fixed; }
-
-/* Second button sits right next to the fullscreen one. */
-#cardFadeBtn { right: 48px; display: flex; align-items: center; justify-content: center; }
 .pixel-eye-btn svg { image-rendering: pixelated; }
 .pixel-eye-btn.active { background: #ffd166; color: #14213d; border-color: #ffb703; }
 

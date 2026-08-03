@@ -177,19 +177,20 @@ body { background:#2e2a49; margin:0; }
 #app-guesswho .cname { font-size:10.5px; line-height:1.2; }
 #app-guesswho .game { display:flex; flex-direction:column; gap:18px; position:relative; }
 
-/* Focus mode: desktop-only "just show me the boards" view. Reuses the
-   generic .focus-mode-btn look from style.css (shared across both games);
-   this just handles what gets hidden here specifically -- the nav, page
-   header/blurb, and notice bar, leaving the ID cards and the character grid
-   itself as the only things on screen. */
-body.gw-focus-mode .mode-switcher,
-body.gw-focus-mode #gwNoticeBar,
-body.gw-focus-mode #gwScreen > h1,
-body.gw-focus-mode #gwTopBlurb {
-  display: none !important;
+/* Eye-fade mode: desktop-only "just show me the boards" view. Reuses the
+   generic .focus-mode-btn/.pixel-eye-btn look from style.css (shared across
+   both games); this just handles what fades here specifically -- the nav,
+   page header/blurb, and notice bar, leaving the ID cards and the character
+   grid itself as the only things fully visible. Real opacity transition
+   (not display:none) so it actually fades. */
+body.gw-card-fade-mode .mode-switcher,
+body.gw-card-fade-mode #gwNoticeBar,
+body.gw-card-fade-mode #gwScreen > h1,
+body.gw-card-fade-mode #gwTopBlurb {
+  opacity: 0; pointer-events: none; transition: opacity 0.35s ease;
 }
-body.gw-focus-mode #gwScreen {
-  min-height: 100vh; display: flex; flex-direction: column; justify-content: center;
+.mode-switcher, #gwNoticeBar, #gwScreen > h1, #gwTopBlurb {
+  transition: opacity 0.35s ease;
 }
 #app-guesswho .panel-title { font-size:14px; color:var(--muted); margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
 #app-guesswho .pill {

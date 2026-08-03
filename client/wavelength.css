@@ -120,11 +120,21 @@ body { background: var(--wl-bg-orange); }
 /* The wheel only used a fraction of the available width on desktop before --
    this lets the card and the wheel inside it grow substantially wider once
    there's actually room for it, while leaving phones (which were already
-   sized right) untouched. */
+   sized right) untouched. The card itself was still getting clipped to
+   720px even after being told to grow, because it sits inside the shared
+   .screen wrapper (used by all three games) which caps out at 720px --
+   that outer cap has to widen too, not just the card inside it. */
 @media (min-width: 700px) {
-  #app-wavelength .wl-playing-card { max-width: 820px; }
+  #app-wavelength #wlScreen.screen { max-width: 1100px; }
+  #app-wavelength .wl-playing-card { max-width: 1040px; }
   .wl-playing-card .wl-wheel-wrap,
-  .wl-playing-card .wl-pair-flank { max-width: 700px; }
+  .wl-playing-card .wl-pair-flank { max-width: 920px; }
+}
+@media (min-width: 1300px) {
+  #app-wavelength #wlScreen.screen { max-width: 1300px; }
+  #app-wavelength .wl-playing-card { max-width: 1220px; }
+  .wl-playing-card .wl-wheel-wrap,
+  .wl-playing-card .wl-pair-flank { max-width: 1100px; }
 }
 
 /* The two clue words sit above the wheel, one per side, rather than inside
