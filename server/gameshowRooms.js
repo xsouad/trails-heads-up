@@ -5,7 +5,7 @@
 // later piece per the spec.
 
 const MAX_TEAM_SIZE = 3;
-const MAX_SPECTATOR_SEATS = 9;
+const MAX_SPECTATOR_SEATS = 8; // 2 even rows of 4
 const HOST_PASSWORD = 'VANISVAN';
 
 const rooms = new Map(); // code -> room
@@ -61,7 +61,8 @@ function joinRoom(code, socketId, name, avatar, clientId) {
     avatar: avatar || { base: 1, face: 1, hat: 1 },
     clientId,
     role: 'unassigned',
-    seat: null
+    seat: null,
+    ready: false
   });
   return { room };
 }
@@ -101,6 +102,9 @@ function setRole(room, socketId, role, opts = {}) {
       return { error: `That team is already full (${MAX_TEAM_SIZE}/${MAX_TEAM_SIZE}).` };
     }
     clearHostIfSelf(room, socketId);
+    // Switching teams (or joining fresh) always clears readiness -- a
+    // stale "ready" from a different seat shouldn't carry over.
+    if (player.role !== role) player.ready = false;
     player.role = role;
     player.seat = null;
     return { room };
@@ -120,6 +124,7 @@ function setRole(room, socketId, role, opts = {}) {
     clearHostIfSelf(room, socketId);
     player.role = 'spectator';
     player.seat = seat;
+    player.ready = false;
     return { room };
   }
 
@@ -127,10 +132,32 @@ function setRole(room, socketId, role, opts = {}) {
     clearHostIfSelf(room, socketId);
     player.role = 'unassigned';
     player.seat = null;
+    player.ready = false;
     return { room };
   }
 
   return { error: 'Unknown role.' };
+}
+
+function toggleReady(room, socketId) {
+  const player = room.players.get(socketId);
+  if (!player) return { error: 'Not in this room.' };
+  if (player.role !== 'teamA' && player.role !== 'teamB') {
+    return { error: 'Only competitors need to ready up.' };
+  }
+  player.ready = !player.ready;
+  return { room };
+}
+
+function allCompetitorsReady(room) {
+  let anyCompetitor = false;
+  for (const p of room.players.values()) {
+    if (p.role === 'teamA' || p.role === 'teamB') {
+      anyCompetitor = true;
+      if (!p.ready) return false;
+    }
+  }
+  return anyCompetitor;
 }
 
 function removeBySocket(socketId) {
@@ -152,6 +179,9 @@ function startNamingPhase(room, socketId) {
   if (room.hostId !== socketId) return { error: 'Only the host can start the naming round.' };
   if (teamCount(room, 'teamA') < 1 || teamCount(room, 'teamB') < 1) {
     return { error: 'Both teams need at least 1 member first.' };
+  }
+  if (!allCompetitorsReady(room)) {
+    return { error: 'Not everyone has readied up yet.' };
   }
   room.phase = 'naming';
   room.teamA = { name: null, locked: false, candidates: [], votes: {} };
@@ -219,6 +249,7 @@ function serialize(room) {
 
 module.exports = {
   createRoom, getRoom, joinRoom, findRoomBySocket, setRole, removeBySocket,
+  toggleReady, allCompetitorsReady,
   startNamingPhase, submitNameCandidate, voteNameCandidate, finishNamingPhase,
   serialize, MAX_TEAM_SIZE, MAX_SPECTATOR_SEATS
 };

@@ -197,7 +197,10 @@ function renderPodium(teamKey) {
       const mine = me && occ.id === me.id;
       slots.push(`
         <div class="gs-podium occupied ${mine ? 'mine' : ''}">
-          <div class="gs-podium-avatar" data-avatar-for="${occ.id}"></div>
+          <div class="gs-podium-avatar-wrap">
+            <div class="gs-podium-avatar" data-avatar-for="${occ.id}"></div>
+            ${occ.ready ? '<span class="gs-ready-badge">✅</span>' : ''}
+          </div>
           <div class="gs-podium-block ${teamKey}"></div>
           <div class="gs-podium-name">${occ.name}</div>
         </div>
@@ -211,7 +214,7 @@ function renderPodium(teamKey) {
       `);
     }
   }
-  return `<div class="gs-team-column">${slots.join('')}</div>`;
+  return `<div class="gs-team-column ${teamKey}">${slots.join('')}</div>`;
 }
 
 function renderHostSlot() {
@@ -267,21 +270,29 @@ function renderClapArea() {
   const me = myPlayer();
   if (!me || me.role !== 'spectator') return '';
   // Clapping only makes sense once there's an actual game to react to --
-  // not while everyone's still picking seats or naming their teams.
+  // not while everyone's still picking seats or naming their teams. Hidden
+  // entirely (not just grayed out) until then.
   const allowed = room.phase !== 'lobby' && room.phase !== 'naming';
+  if (!allowed) return '';
   return `
     <div class="center gs-clap-area">
-      <button type="button" class="primary" id="gsClapBtn" ${allowed ? '' : 'disabled'}>👏 Clap</button>
-      ${allowed ? '' : '<p class="hint">Clapping opens once the game begins.</p>'}
+      <button type="button" class="primary" id="gsClapBtn">👏 Clap</button>
     </div>
   `;
 }
 
 function renderScreenLobby() {
   const room = state.room;
+  const competitors = room.players.filter(p => p.role === 'teamA' || p.role === 'teamB');
+  const readyCount = competitors.filter(p => p.ready).length;
+  let statusLine;
+  if (!competitors.length) statusLine = 'Waiting for players to join a team.';
+  else if (readyCount < competitors.length) statusLine = `${readyCount}/${competitors.length} competitors ready.`;
+  else statusLine = 'Everyone is ready -- waiting on the host.';
   return `
     <div class="gs-screen-roomcode">${room.code}</div>
-    <p class="hint">Share this code with everyone joining. Pick your spot below.</p>
+    <p class="gs-screen-sub">Share this code with everyone joining. Pick your spot below.</p>
+    <p class="gs-screen-status">${statusLine}</p>
   `;
 }
 
@@ -373,9 +384,12 @@ function renderStage() {
 
   const me = myPlayer();
   const iAmHost = room.hostId === socket.id;
+  const iAmCompetitor = me && (me.role === 'teamA' || me.role === 'teamB');
   const teamA = room.players.filter(p => p.role === 'teamA');
   const teamB = room.players.filter(p => p.role === 'teamB');
   const bothTeamsReady = teamA.length >= 1 && teamB.length >= 1;
+  const everyoneReadied = [...teamA, ...teamB].every(p => p.ready);
+  const canStartNaming = bothTeamsReady && everyoneReadied;
 
   return `
     <div class="gs-tv-screen">
@@ -388,6 +402,12 @@ function renderStage() {
       ${renderPodium('teamB')}
     </div>
 
+    ${iAmCompetitor && room.phase === 'lobby' ? `
+      <div class="center gs-ready-wrap">
+        <button type="button" class="secondary ${me.ready ? 'is-ready' : ''}" id="gsReadyToggleBtn">${me.ready ? '✅ Ready' : 'Ready'}</button>
+      </div>
+    ` : ''}
+
     <div class="gs-spectator-row">
       ${Array.from({ length: room.maxSpectatorSeats }, (_, i) => i + 1).map(renderSeat).join('')}
     </div>
@@ -396,8 +416,7 @@ function renderStage() {
 
     ${iAmHost && room.phase === 'lobby' ? `
       <div class="center">
-        <button type="button" class="primary" id="gsStartNamingBtn" ${bothTeamsReady ? '' : 'disabled'}>Start Team Naming</button>
-        ${bothTeamsReady ? '' : '<p class="hint">Both teams need at least 1 member first.</p>'}
+        <button type="button" class="primary" id="gsStartNamingBtn" ${canStartNaming ? '' : 'disabled'}>Start Team Naming</button>
       </div>
     ` : ''}
 
@@ -582,8 +601,15 @@ function attachHandlers() {
     });
   });
 
+  const readyToggleBtn = document.getElementById('gsReadyToggleBtn');
+  if (readyToggleBtn) readyToggleBtn.addEventListener('click', () => {
+    socket.emit('gsToggleReady', null, (res) => {
+      if (!res.ok) showGsNotice(res.error || "Couldn't update ready status.");
+    });
+  });
+
   const clapBtn = document.getElementById('gsClapBtn');
-  if (clapBtn && !clapBtn.disabled) clapBtn.addEventListener('click', () => socket.emit('gsClap'));
+  if (clapBtn) clapBtn.addEventListener('click', () => socket.emit('gsClap'));
 
   const startNamingBtn = document.getElementById('gsStartNamingBtn');
   if (startNamingBtn) startNamingBtn.addEventListener('click', () => {
