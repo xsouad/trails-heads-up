@@ -90,6 +90,15 @@ body { background:#2e2a49; margin:0; }
     background:var(--accent); color:#fff; font-size:14px; font-weight:600;
     cursor:pointer; transition:opacity .15s;
   }
+/* The generic rule above (ID + element) has higher specificity than the
+   shared .how-to-play-link class alone, so without this it was quietly
+   winning and making "How to Play" look like a regular padded/colored
+   button here even though the shared style resets it to plain text. This
+   restores the plain-text look on this page specifically. */
+#app-guesswho button.how-to-play-link {
+  padding:0; border:none; background:none; border-radius:0;
+  color:#ffd166; font-weight:bold; font-size:0.9rem;
+}
 #app-guesswho button.secondary { background:var(--panel2); color:var(--text); }
 #app-guesswho .join-btn { background:#17C3B2; color:#fff; }
 /* Heads Up's home screen uses color to tell actions apart at a glance --

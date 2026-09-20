@@ -1299,7 +1299,11 @@ function renderWlHowToPlayPage(){
   document.getElementById('wlHowToPlayPrevBtn').disabled = wlHowToPlayPage === 1;
   document.getElementById('wlHowToPlayNextBtn').disabled = wlHowToPlayPage === WL_HOW_TO_PLAY_PAGE_COUNT;
 }
-document.getElementById('wlHowToPlayBtn').addEventListener('click', ()=>{
+document.getElementById('wlHowToPlayBtn').addEventListener('click', (e)=>{
+  // Now a plain <a> (not a <button>) so it never picks up any default
+  // button chrome from the browser -- preventDefault so it doesn't actually
+  // navigate to "#" / jump the page.
+  e.preventDefault();
   wlHowToPlayPage = 1; renderWlHowToPlayPage();
   document.getElementById('wlHowToPlayOverlay').classList.add('active');
 });
@@ -1320,5 +1324,16 @@ document.getElementById('wlHowToPlayOverlay').addEventListener('click', e=>{
 // leaveRoom() flow, same as any other Leave Room button.
 const wlOpponentLeftBtn = document.getElementById('wlOpponentLeftBtn');
 if(wlOpponentLeftBtn) wlOpponentLeftBtn.addEventListener('click', leaveRoom);
+
+// Catches leaving via ANY means the explicit Leave Room buttons don't cover
+// -- most importantly clicking one of the top nav links to switch to a
+// different minigame, which navigates away without ever running
+// leaveRoom(). Matches Heads Up's own pagehide handler (socket.io leave)
+// and Guess Who's equivalent.
+window.addEventListener('pagehide', () => {
+  if(state.code && !state.isSpectator){
+    db.ref('wavelength_rooms/' + state.code + '/players/' + state.playerId).remove();
+  }
+});
 
 render();

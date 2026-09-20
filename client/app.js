@@ -368,7 +368,11 @@ function renderHowToPlayPage() {
   document.getElementById('howToPlayPrevBtn').disabled = howToPlayPage === 1;
   document.getElementById('howToPlayNextBtn').disabled = howToPlayPage === HOW_TO_PLAY_PAGE_COUNT;
 }
-document.getElementById('howToPlayBtn').addEventListener('click', () => {
+document.getElementById('howToPlayBtn').addEventListener('click', (e) => {
+  // Now a plain <a> (not a <button>) so it never picks up any default
+  // button chrome from the browser -- preventDefault so it doesn't actually
+  // navigate to "#" / jump the page.
+  e.preventDefault();
   howToPlayPage = 1;
   renderHowToPlayPage();
   document.getElementById('howToPlayOverlay').classList.add('active');

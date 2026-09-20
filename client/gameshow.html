@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gameshow</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="gameshow.css">
+</head>
+<body>
+
+<div class="mode-switcher">
+  <a class="mode-btn" href="/">Heads Up</a>
+  <a class="mode-btn" href="/guesswho">Guess Who</a>
+  <a class="mode-btn" href="/wavelength">Wavelength</a>
+  <a class="mode-btn active" href="/gameshow">Gameshow</a>
+</div>
+
+<div id="app-gameshow">
+  <div id="gsNoticeBar"></div>
+
+  <div class="screen active" id="gsScreen">
+    <div id="gsRoot"></div>
+  </div>
+</div>
+
+<script src="gameshow.js"></script>
+</body>
+</html>

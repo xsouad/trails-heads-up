@@ -1172,4 +1172,20 @@ document.getElementById('gwJoinModal').addEventListener('click', (e)=>{
 const gwOpponentLeftBtn = document.getElementById('gwOpponentLeftBtn');
 if(gwOpponentLeftBtn) gwOpponentLeftBtn.addEventListener('click', leaveRoom);
 
+// Catches leaving via ANY means the explicit "Leave Game"/"Leave Room"
+// buttons don't cover -- most importantly clicking one of the top nav links
+// to switch to a different minigame, which navigates away without ever
+// running leaveRoom(). Without this, the opponent only found out once
+// Firebase's own onDisconnect() cleanup noticed the dropped connection,
+// which is what "took a whole 30 seconds" (and matches Heads Up's own
+// pagehide handler, which already does the equivalent socket.io leave).
+// pagehide fires on navigation, tab close, and refresh alike, and (unlike
+// unload) still gives the page a brief window to get this write out before
+// it's actually torn down.
+window.addEventListener('pagehide', () => {
+  if(state.code && !state.isSpectator){
+    db.ref('rooms/' + state.code + '/players/' + state.playerId).remove();
+  }
+});
+
 loadCharacters().then(render);

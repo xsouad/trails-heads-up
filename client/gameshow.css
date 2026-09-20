@@ -1,0 +1,202 @@
+/* Gameshow (WIP) -- scoped styling for the password gate + speed-round
+   minigame test harness. Reuses .card/.primary/.secondary/.hint/.error-msg
+   from style.css so it matches the look of the other three games. */
+
+#app-gameshow {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 20px 16px 60px;
+}
+
+#app-gameshow .gs-gate-card {
+  margin-top: 24px;
+}
+
+#app-gameshow .gs-wip-note {
+  color: #ff8fb1;
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin: 0 0 6px;
+}
+
+#app-gameshow .gs-gate-title {
+  margin: 0 0 8px;
+  font-size: 1.6rem;
+}
+
+#app-gameshow .gs-password-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 14px 0 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(0,0,0,0.25);
+  color: #fff;
+  font-size: 1rem;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+#app-gameshow .gs-dev-card {
+  margin-top: 16px;
+  opacity: 0.85;
+}
+
+/* ---------- speed round ---------- */
+
+#app-gameshow .gs-speed-card {
+  padding-top: 16px;
+}
+
+#app-gameshow .gs-speed-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+#app-gameshow .gs-speed-timer {
+  font-size: 1.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+#app-gameshow .gs-speed-timer.urgent {
+  color: #ff5a5a;
+}
+
+#app-gameshow .gs-speed-score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+#app-gameshow .gs-speed-points {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #ffd166;
+}
+
+#app-gameshow .gs-speed-progress {
+  font-size: 0.75rem;
+  color: #b9c2de;
+}
+
+#app-gameshow .gs-speed-input-wrap {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+#app-gameshow .gs-speed-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(0,0,0,0.25);
+  color: #fff;
+  font-size: 1rem;
+}
+
+#app-gameshow .gs-speed-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 5;
+  background: #1c2038;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  overflow: hidden;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+#app-gameshow .gs-suggestion-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+#app-gameshow .gs-suggestion-row img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+#app-gameshow .gs-suggestion-row:hover,
+#app-gameshow .gs-suggestion-row.active {
+  background: rgba(255,255,255,0.08);
+}
+
+#app-gameshow .gs-speed-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+#app-gameshow .gs-feed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  animation: gsFeedIn 0.2s ease;
+}
+
+@keyframes gsFeedIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+#app-gameshow .gs-feed-row.ok {
+  border-left: 3px solid #4caf50;
+}
+
+#app-gameshow .gs-feed-row.bad {
+  border-left: 3px solid #ff5a5a;
+}
+
+#app-gameshow .gs-feed-row img {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+#app-gameshow .gs-feed-name {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+#app-gameshow .gs-feed-mark {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+#app-gameshow .gs-feed-row.ok .gs-feed-mark { color: #4caf50; }
+#app-gameshow .gs-feed-row.bad .gs-feed-mark { color: #ff5a5a; }
+
+#app-gameshow .gs-result-points {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #ffd166;
+  margin: 6px 0;
+}
+
+@media (max-width: 480px) {
+  #app-gameshow { padding: 14px 10px 50px; }
+  #app-gameshow .gs-speed-timer { font-size: 1.5rem; }
+}

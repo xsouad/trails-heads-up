@@ -70,6 +70,12 @@ app.get('/wavelength', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/wavelength.html'));
 });
 
+// Same pattern again. Gameshow is still WIP (password-gated on the client
+// side) but gets its own real URL like the other games.
+app.get('/gameshow', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/gameshow.html'));
+});
+
 function broadcastRoom(room) {
   log('BROADCAST', room.code, 'players:', room.players.size, 'spectators:', room.spectators.size, 'ids:', Array.from(room.players.keys()));
   room.players.forEach((player, socketId) => {
