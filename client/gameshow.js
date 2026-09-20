@@ -10,6 +10,10 @@
 //      "DEV TEST BUTTON" below) once the real gameshow is playable.
 // No server/multiplayer wiring yet -- this is all local client state.
 
+// Yellow theme, set directly on <body> (not just via CSS) so it applies
+// reliably even in browsers without :has() support.
+document.body.style.background = '#ffcc00';
+
 const GS_PASSWORD = 'VANISVAN';
 
 // Character list, shared with Heads Up/Guess Who -- same file, same image
@@ -21,6 +25,15 @@ async function loadGsCharacters() {
   GS_CHARACTERS = data.map(c => ({ name: c.name, img: c.image }));
 }
 function gsImgUrl(c) { return 'assets/items/characters/' + encodeURIComponent(c.img); }
+
+function gsShuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 let state = {
   screen: 'gate', // gate, hub, speedIntro, speedPlaying, speedResults
@@ -112,10 +125,9 @@ function renderSpeedIntro() {
     <div class="card center">
       <h2 class="gs-gate-title">That Won't Be Necessary</h2>
       <p class="hint">
-        Name as many characters as you can in ${SPEED_ROUND_SECONDS} seconds.
-        Start typing and pick from the suggestions -- every ${NAMES_PER_POINT}
-        correct, unique names earns 1 point. Duplicates and non-matches count
-        as wrong.
+        A character's picture shows up on screen -- type their name (or pick
+        it from the dropdown) as fast as you can, then the next one appears.
+        Every ${NAMES_PER_POINT} correct names earns 1 point. ${SPEED_ROUND_SECONDS} seconds on the clock.
       </p>
       <button type="button" class="primary" id="gsStartSpeedBtn">Start (${SPEED_ROUND_SECONDS}s)</button>
       <div style="margin-top:10px;"><button type="button" class="secondary" id="gsBackFromIntroBtn">Back</button></div>
@@ -138,8 +150,14 @@ function renderSpeedPlaying() {
         </div>
       </div>
 
+      <div class="gs-target-wrap">
+        <div class="gs-target-frame">
+          <img id="gsTargetImg" src="${gsImgUrl(s.current)}" alt="Who is this?" />
+        </div>
+      </div>
+
       <div class="gs-speed-input-wrap">
-        <input type="text" id="gsSpeedInput" class="gs-speed-input" placeholder="Type a character name..." autocomplete="off" autocapitalize="off" spellcheck="false" />
+        <input type="text" id="gsSpeedInput" class="gs-speed-input" placeholder="Who is this? Type their name..." autocomplete="off" autocapitalize="off" spellcheck="false" />
         <div class="gs-speed-suggestions" id="gsSuggestions"></div>
       </div>
 
@@ -232,12 +250,28 @@ function attachHandlers() {
 // ---------- speed round logic ----------
 let speedTimerHandle = null;
 
+function gsNextTarget(s) {
+  // Draw from a shuffled queue of the whole roster so nothing repeats until
+  // everyone's been shown once, then reshuffle and keep going.
+  if (!s.queue || s.queueIdx >= s.queue.length) {
+    s.queue = gsShuffle(GS_CHARACTERS);
+    s.queueIdx = 0;
+  }
+  const next = s.queue[s.queueIdx];
+  s.queueIdx += 1;
+  return next;
+}
+
 function startSpeedRound() {
-  state.speed = {
+  const s = {
     timeLeft: SPEED_ROUND_SECONDS,
     feed: [], // { name, ok, img }
-    guessedNames: new Set() // lowercased, for duplicate detection
+    queue: [],
+    queueIdx: 0,
+    current: null
   };
+  s.current = gsNextTarget(s);
+  state.speed = s;
   state.screen = 'speedPlaying';
   render();
   const input = document.getElementById('gsSpeedInput');
@@ -250,9 +284,9 @@ function startSpeedRound() {
       endSpeedRound();
       return;
     }
-    // Only the timer number + suggestions need to live-update every tick --
-    // re-rendering the whole screen every second would also blow away
-    // whatever's mid-type in the input. Patch just the timer text instead.
+    // Only the timer number needs to live-update every tick -- re-rendering
+    // the whole screen every second would also blow away whatever's
+    // mid-type in the input. Patch just the timer text instead.
     const timerEl = document.getElementById('gsTimer');
     if (timerEl) {
       timerEl.textContent = state.speed.timeLeft + 's';
@@ -276,26 +310,33 @@ function gsFindMatches(query) {
   return GS_CHARACTERS.filter(c => c.name.toLowerCase().includes(q)).slice(0, 6);
 }
 
-function gsSubmitGuess(name) {
+// Checks the typed/picked name against the character currently on screen
+// (not just "is this any known character" -- it has to be THIS one).
+function gsSubmitGuess(guessedName) {
   const s = state.speed;
-  if (!s) return;
-  const key = name.trim().toLowerCase();
+  if (!s || !s.current) return;
+  const key = guessedName.trim().toLowerCase();
   if (!key) return;
-  const match = GS_CHARACTERS.find(c => c.name.toLowerCase() === key);
-  const alreadyGuessed = s.guessedNames.has(key);
-  const ok = !!match && !alreadyGuessed;
-  if (match) s.guessedNames.add(key);
-  s.feed.push({ name: match ? match.name : name.trim(), ok, img: match ? gsImgUrl(match) : null });
+
+  const target = s.current;
+  const ok = key === target.name.toLowerCase();
+  s.feed.push({ name: target.name, ok, img: gsImgUrl(target) });
   ok ? playTing() : playError();
+
+  // Move on to the next character regardless of right/wrong -- that's what
+  // keeps this a speed round rather than a stop-and-retry quiz.
+  s.current = gsNextTarget(s);
 
   const input = document.getElementById('gsSpeedInput');
   if (input) { input.value = ''; }
   const suggestions = document.getElementById('gsSuggestions');
   if (suggestions) suggestions.innerHTML = '';
 
-  // Same "patch, don't full-render" reasoning as the timer tick -- keeps
-  // focus in the input and avoids losing keystrokes typed the instant after
-  // a guess lands.
+  // Patch the DOM directly instead of a full render() -- keeps focus in the
+  // input and avoids losing keystrokes typed the instant after a guess lands.
+  const targetImg = document.getElementById('gsTargetImg');
+  if (targetImg) targetImg.src = gsImgUrl(s.current);
+
   const topbar = document.querySelector('.gs-speed-topbar');
   const feedEl = document.getElementById('gsFeed');
   if (topbar) {
@@ -348,8 +389,12 @@ function wireSpeedInput() {
       rows.forEach((r, i) => r.classList.toggle('active', i === activeIndex));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (activeIndex >= 0 && rows[activeIndex]) {
-        gsSubmitGuess(rows[activeIndex].dataset.name);
+      // If there's a dropdown showing, Enter always takes a suggestion --
+      // the arrow-selected one if the player used the arrows, otherwise the
+      // top one -- rather than submitting whatever's raw-typed so far.
+      if (rows.length) {
+        const pick = rows[activeIndex >= 0 ? activeIndex : 0];
+        gsSubmitGuess(pick.dataset.name);
       } else if (input.value.trim()) {
         gsSubmitGuess(input.value);
       }
