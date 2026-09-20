@@ -56,7 +56,9 @@ function joinRoom(code, socketId, name, avatar, clientId) {
   room.players.set(socketId, {
     id: socketId,
     name: (name || 'Player').slice(0, 24),
-    avatar: avatar || { color: '#e63946', initial: (name || 'P')[0].toUpperCase() },
+    // Same layered base/face/hat avatar system as Heads Up/Guess Who
+    // (see avatar-shared.js) -- not a color swatch.
+    avatar: avatar || { base: 1, face: 1, hat: 1 },
     clientId,
     role: 'unassigned',
     seat: null

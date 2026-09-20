@@ -1,12 +1,11 @@
 // ---------- Gameshow (WIP) ----------
-// Slice 1 (done earlier): a standalone "That Won't Be Necessary" speed-round
-// test harness, reachable without a room via a dev button.
-// Slice 2 (this pass): the actual multiplayer lobby -- people join a room,
-// pick a position (Host, needs the VANISVAN password / Team A / Team B /
-// Spectator with a seat), and the Team A vs Team B naming minigame.
+// Slice 1: a standalone "That Won't Be Necessary" speed-round test harness.
+// Slice 2: the multiplayer lobby -- join, pick a position (Host / Team A /
+// Team B / Spectator with a seat) on a "stage" (screen up top, podiums and
+// theater seats below, matching the sketch), and the Team A vs Team B
+// naming minigame.
 // Still not built: the actual board (quotes/trivia/screenshots columns),
-// hints, steal, and the "That Won't Be Necessary" comeback trigger hooked
-// into a real match -- those come next.
+// hints, steal, and hooking the speed round in as the real comeback trigger.
 
 document.body.style.background = '#ffcc00';
 
@@ -23,7 +22,10 @@ function getClientId() {
 }
 const clientId = getClientId();
 
-const AVATAR_COLORS = ['#e63946', '#457b9d', '#2a9d8f', '#f4a261', '#9b5de5', '#ff6392', '#606c38', '#118ab2'];
+// `avatar`, `saveAvatar`, `loadAvatar`, `effectiveLayerCount`, and
+// `renderAvatarStage` all come from avatar-shared.js -- the exact same
+// layered base/face/hat system Heads Up and Guess Who use, so a player's
+// avatar carries over between games instead of Gameshow inventing its own.
 
 // Character list, shared with Heads Up/Guess Who -- same file, same image
 // folder convention (assets/items/characters/<image>).
@@ -45,15 +47,13 @@ function gsShuffle(arr) {
 }
 
 let state = {
-  screen: 'landing', // landing, lobby, naming, ready, speedIntro, speedPlaying, speedResults
+  screen: 'landing', // landing, stage (lobby/naming/ready all live on the stage), speedIntro, speedPlaying, speedResults
   myName: '',
-  myColor: AVATAR_COLORS[0],
   joinCodeInput: '',
   error: '',
   room: null, // last gsRoomState payload from the server
-  hostPasswordDraft: '',
+  showHostPasswordBox: false,
   hostAuthError: '',
-  showSeatPicker: false,
   speed: null // set by startSpeedRound() -- the standalone test harness
 };
 
@@ -83,15 +83,7 @@ socket.on('gsNotice', ({ text }) => showGsNotice(text));
 socket.on('gsClap', ({ name }) => showGsClapToast(name));
 socket.on('gsRoomState', (room) => {
   state.room = room;
-  if (state.screen === 'landing') {
-    state.screen = room.phase === 'naming' ? 'naming' : (room.phase === 'ready' ? 'ready' : 'lobby');
-  } else if (room.phase === 'naming' && state.screen === 'lobby') {
-    state.screen = 'naming';
-  } else if (room.phase === 'ready' && (state.screen === 'lobby' || state.screen === 'naming')) {
-    state.screen = 'ready';
-  } else if (room.phase === 'lobby' && (state.screen === 'naming' || state.screen === 'ready')) {
-    state.screen = 'lobby';
-  }
+  if (state.screen === 'landing') state.screen = 'stage';
   render();
 });
 
@@ -123,13 +115,19 @@ function playError() { gsBeep({ freq: 220, endFreq: 110, duration: 0.28, type: '
 function render() {
   let html = '';
   if (state.screen === 'landing') html = renderLanding();
-  else if (state.screen === 'lobby') html = renderLobby();
-  else if (state.screen === 'naming') html = renderNaming();
-  else if (state.screen === 'ready') html = renderReady();
+  else if (state.screen === 'stage') html = renderStage();
   else if (state.screen === 'speedIntro') html = renderSpeedIntro();
   else if (state.screen === 'speedPlaying') html = renderSpeedPlaying();
   else if (state.screen === 'speedResults') html = renderSpeedResults();
   gsRoot.innerHTML = html;
+  // Avatars are rendered as real layered images (not string HTML) -- fill
+  // in every placeholder left behind by the string templates above.
+  document.querySelectorAll('[data-avatar-for]').forEach(el => {
+    const p = state.room && state.room.players.find(pl => pl.id === el.dataset.avatarFor);
+    if (p) renderAvatarStage(el, p.avatar);
+  });
+  const stage = document.getElementById('avatarStage');
+  if (stage) renderAvatarStage(stage, avatar);
   attachHandlers();
 }
 
@@ -143,20 +141,36 @@ function renderLanding() {
   return `
     <div class="card center">
       <h2 class="gs-gate-title">Gameshow</h2>
-      <p class="hint">Still very much a work in progress -- pick a name, then create or join a room.</p>
+      <p class="hint">Still very much a work in progress -- build your avatar, pick a name, then create or join a room.</p>
+
+      <div class="avatar-builder">
+        <div class="avatar-stage" id="avatarStage"></div>
+        <div class="arrow-row">
+          <button type="button" data-layer="hat" data-dir="-1">&lt;</button>
+          <span class="layer-label">Accessories</span>
+          <button type="button" data-layer="hat" data-dir="1">&gt;</button>
+        </div>
+        <div class="arrow-row">
+          <button type="button" data-layer="face" data-dir="-1">&lt;</button>
+          <span class="layer-label">Face</span>
+          <button type="button" data-layer="face" data-dir="1">&gt;</button>
+        </div>
+        <div class="arrow-row">
+          <button type="button" data-layer="base" data-dir="-1">&lt;</button>
+          <span class="layer-label">Color</span>
+          <button type="button" data-layer="base" data-dir="1">&gt;</button>
+        </div>
+        <button type="button" class="dice-btn" id="diceBtn">Randomize</button>
+      </div>
 
       <input type="text" id="gsNameInput" class="gs-password-input" placeholder="Your name" maxlength="24" value="${state.myName.replace(/"/g, '&quot;')}" autocomplete="off" />
-
-      <div class="gs-color-row">
-        ${AVATAR_COLORS.map(c => `<button type="button" class="gs-color-swatch ${c === state.myColor ? 'active' : ''}" data-color="${c}" style="background:${c};"></button>`).join('')}
-      </div>
 
       <div class="error-msg">${state.error}</div>
 
       <button type="button" class="primary" id="gsCreateRoomBtn">Create Room</button>
 
-      <div class="gs-join-row">
-        <input type="text" id="gsJoinCodeInput" class="gs-password-input gs-join-input" placeholder="Room code" maxlength="4" value="${state.joinCodeInput}" autocomplete="off" />
+      <div class="join-row gs-join-row">
+        <input type="text" id="gsJoinCodeInput" placeholder="Room code" maxlength="4" value="${state.joinCodeInput}" autocomplete="off" />
         <button type="button" class="secondary" id="gsJoinRoomBtn">Join Room</button>
       </div>
     </div>
@@ -170,96 +184,107 @@ function renderLanding() {
   `;
 }
 
-// ---------- lobby ----------
-function renderPlayerChip(p) {
-  return `
-    <div class="gs-chip">
-      <span class="gs-chip-dot" style="background:${(p.avatar && p.avatar.color) || '#999'};">${(p.avatar && p.avatar.initial) || p.name[0].toUpperCase()}</span>
-      <span class="gs-chip-name">${p.name}</span>
-    </div>
-  `;
-}
+// ---------- stage (persistent screen + podiums + spectator seats) ----------
 
-function renderLobby() {
+function renderPodium(teamKey) {
   const room = state.room;
   const me = myPlayer();
-  const myRole = me ? me.role : 'unassigned';
-  const teamA = room.players.filter(p => p.role === 'teamA');
-  const teamB = room.players.filter(p => p.role === 'teamB');
+  const members = room.players.filter(p => p.role === teamKey);
+  const slots = [];
+  for (let i = 0; i < room.maxTeamSize; i++) {
+    const occ = members[i];
+    if (occ) {
+      const mine = me && occ.id === me.id;
+      slots.push(`
+        <div class="gs-podium occupied ${mine ? 'mine' : ''}">
+          <div class="gs-podium-avatar" data-avatar-for="${occ.id}"></div>
+          <div class="gs-podium-block ${teamKey}"></div>
+          <div class="gs-podium-name">${occ.name}</div>
+        </div>
+      `);
+    } else {
+      slots.push(`
+        <button type="button" class="gs-podium empty" data-join-team="${teamKey}">
+          <div class="gs-podium-block ${teamKey}"></div>
+          <span class="gs-podium-plus">+</span>
+        </button>
+      `);
+    }
+  }
+  return `<div class="gs-team-column">${slots.join('')}</div>`;
+}
+
+function renderHostSlot() {
+  const room = state.room;
+  const me = myPlayer();
   const host = room.players.find(p => p.role === 'host');
-  const spectators = room.players.filter(p => p.role === 'spectator');
-  const unassigned = room.players.filter(p => p.role === 'unassigned');
-  const seatMap = {};
-  spectators.forEach(p => { seatMap[p.seat] = p; });
-
-  const iAmHost = room.hostId === socket.id;
-  const bothTeamsReady = teamA.length >= 1 && teamB.length >= 1;
-
+  if (host) {
+    const mine = me && host.id === me.id;
+    return `
+      <div class="gs-host-slot occupied ${mine ? 'mine' : ''}">
+        <div class="gs-podium-avatar" data-avatar-for="${host.id}"></div>
+        <div class="gs-host-label">GAMESHOW HOST</div>
+        <div class="gs-podium-name">${host.name}</div>
+      </div>
+    `;
+  }
   return `
-    <div class="card center">
-      <h2 class="gs-gate-title">Room ${room.code}</h2>
-      <p class="hint">Share this code so everyone else can join.</p>
-      <button type="button" class="secondary" id="gsLeaveRoomBtn">Leave Room</button>
-    </div>
-
-    <div class="card">
-      <p class="gs-section-title">Host</p>
-      ${host ? renderPlayerChip(host) : `
-        <div class="gs-role-pick">
-          <input type="password" id="gsHostPasswordInput" class="gs-password-input" placeholder="Host code" ${myRole === 'host' ? 'disabled' : ''} />
-          <button type="button" class="secondary" id="gsBecomeHostBtn" ${myRole === 'host' ? 'disabled' : ''}>Become Host</button>
+    <div class="gs-host-slot empty">
+      <div class="gs-host-label">GAMESHOW HOST</div>
+      ${state.showHostPasswordBox ? `
+        <div class="join-row gs-host-password-row">
+          <input type="password" id="gsHostPasswordInput" placeholder="Host code" autocomplete="off" />
+          <button type="button" class="secondary" id="gsBecomeHostBtn">Enter</button>
         </div>
         <div class="error-msg">${state.hostAuthError}</div>
-      `}
-      ${host && myRole === 'host' ? `<p class="hint">You're the host. Only you can start naming and (later) run the board.</p>` : ''}
+      ` : `<button type="button" class="secondary" id="gsOpenHostBoxBtn">Become Host</button>`}
     </div>
-
-    <div class="gs-teams-row">
-      <div class="card gs-team-card">
-        <p class="gs-section-title">Team A (${teamA.length}/${room.maxTeamSize})</p>
-        <div class="gs-chip-list">${teamA.map(renderPlayerChip).join('') || '<p class="hint">No one yet.</p>'}</div>
-        <button type="button" class="secondary gs-role-btn" data-role="teamA" ${myRole === 'teamA' ? 'disabled' : ''}>${myRole === 'teamA' ? 'You\'re on this team' : 'Join Team A'}</button>
-      </div>
-      <div class="card gs-team-card">
-        <p class="gs-section-title">Team B (${teamB.length}/${room.maxTeamSize})</p>
-        <div class="gs-chip-list">${teamB.map(renderPlayerChip).join('') || '<p class="hint">No one yet.</p>'}</div>
-        <button type="button" class="secondary gs-role-btn" data-role="teamB" ${myRole === 'teamB' ? 'disabled' : ''}>${myRole === 'teamB' ? 'You\'re on this team' : 'Join Team B'}</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <p class="gs-section-title">Spectators (${spectators.length}/${room.maxSpectatorSeats})</p>
-      <div class="gs-seat-grid">
-        ${Array.from({ length: room.maxSpectatorSeats }, (_, i) => i + 1).map(seat => {
-          const occ = seatMap[seat];
-          const isMe = occ && me && occ.id === me.id;
-          return `
-            <button type="button" class="gs-seat ${occ ? 'occupied' : ''} ${isMe ? 'mine' : ''}" data-seat="${seat}" ${occ && !isMe ? 'disabled' : ''}>
-              ${occ ? `<span class="gs-chip-dot" style="background:${occ.avatar.color};">${occ.avatar.initial}</span><span class="gs-seat-name">${occ.name}</span>` : `<span class="gs-seat-num">${seat}</span>`}
-            </button>
-          `;
-        }).join('')}
-      </div>
-      ${myRole === 'spectator' ? `<button type="button" class="primary" id="gsClapBtn">👏 Clap</button>` : ''}
-    </div>
-
-    ${unassigned.length ? `
-      <div class="card">
-        <p class="gs-section-title">Just joined</p>
-        <div class="gs-chip-list">${unassigned.map(renderPlayerChip).join('')}</div>
-      </div>
-    ` : ''}
-
-    ${iAmHost ? `
-      <div class="card center">
-        <button type="button" class="primary" id="gsStartNamingBtn" ${bothTeamsReady ? '' : 'disabled'}>Start Team Naming</button>
-        ${bothTeamsReady ? '' : '<p class="hint">Both teams need at least 1 member first.</p>'}
-      </div>
-    ` : ''}
   `;
 }
 
-// ---------- naming ----------
+function renderSeat(seat) {
+  const room = state.room;
+  const me = myPlayer();
+  const occ = room.players.find(p => p.role === 'spectator' && p.seat === seat);
+  if (occ) {
+    const mine = me && occ.id === me.id;
+    return `
+      <div class="gs-seat occupied ${mine ? 'mine' : ''}">
+        <div class="gs-seat-avatar" data-avatar-for="${occ.id}"></div>
+        <span class="gs-seat-name">${occ.name}</span>
+      </div>
+    `;
+  }
+  return `
+    <button type="button" class="gs-seat empty" data-seat="${seat}">
+      <span class="gs-seat-num">${seat}</span>
+    </button>
+  `;
+}
+
+function renderClapArea() {
+  const room = state.room;
+  const me = myPlayer();
+  if (!me || me.role !== 'spectator') return '';
+  // Clapping only makes sense once there's an actual game to react to --
+  // not while everyone's still picking seats or naming their teams.
+  const allowed = room.phase !== 'lobby' && room.phase !== 'naming';
+  return `
+    <div class="center gs-clap-area">
+      <button type="button" class="primary" id="gsClapBtn" ${allowed ? '' : 'disabled'}>👏 Clap</button>
+      ${allowed ? '' : '<p class="hint">Clapping opens once the game begins.</p>'}
+    </div>
+  `;
+}
+
+function renderScreenLobby() {
+  const room = state.room;
+  return `
+    <div class="gs-screen-roomcode">${room.code}</div>
+    <p class="hint">Share this code with everyone joining. Pick your spot below.</p>
+  `;
+}
+
 function renderNameColumn(team, label) {
   const room = state.room;
   const t = room[team];
@@ -270,11 +295,11 @@ function renderNameColumn(team, label) {
   Object.values(t.votes).forEach(idx => { tally[idx] = (tally[idx] || 0) + 1; });
 
   return `
-    <div class="card gs-team-card">
+    <div class="gs-team-card">
       <p class="gs-section-title">${label}</p>
       ${onThisTeam ? `
-        <div class="gs-name-submit-row">
-          <input type="text" id="gsNameInput_${team}" class="gs-password-input" placeholder="Suggest a team name" maxlength="30" />
+        <div class="join-row gs-name-submit-row">
+          <input type="text" id="gsNameInput_${team}" placeholder="Suggest a team name" maxlength="30" />
           <button type="button" class="secondary gs-submit-name-btn" data-team="${team}">Submit</button>
         </div>
       ` : ''}
@@ -291,34 +316,93 @@ function renderNameColumn(team, label) {
   `;
 }
 
-function renderNaming() {
+function renderScreenNaming() {
   const room = state.room;
+  const me = myPlayer();
   const iAmHost = room.hostId === socket.id;
+  // Competitors only see their own team's suggestions -- host and
+  // spectators watch both live.
+  const canSee = (team) => iAmHost || !me || me.role === 'spectator' || me.role === team;
+
+  const cols = ['teamA', 'teamB'].map(team => {
+    const label = team === 'teamA' ? 'Team A' : 'Team B';
+    if (canSee(team)) return renderNameColumn(team, label);
+    return `<div class="gs-team-card gs-hidden-col"><p class="gs-section-title">${label}</p><p class="hint">Only ${label} can see their own suggestions.</p></div>`;
+  }).join('');
+
   return `
-    <div class="card center">
-      <h2 class="gs-gate-title">Naming Your Teams</h2>
-      <p class="hint">Everyone can watch live -- only team members can suggest and vote.</p>
-    </div>
-    <div class="gs-teams-row">
-      ${renderNameColumn('teamA', 'Team A')}
-      ${renderNameColumn('teamB', 'Team B')}
-    </div>
-    ${iAmHost ? `
-      <div class="card center">
-        <button type="button" class="primary" id="gsFinishNamingBtn">Lock In Team Names</button>
-      </div>
-    ` : `<div class="card center"><p class="hint">Waiting for the host to lock in the names...</p></div>`}
+    <h3 class="gs-screen-title">Recommend a name for your Team</h3>
+    <div class="gs-naming-cols">${cols}</div>
+    ${iAmHost
+      ? `<div class="center"><button type="button" class="primary" id="gsFinishNamingBtn">Lock In Team Names</button></div>`
+      : `<p class="hint center-text">Waiting for the host to lock in the names...</p>`}
   `;
 }
 
-// ---------- ready ----------
-function renderReady() {
+function renderTeamReadyRow(team) {
   const room = state.room;
+  const members = room.players.filter(p => p.role === team);
   return `
-    <div class="card center">
-      <h2 class="gs-gate-title">${room.teamA.name || 'Team A'} vs ${room.teamB.name || 'Team B'}</h2>
-      <p class="hint">The board (quotes, trivia, screenshots, hints, steal) is being built next -- this screen will turn into the real game. For now, positions and team names are locked in.</p>
-      <button type="button" class="secondary" id="gsLeaveRoomBtn">Leave Room</button>
+    <div class="gs-ready-team">
+      <p class="gs-ready-label">${team === 'teamA' ? 'TEAM A' : 'TEAM B'} is called: <strong>${room[team].name || (team === 'teamA' ? 'Team A' : 'Team B')}</strong></p>
+      <div class="gs-avatar-row">
+        ${members.map(p => `
+          <div class="gs-mini-avatar-wrap">
+            <div class="gs-mini-avatar" data-avatar-for="${p.id}"></div>
+            <span>${p.name}</span>
+          </div>
+        `).join('') || '<p class="hint">No members.</p>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderScreenReady() {
+  return `
+    ${renderTeamReadyRow('teamA')}
+    ${renderTeamReadyRow('teamB')}
+  `;
+}
+
+function renderStage() {
+  const room = state.room;
+  let screenInner = '';
+  if (room.phase === 'naming') screenInner = renderScreenNaming();
+  else if (room.phase === 'ready') screenInner = renderScreenReady();
+  else screenInner = renderScreenLobby();
+
+  const me = myPlayer();
+  const iAmHost = room.hostId === socket.id;
+  const teamA = room.players.filter(p => p.role === 'teamA');
+  const teamB = room.players.filter(p => p.role === 'teamB');
+  const bothTeamsReady = teamA.length >= 1 && teamB.length >= 1;
+
+  return `
+    <div class="gs-tv-screen">
+      <div class="gs-tv-screen-inner">${screenInner}</div>
+    </div>
+
+    <div class="gs-floor">
+      ${renderPodium('teamA')}
+      ${renderHostSlot()}
+      ${renderPodium('teamB')}
+    </div>
+
+    <div class="gs-spectator-row">
+      ${Array.from({ length: room.maxSpectatorSeats }, (_, i) => i + 1).map(renderSeat).join('')}
+    </div>
+
+    ${renderClapArea()}
+
+    ${iAmHost && room.phase === 'lobby' ? `
+      <div class="center">
+        <button type="button" class="primary" id="gsStartNamingBtn" ${bothTeamsReady ? '' : 'disabled'}>Start Team Naming</button>
+        ${bothTeamsReady ? '' : '<p class="hint">Both teams need at least 1 member first.</p>'}
+      </div>
+    ` : ''}
+
+    <div class="center gs-leave-wrap">
+      <button type="button" class="secondary gs-leave-btn" id="gsLeaveRoomBtn">Leave Room</button>
     </div>
   `;
 }
@@ -403,18 +487,37 @@ function renderSpeedResults() {
 
 // ---------- handlers ----------
 function attachHandlers() {
+  // avatar builder (landing only, but harmless to try wiring elsewhere)
+  document.querySelectorAll('.arrow-row button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const layer = btn.dataset.layer;
+      const dir = parseInt(btn.dataset.dir, 10);
+      const count = effectiveLayerCount(layer);
+      avatar[layer] = ((avatar[layer] - 1 + dir + count) % count) + 1;
+      saveAvatar(avatar);
+      const stageEl = document.getElementById('avatarStage');
+      if (stageEl) renderAvatarStage(stageEl, avatar);
+    });
+  });
+  const diceBtn = document.getElementById('diceBtn');
+  if (diceBtn) diceBtn.addEventListener('click', () => {
+    avatar = {
+      base: 1 + Math.floor(Math.random() * effectiveLayerCount('base')),
+      face: 1 + Math.floor(Math.random() * effectiveLayerCount('face')),
+      hat: 1 + Math.floor(Math.random() * effectiveLayerCount('hat'))
+    };
+    saveAvatar(avatar);
+    const stageEl = document.getElementById('avatarStage');
+    if (stageEl) renderAvatarStage(stageEl, avatar);
+  });
+
   // landing
   const nameInput = document.getElementById('gsNameInput');
   if (nameInput) nameInput.addEventListener('input', e => { state.myName = e.target.value; });
 
-  document.querySelectorAll('.gs-color-swatch').forEach(btn => {
-    btn.addEventListener('click', () => { state.myColor = btn.dataset.color; render(); });
-  });
-
   const createBtn = document.getElementById('gsCreateRoomBtn');
   if (createBtn) createBtn.addEventListener('click', () => {
     if (!state.myName.trim()) { state.error = 'Enter a name first.'; render(); return; }
-    const avatar = { color: state.myColor, initial: state.myName.trim()[0].toUpperCase() };
     socket.emit('gsCreateRoom', { name: state.myName.trim(), avatar, clientId }, (res) => {
       if (!res.ok) { state.error = res.error || 'Could not create room.'; render(); }
     });
@@ -427,7 +530,6 @@ function attachHandlers() {
   if (joinBtn) joinBtn.addEventListener('click', () => {
     if (!state.myName.trim()) { state.error = 'Enter a name first.'; render(); return; }
     if (!state.joinCodeInput.trim()) { state.error = 'Enter a room code.'; render(); return; }
-    const avatar = { color: state.myColor, initial: state.myName.trim()[0].toUpperCase() };
     socket.emit('gsJoinRoom', { code: state.joinCodeInput.trim(), name: state.myName.trim(), avatar, clientId }, (res) => {
       if (!res.ok) { state.error = res.error || 'Could not join room.'; render(); }
     });
@@ -436,14 +538,19 @@ function attachHandlers() {
   const devBtn = document.getElementById('gsDevTestBtn');
   if (devBtn) devBtn.addEventListener('click', () => { state.screen = 'speedIntro'; render(); });
 
-  // lobby
+  // stage: leave
   const leaveBtn = document.getElementById('gsLeaveRoomBtn');
   if (leaveBtn) leaveBtn.addEventListener('click', () => {
     socket.emit('gsLeaveRoom');
     state.room = null;
+    state.showHostPasswordBox = false;
     state.screen = 'landing';
     render();
   });
+
+  // stage: host slot
+  const openHostBoxBtn = document.getElementById('gsOpenHostBoxBtn');
+  if (openHostBoxBtn) openHostBoxBtn.addEventListener('click', () => { state.showHostPasswordBox = true; render(); });
 
   const becomeHostBtn = document.getElementById('gsBecomeHostBtn');
   if (becomeHostBtn) becomeHostBtn.addEventListener('click', () => {
@@ -451,30 +558,32 @@ function attachHandlers() {
     const password = pwInput ? pwInput.value.trim().toUpperCase() : '';
     socket.emit('gsSetRole', { role: 'host', password }, (res) => {
       state.hostAuthError = res.ok ? '' : (res.error || 'Wrong password.');
+      if (res.ok) state.showHostPasswordBox = false;
       render();
     });
   });
 
-  document.querySelectorAll('.gs-role-btn').forEach(btn => {
+  // stage: podiums (join team)
+  document.querySelectorAll('[data-join-team]').forEach(btn => {
     btn.addEventListener('click', () => {
-      socket.emit('gsSetRole', { role: btn.dataset.role }, (res) => {
-        if (!res.ok) { showGsNotice(res.error || "Couldn't switch roles."); }
+      socket.emit('gsSetRole', { role: btn.dataset.joinTeam }, (res) => {
+        if (!res.ok) showGsNotice(res.error || "Couldn't join that team.");
       });
     });
   });
 
-  document.querySelectorAll('.gs-seat').forEach(btn => {
-    if (btn.disabled) return;
+  // stage: spectator seats
+  document.querySelectorAll('.gs-seat.empty').forEach(btn => {
     btn.addEventListener('click', () => {
       const seat = parseInt(btn.dataset.seat, 10);
       socket.emit('gsSetRole', { role: 'spectator', seat }, (res) => {
-        if (!res.ok) { showGsNotice(res.error || "Couldn't sit there."); }
+        if (!res.ok) showGsNotice(res.error || "Couldn't sit there.");
       });
     });
   });
 
   const clapBtn = document.getElementById('gsClapBtn');
-  if (clapBtn) clapBtn.addEventListener('click', () => socket.emit('gsClap'));
+  if (clapBtn && !clapBtn.disabled) clapBtn.addEventListener('click', () => socket.emit('gsClap'));
 
   const startNamingBtn = document.getElementById('gsStartNamingBtn');
   if (startNamingBtn) startNamingBtn.addEventListener('click', () => {

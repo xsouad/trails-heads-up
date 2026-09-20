@@ -1,15 +1,14 @@
-/* Gameshow (WIP) -- scoped styling for the password gate + speed-round
-   minigame test harness. Reuses .card/.primary/.secondary/.hint/.error-msg
-   from style.css for structure, but overrides colors to a yellow theme
-   (distinct from the other three games' dark-navy look) with dark text for
-   contrast against the yellow. */
+/* Gameshow (WIP) -- scoped styling. Yellow theme (distinct from the other
+   three games' dark-navy look) with dark text for contrast against the
+   yellow. Reuses .card/.primary/.secondary/.hint/.error-msg/.join-row/
+   .avatar-builder/.avatar-stage/.arrow-row/.dice-btn from style.css. */
 
 body:has(#app-gameshow) {
   background: #ffcc00;
 }
 
 #app-gameshow {
-  max-width: 520px;
+  max-width: 640px;
   margin: 0 auto;
   padding: 20px 16px 60px;
   color: #17140a;
@@ -32,17 +31,7 @@ body:has(#app-gameshow) {
 #app-gameshow .hint {
   color: #4a3d00;
 }
-
-#app-gameshow .gs-gate-card {
-  margin-top: 24px;
-}
-
-#app-gameshow .gs-wip-note {
-  color: #b3001b;
-  font-weight: 700;
-  font-size: 0.95rem;
-  margin: 0 0 6px;
-}
+#app-gameshow .hint.center-text { text-align: center; }
 
 #app-gameshow .gs-gate-title {
   margin: 0 0 8px;
@@ -50,62 +39,11 @@ body:has(#app-gameshow) {
   color: #17140a;
 }
 
-#app-gameshow .gs-password-input {
-  width: 100%;
-  box-sizing: border-box;
-  margin: 14px 0 8px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(0,0,0,0.25);
-  background: #fff9e0;
-  color: #17140a;
-  font-size: 1rem;
+#app-gameshow .gs-screen-title {
+  margin: 0 0 12px;
   text-align: center;
-  letter-spacing: 1px;
+  color: #fff;
 }
-
-#app-gameshow .gs-dev-card {
-  margin-top: 16px;
-  opacity: 0.9;
-}
-
-/* ---------- landing ---------- */
-
-#app-gameshow .gs-color-row {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin: 10px 0 14px;
-  flex-wrap: wrap;
-}
-
-#app-gameshow .gs-color-swatch {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  cursor: pointer;
-  padding: 0;
-}
-
-#app-gameshow .gs-color-swatch.active {
-  border-color: #17140a;
-  transform: scale(1.15);
-}
-
-#app-gameshow .gs-join-row {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-#app-gameshow .gs-join-input {
-  margin: 0;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-/* ---------- lobby ---------- */
 
 #app-gameshow .gs-section-title {
   font-weight: 800;
@@ -113,68 +51,187 @@ body:has(#app-gameshow) {
   color: #17140a;
 }
 
-#app-gameshow .gs-role-pick {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+/* Text inputs everywhere in Gameshow (reusing this one class for the
+   password gate, join code, host code, name fields, etc). */
+#app-gameshow .gs-password-input,
+#app-gameshow .join-row input[type=text],
+#app-gameshow .join-row input[type=password] {
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.25);
+  background: #fff9e0;
+  color: #17140a;
+  font-size: 1rem;
 }
-
-#app-gameshow .gs-role-pick .gs-password-input {
-  margin: 0;
+/* The shared .join-row rule in style.css only grants flex:1 to
+   type=text inputs -- the host-code box uses type=password so it needs
+   the same rule repeated here, otherwise it renders tiny next to its
+   button instead of sharing the row properly. */
+#app-gameshow .join-row input[type=password] {
   flex: 1;
+  margin-bottom: 0;
+  text-transform: uppercase;
+}
+#app-gameshow .gs-host-password-row input {
+  width: auto;
+}
+#app-gameshow .gs-password-input {
+  width: 100%;
+  margin: 14px 0 8px;
+  text-align: center;
+  letter-spacing: 1px;
 }
 
-#app-gameshow .gs-teams-row {
+#app-gameshow .avatar-builder { margin-bottom: 10px; }
+#app-gameshow .layer-label { color: #4a3d00; }
+
+#app-gameshow .gs-dev-card {
+  margin-top: 16px;
+  opacity: 0.9;
+}
+
+/* ---------- lobby: TV screen ---------- */
+
+#app-gameshow .gs-tv-screen {
+  background: #0c0c0c;
+  border: 10px solid #050505;
+  border-radius: 20px;
+  box-shadow: 0 6px 0 rgba(0,0,0,0.3), inset 0 0 30px rgba(255,255,255,0.03);
+  padding: 20px 16px;
+  margin-bottom: 18px;
+  min-height: 140px;
+}
+
+#app-gameshow .gs-tv-screen-inner {
+  color: #fff;
+  text-align: center;
+}
+
+#app-gameshow .gs-tv-screen-inner .hint {
+  color: #c7c7c7;
+}
+
+#app-gameshow .gs-screen-roomcode {
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: #ffd400;
+  margin-bottom: 6px;
+}
+
+/* ---------- lobby: floor (podiums + host) ---------- */
+
+#app-gameshow .gs-floor {
   display: flex;
-  gap: 12px;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
 }
 
-#app-gameshow .gs-team-card {
-  flex: 1;
-  min-width: 220px;
+#app-gameshow .gs-team-column {
+  display: flex;
+  gap: 8px;
 }
 
-#app-gameshow .gs-chip-list {
+#app-gameshow .gs-podium {
+  width: 76px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-#app-gameshow .gs-chip {
-  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  background: rgba(0,0,0,0.06);
-  border-radius: 8px;
+  gap: 2px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: default;
+  font-family: inherit;
 }
 
-#app-gameshow .gs-chip-dot {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 800;
-  font-size: 0.8rem;
-  flex-shrink: 0;
+#app-gameshow .gs-podium.empty {
+  cursor: pointer;
 }
 
-#app-gameshow .gs-chip-name {
-  font-weight: 600;
+#app-gameshow .gs-podium-avatar {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  margin-bottom: -6px;
 }
+#app-gameshow .gs-podium-avatar img { image-rendering: pixelated; }
 
-#app-gameshow .gs-role-btn {
+#app-gameshow .gs-podium-block {
   width: 100%;
+  height: 46px;
+  border-radius: 8px 8px 4px 4px;
+  border: 2px solid rgba(0,0,0,0.35);
+}
+#app-gameshow .gs-podium-block.teamA { background: #457b9d; }
+#app-gameshow .gs-podium-block.teamB { background: #e63946; }
+
+#app-gameshow .gs-podium.empty .gs-podium-block {
+  border-style: dashed;
+  background: rgba(0,0,0,0.06);
 }
 
-#app-gameshow .gs-seat-grid {
+#app-gameshow .gs-podium-plus {
+  margin-top: -32px;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #4a3d00;
+  pointer-events: none;
+}
+
+#app-gameshow .gs-podium-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #17140a;
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#app-gameshow .gs-podium.mine .gs-podium-block {
+  box-shadow: 0 0 0 3px #17140a;
+}
+
+#app-gameshow .gs-host-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 110px;
+  padding-bottom: 4px;
+}
+
+#app-gameshow .gs-host-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #17140a;
+  background: #fff9e0;
+  border: 1px solid rgba(0,0,0,0.25);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+#app-gameshow .gs-host-slot .gs-podium-avatar {
+  margin-bottom: 0;
+}
+
+#app-gameshow .gs-host-password-row {
+  margin-top: 6px;
+  max-width: 220px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---------- lobby: spectator seats ---------- */
+
+#app-gameshow .gs-spectator-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -184,13 +241,14 @@ body:has(#app-gameshow) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 10px 4px;
+  gap: 2px;
+  padding: 6px 2px 8px;
   border-radius: 10px;
   border: 1px dashed rgba(0,0,0,0.3);
   background: rgba(0,0,0,0.04);
   cursor: pointer;
-  min-height: 64px;
+  min-height: 70px;
+  font-family: inherit;
 }
 
 #app-gameshow .gs-seat.occupied {
@@ -204,33 +262,73 @@ body:has(#app-gameshow) {
   border-width: 2px;
 }
 
+#app-gameshow .gs-seat-avatar {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
 #app-gameshow .gs-seat-num {
   font-weight: 700;
   color: #4a3d00;
 }
 
 #app-gameshow .gs-seat-name {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 600;
   color: #17140a;
   text-align: center;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#app-gameshow .gs-clap-area {
+  margin-bottom: 14px;
 }
 
 #app-gameshow .gs-clap-toast {
   font-weight: 700;
 }
 
-/* ---------- naming ---------- */
-
-#app-gameshow .gs-name-submit-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
+#app-gameshow .gs-leave-wrap {
+  margin-top: 6px;
 }
 
-#app-gameshow .gs-name-submit-row .gs-password-input {
-  margin: 0;
+#app-gameshow .gs-leave-btn {
+  padding: 6px 16px;
+  font-size: 0.8rem;
+}
+
+/* ---------- naming (rendered inside the TV screen) ---------- */
+
+#app-gameshow .gs-naming-cols {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  text-align: left;
+}
+
+#app-gameshow .gs-team-card {
   flex: 1;
+  min-width: 220px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 12px;
+  padding: 14px;
+  color: #fff;
+}
+
+#app-gameshow .gs-team-card .gs-section-title { color: #fff; }
+
+#app-gameshow .gs-team-card.gs-hidden-col {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+#app-gameshow .gs-name-submit-row {
+  margin-bottom: 10px;
 }
 
 #app-gameshow .gs-candidate-list {
@@ -245,31 +343,64 @@ body:has(#app-gameshow) {
   gap: 8px;
   padding: 8px 10px;
   border-radius: 8px;
-  background: rgba(0,0,0,0.06);
+  background: rgba(255,255,255,0.08);
   flex-wrap: wrap;
 }
 
 #app-gameshow .gs-candidate-row.voted {
-  background: rgba(28,122,46,0.18);
-  border: 1px solid rgba(28,122,46,0.4);
+  background: rgba(76,175,80,0.25);
+  border: 1px solid rgba(76,175,80,0.5);
 }
 
 #app-gameshow .gs-candidate-text {
   flex: 1;
   font-weight: 600;
 }
+#app-gameshow .gs-candidate-text .hint { color: #cfcfcf; }
 
 #app-gameshow .gs-candidate-votes {
   font-size: 0.8rem;
-  color: #4a3d00;
+  color: #d8d8d8;
 }
 
-@media (max-width: 480px) {
-  #app-gameshow .gs-teams-row { flex-direction: column; }
-  #app-gameshow .gs-seat-grid { grid-template-columns: repeat(3, 1fr); }
+/* ---------- ready (rendered inside the TV screen) ---------- */
+
+#app-gameshow .gs-ready-team {
+  margin-bottom: 18px;
 }
 
-/* ---------- speed round ---------- */
+#app-gameshow .gs-ready-label {
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+}
+#app-gameshow .gs-ready-label strong { color: #ffd400; }
+
+#app-gameshow .gs-avatar-row {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+#app-gameshow .gs-mini-avatar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+#app-gameshow .gs-mini-avatar {
+  position: relative;
+  width: 56px;
+  height: 56px;
+}
+
+#app-gameshow .gs-mini-avatar-wrap span {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* ---------- speed round (unchanged from earlier pass) ---------- */
 
 #app-gameshow .gs-speed-card {
   padding-top: 16px;
@@ -311,8 +442,6 @@ body:has(#app-gameshow) {
   color: #4a3d00;
 }
 
-/* The character-to-identify. Big, centered, sitting on a slightly darker
-   yellow card so the picture itself pops. */
 #app-gameshow .gs-target-wrap {
   display: flex;
   justify-content: center;
@@ -413,13 +542,8 @@ body:has(#app-gameshow) {
   to { opacity: 1; transform: translateY(0); }
 }
 
-#app-gameshow .gs-feed-row.ok {
-  border-left: 3px solid #1c7a2e;
-}
-
-#app-gameshow .gs-feed-row.bad {
-  border-left: 3px solid #c81d3d;
-}
+#app-gameshow .gs-feed-row.ok { border-left: 3px solid #1c7a2e; }
+#app-gameshow .gs-feed-row.bad { border-left: 3px solid #c81d3d; }
 
 #app-gameshow .gs-feed-row img {
   width: 28px;
@@ -455,4 +579,11 @@ body:has(#app-gameshow) {
   #app-gameshow { padding: 14px 10px 50px; }
   #app-gameshow .gs-speed-timer { font-size: 1.5rem; }
   #app-gameshow .gs-target-frame { width: 160px; height: 160px; }
+  #app-gameshow .gs-podium { width: 60px; }
+  #app-gameshow .gs-podium-avatar { width: 48px; height: 48px; }
+  #app-gameshow .gs-podium-name { max-width: 60px; font-size: 0.65rem; }
+  #app-gameshow .gs-spectator-row { grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  #app-gameshow .gs-seat { min-height: 58px; padding: 4px 2px 6px; }
+  #app-gameshow .gs-seat-avatar { width: 30px; height: 30px; }
+  #app-gameshow .gs-naming-cols { flex-direction: column; }
 }
