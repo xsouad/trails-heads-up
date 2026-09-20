@@ -62,6 +62,7 @@ function joinRoom(code, socketId, name, avatar, clientId) {
     clientId,
     role: 'unassigned',
     seat: null,
+    slot: null, // which of the 3 podium slots on their team (0/1/2)
     ready: false
   });
   return { room };
@@ -79,6 +80,12 @@ function takenSeats(room) {
   return seats;
 }
 
+function takenSlots(room, team) {
+  const slots = new Set();
+  room.players.forEach(p => { if (p.role === team && p.slot != null) slots.add(p.slot); });
+  return slots;
+}
+
 function clearHostIfSelf(room, socketId) {
   if (room.hostId === socketId) { room.hostId = null; room.hostClientId = null; }
 }
@@ -92,6 +99,7 @@ function setRole(room, socketId, role, opts = {}) {
     if (room.hostId && room.hostId !== socketId) return { error: 'This room already has a host.' };
     player.role = 'host';
     player.seat = null;
+    player.slot = null;
     room.hostId = socketId;
     room.hostClientId = player.clientId;
     return { room };
@@ -101,12 +109,27 @@ function setRole(room, socketId, role, opts = {}) {
     if (player.role !== role && teamCount(room, role) >= MAX_TEAM_SIZE) {
       return { error: `That team is already full (${MAX_TEAM_SIZE}/${MAX_TEAM_SIZE}).` };
     }
+    // Which specific podium (0/1/2) -- picking a taken one (that isn't
+    // already yours) is rejected rather than silently bumping someone.
+    const taken = takenSlots(room, role);
+    let slot = opts.slot;
+    if (slot != null) {
+      if (slot < 0 || slot > 2) return { error: 'Invalid podium.' };
+      if (taken.has(slot) && !(player.role === role && player.slot === slot)) {
+        return { error: 'Someone is already standing there.' };
+      }
+    } else {
+      slot = null;
+      for (let i = 0; i < MAX_TEAM_SIZE; i++) { if (!taken.has(i)) { slot = i; break; } }
+      if (slot == null) return { error: `That team is already full (${MAX_TEAM_SIZE}/${MAX_TEAM_SIZE}).` };
+    }
     clearHostIfSelf(room, socketId);
     // Switching teams (or joining fresh) always clears readiness -- a
     // stale "ready" from a different seat shouldn't carry over.
     if (player.role !== role) player.ready = false;
     player.role = role;
     player.seat = null;
+    player.slot = slot;
     return { room };
   }
 
@@ -124,6 +147,7 @@ function setRole(room, socketId, role, opts = {}) {
     clearHostIfSelf(room, socketId);
     player.role = 'spectator';
     player.seat = seat;
+    player.slot = null;
     player.ready = false;
     return { room };
   }
@@ -132,6 +156,7 @@ function setRole(room, socketId, role, opts = {}) {
     clearHostIfSelf(room, socketId);
     player.role = 'unassigned';
     player.seat = null;
+    player.slot = null;
     player.ready = false;
     return { room };
   }
@@ -238,8 +263,20 @@ function tallyTeamName(room, team) {
   t.locked = true;
 }
 
+function everyoneVoted(room, team) {
+  const t = room[team];
+  if (!t.candidates.length) return false; // nothing to vote on yet
+  for (const p of room.players.values()) {
+    if (p.role === team && !(p.id in t.votes)) return false;
+  }
+  return true;
+}
+
 function finishNamingPhase(room, socketId) {
   if (room.hostId !== socketId) return { error: 'Only the host can lock in team names.' };
+  if (!everyoneVoted(room, 'teamA') || !everyoneVoted(room, 'teamB')) {
+    return { error: 'Everyone on both teams needs to vote first.' };
+  }
   tallyTeamName(room, 'teamA');
   tallyTeamName(room, 'teamB');
   room.phase = 'ready';
@@ -262,6 +299,6 @@ function serialize(room) {
 module.exports = {
   createRoom, getRoom, joinRoom, findRoomBySocket, setRole, removeBySocket,
   setAvatar, toggleReady, allCompetitorsReady,
-  startNamingPhase, submitNameCandidate, voteNameCandidate, finishNamingPhase,
+  startNamingPhase, submitNameCandidate, voteNameCandidate, finishNamingPhase, everyoneVoted,
   serialize, MAX_TEAM_SIZE, MAX_SPECTATOR_SEATS
 };

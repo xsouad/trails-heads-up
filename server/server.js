@@ -372,10 +372,10 @@ io.on('connection', (socket) => {
     gsNotifyRoom(result.room, `${name || 'Player'} joined.`);
   });
 
-  socket.on('gsSetRole', ({ role, password, seat }, cb) => {
+  socket.on('gsSetRole', ({ role, password, seat, slot }, cb) => {
     const room = gsRooms.findRoomBySocket(socket.id);
     if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
-    const result = gsRooms.setRole(room, socket.id, role, { password, seat });
+    const result = gsRooms.setRole(room, socket.id, role, { password, seat, slot });
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     cb && cb({ ok: true });
     broadcastGsRoom(room);

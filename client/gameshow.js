@@ -55,8 +55,27 @@ let state = {
   avatarConfirmed: false,
   showHostModal: false,
   hostAuthError: '',
+  showHowToPlay: false,
   speed: null // set by startSpeedRound() -- the standalone test harness
 };
+
+// ---------- speed round leaderboard (client-side, this browser only) ----------
+const GS_LEADERBOARD_KEY = 'trailsGameshow_speedLeaderboard';
+function loadLeaderboard() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(GS_LEADERBOARD_KEY));
+    if (Array.isArray(parsed)) return parsed;
+  } catch (e) { /* ignore malformed/missing data */ }
+  return [];
+}
+function saveScoreToLeaderboard(name, points, correctCount) {
+  const board = loadLeaderboard();
+  board.push({ name: (name || 'Player').slice(0, 24), points, correctCount, date: Date.now() });
+  board.sort((a, b) => (b.points - a.points) || (b.correctCount - a.correctCount));
+  const trimmed = board.slice(0, 10);
+  try { localStorage.setItem(GS_LEADERBOARD_KEY, JSON.stringify(trimmed)); } catch (e) { /* storage unavailable -- skip */ }
+  return trimmed;
+}
 
 const gsRoot = document.getElementById('gsRoot');
 
@@ -147,7 +166,7 @@ function renderLanding() {
   return `
     <div class="card center">
       <h2 class="gs-gate-title">Gameshow</h2>
-      <p class="hint">Still very much a work in progress -- pick a name, then create or join a room. You'll build your avatar right after.</p>
+      <a href="#" id="gsHowToPlayBtn" class="how-to-play-link">How to Play</a>
 
       <input type="text" id="gsNameInput" class="gs-password-input" placeholder="Your name" maxlength="24" value="${state.myName.replace(/"/g, '&quot;')}" autocomplete="off" />
 
@@ -167,16 +186,31 @@ function renderLanding() {
       <p class="hint">Dev-only, temporary:</p>
       <button type="button" class="secondary" id="gsDevTestBtn">🧪 Test: Speed Round</button>
     </div>
+
+    ${renderHowToPlayModal()}
+  `;
+}
+
+function renderHowToPlayModal() {
+  return `
+    <div class="zoom-overlay ${state.showHowToPlay ? 'active' : ''}" id="gsHowToPlayModal">
+      <div class="zoom-card" style="max-width:420px; text-align:left;">
+        <h3 style="margin-top:0; text-align:center;">Gameshow (WIP)</h3>
+        <p>Create or join a room, then build your avatar. Pick Host (needs the code), Team A, Team B, or a spectator seat.</p>
+        <p>Once both teams have people in and everyone's hit Ready, the host starts a quick minigame where each team names itself and votes on the winner.</p>
+        <p>The actual quiz board (quotes, trivia, screenshots) is still being built -- this is just the lobby so far.</p>
+        <button type="button" class="close-btn" id="gsCloseHowToPlayBtn" style="margin-top:10px; display:block; margin-left:auto; margin-right:auto;">Close</button>
+      </div>
+    </div>
   `;
 }
 
 // ---------- avatar setup (shown once, right after joining/creating a room) ----------
 function renderAvatarSetup() {
-  const room = state.room;
   return `
     <div class="card center">
       <h2 class="gs-gate-title">Build Your Avatar</h2>
-      <p class="hint">Room ${room ? room.code : ''} -- this is what everyone will see standing at your podium or seat.</p>
+      <p class="gs-avatar-setup-name">${state.myName}</p>
 
       <div class="avatar-builder">
         <div class="avatar-stage" id="avatarStage"></div>
@@ -208,31 +242,30 @@ function renderAvatarSetup() {
 function renderPodium(teamKey) {
   const room = state.room;
   const me = myPlayer();
-  const members = room.players.filter(p => p.role === teamKey);
-  const slots = [];
-  for (let i = 0; i < room.maxTeamSize; i++) {
-    const occ = members[i];
+  const members = {};
+  room.players.forEach(p => { if (p.role === teamKey && p.slot != null) members[p.slot] = p; });
+  const slotOrder = teamKey === 'teamA' ? [0, 1, 2] : [0, 1, 2];
+  const slots = slotOrder.map(slotIdx => {
+    const occ = members[slotIdx];
     if (occ) {
       const mine = me && occ.id === me.id;
-      slots.push(`
-        <div class="gs-podium occupied ${mine ? 'mine' : ''}">
+      return `
+        <div class="gs-podium occupied ${mine ? 'mine' : ''} ${occ.ready ? 'is-ready' : ''}">
           <div class="gs-podium-avatar-wrap">
             <div class="gs-podium-avatar" data-avatar-for="${occ.id}"></div>
-            ${occ.ready ? '<span class="gs-ready-badge">✅</span>' : ''}
           </div>
           <div class="gs-podium-block ${teamKey}"></div>
           <div class="gs-podium-name">${occ.name}</div>
         </div>
-      `);
-    } else {
-      slots.push(`
-        <button type="button" class="gs-podium empty" data-join-team="${teamKey}">
-          <div class="gs-podium-block ${teamKey}"></div>
-          <span class="gs-podium-plus">+</span>
-        </button>
-      `);
+      `;
     }
-  }
+    return `
+      <button type="button" class="gs-podium empty" data-join-team="${teamKey}" data-join-slot="${slotIdx}">
+        <div class="gs-podium-block ${teamKey}"></div>
+        <span class="gs-podium-plus">+</span>
+      </button>
+    `;
+  });
   return `<div class="gs-team-column ${teamKey}">${slots.join('')}</div>`;
 }
 
@@ -357,6 +390,13 @@ function renderNameColumn(team, label) {
   `;
 }
 
+function everyoneVotedClient(room, team) {
+  const t = room[team];
+  if (!t.candidates.length) return false;
+  const members = room.players.filter(p => p.role === team);
+  return members.every(p => Object.prototype.hasOwnProperty.call(t.votes, p.id));
+}
+
 function renderScreenNaming() {
   const room = state.room;
   const me = myPlayer();
@@ -371,11 +411,16 @@ function renderScreenNaming() {
     return `<div class="gs-team-card gs-hidden-col"><p class="gs-section-title">${label}</p><p class="hint">Only ${label} can see their own suggestions.</p></div>`;
   }).join('');
 
+  const readyToLock = everyoneVotedClient(room, 'teamA') && everyoneVotedClient(room, 'teamB');
+
   return `
     <h3 class="gs-screen-title">Recommend a name for your Team</h3>
     <div class="gs-naming-cols">${cols}</div>
     ${iAmHost
-      ? `<div class="center"><button type="button" class="primary" id="gsFinishNamingBtn">Lock In Team Names</button></div>`
+      ? `<div class="center">
+          <button type="button" class="primary" id="gsFinishNamingBtn" ${readyToLock ? '' : 'disabled'}>Lock In Team Names</button>
+          ${readyToLock ? '' : '<p class="hint">Waiting for everyone on both teams to vote.</p>'}
+        </div>`
       : `<p class="hint center-text">Waiting for the host to lock in the names...</p>`}
   `;
 }
@@ -402,6 +447,7 @@ function renderScreenReady() {
   return `
     ${renderTeamReadyRow('teamA')}
     ${renderTeamReadyRow('teamB')}
+    <p class="gs-screen-status">Teams are locked in. The actual quiz board isn't built yet -- that's the next piece coming.</p>
   `;
 }
 
@@ -459,6 +505,16 @@ function renderStage() {
 const SPEED_ROUND_SECONDS = 60;
 const NAMES_PER_POINT = 5;
 
+function renderLeaderboard() {
+  const board = loadLeaderboard();
+  if (!board.length) return '<p class="hint">No scores yet -- be the first!</p>';
+  return `
+    <ol class="gs-leaderboard-list">
+      ${board.map(entry => `<li><span class="gs-leaderboard-name">${entry.name}</span><span class="gs-leaderboard-points">${entry.points} pt${entry.points === 1 ? '' : 's'}</span></li>`).join('')}
+    </ol>
+  `;
+}
+
 function renderSpeedIntro() {
   return `
     <div class="card center">
@@ -470,6 +526,10 @@ function renderSpeedIntro() {
       </p>
       <button type="button" class="primary" id="gsStartSpeedBtn">Start (${SPEED_ROUND_SECONDS}s)</button>
       <div style="margin-top:10px;"><button type="button" class="secondary" id="gsBackFromIntroBtn">Back</button></div>
+    </div>
+    <div class="card center">
+      <p class="gs-section-title">Leaderboard (this browser)</p>
+      ${renderLeaderboard()}
     </div>
   `;
 }
@@ -527,8 +587,18 @@ function renderSpeedResults() {
       <h2 class="gs-gate-title">Time's up!</h2>
       <p class="gs-result-points">${points} point${points === 1 ? '' : 's'}</p>
       <p class="hint">${correctCount} correct &middot; ${wrongCount} wrong &middot; ${s.feed.length} total guesses</p>
-      <button type="button" class="primary" id="gsPlayAgainBtn">Play Again</button>
+      ${s.savedToLeaderboard ? `<p class="gs-screen-status" style="color:#1c7a2e;">Saved to the leaderboard!</p>` : `
+        <div class="join-row gs-name-submit-row" style="max-width:320px; margin:12px auto 0;">
+          <input type="text" id="gsLeaderboardNameInput" placeholder="Your name" maxlength="24" value="${state.myName.replace(/"/g, '&quot;')}" />
+          <button type="button" class="secondary" id="gsSaveScoreBtn">Save Score</button>
+        </div>
+      `}
+      <button type="button" class="primary" id="gsPlayAgainBtn" style="margin-top:14px;">Play Again</button>
       <div style="margin-top:10px;"><button type="button" class="secondary" id="gsBackToHubBtn">Back</button></div>
+    </div>
+    <div class="card center">
+      <p class="gs-section-title">Leaderboard (this browser)</p>
+      ${renderLeaderboard()}
     </div>
   `;
 }
@@ -586,6 +656,11 @@ function attachHandlers() {
   const devBtn = document.getElementById('gsDevTestBtn');
   if (devBtn) devBtn.addEventListener('click', () => { state.screen = 'speedIntro'; render(); });
 
+  const howToPlayBtn = document.getElementById('gsHowToPlayBtn');
+  if (howToPlayBtn) howToPlayBtn.addEventListener('click', (e) => { e.preventDefault(); state.showHowToPlay = true; render(); });
+  const closeHowToPlayBtn = document.getElementById('gsCloseHowToPlayBtn');
+  if (closeHowToPlayBtn) closeHowToPlayBtn.addEventListener('click', () => { state.showHowToPlay = false; render(); });
+
   // avatar setup (shown once, right after joining/creating a room)
   const confirmAvatarBtn = document.getElementById('gsConfirmAvatarBtn');
   if (confirmAvatarBtn) confirmAvatarBtn.addEventListener('click', () => {
@@ -638,10 +713,11 @@ function attachHandlers() {
   const hostPwInput = document.getElementById('gsHostPasswordInput');
   if (hostPwInput) hostPwInput.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('gsBecomeHostBtn').click(); });
 
-  // stage: podiums (join team)
+  // stage: podiums (join team at the specific slot clicked)
   document.querySelectorAll('[data-join-team]').forEach(btn => {
     btn.addEventListener('click', () => {
-      socket.emit('gsSetRole', { role: btn.dataset.joinTeam }, (res) => {
+      const slot = parseInt(btn.dataset.joinSlot, 10);
+      socket.emit('gsSetRole', { role: btn.dataset.joinTeam, slot }, (res) => {
         if (!res.ok) showGsNotice(res.error || "Couldn't join that team.");
       });
     });
@@ -710,6 +786,19 @@ function attachHandlers() {
 
   const quitBtn = document.getElementById('gsQuitSpeedBtn');
   if (quitBtn) quitBtn.addEventListener('click', endSpeedRound);
+
+  const saveScoreBtn = document.getElementById('gsSaveScoreBtn');
+  if (saveScoreBtn) saveScoreBtn.addEventListener('click', () => {
+    const nameInput = document.getElementById('gsLeaderboardNameInput');
+    const name = nameInput ? nameInput.value.trim() : '';
+    if (!name) { showGsNotice('Enter a name first.'); return; }
+    const s = state.speed;
+    const correctCount = s.feed.filter(f => f.ok).length;
+    const points = Math.floor(correctCount / NAMES_PER_POINT);
+    saveScoreToLeaderboard(name, points, correctCount);
+    s.savedToLeaderboard = true;
+    render();
+  });
 
   const playAgainBtn = document.getElementById('gsPlayAgainBtn');
   if (playAgainBtn) playAgainBtn.addEventListener('click', () => { state.screen = 'speedIntro'; render(); });
