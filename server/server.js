@@ -463,10 +463,37 @@ io.on('connection', (socket) => {
     broadcastGsRoom(room);
   });
 
+  socket.on('gsReplayGame', (_, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsBoard.replayGame(room, socket.id);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  socket.on('gsRerollCell', ({ cellId }, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsBoard.rerollCell(room, socket.id, cellId);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
   socket.on('gsOpenCell', ({ cellId }, cb) => {
     const room = gsRooms.findRoomBySocket(socket.id);
     if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
-    const result = gsBoard.openCell(room, socket.id, cellId);
+    const result = gsBoard.openCell(room, socket.id, cellId, () => broadcastGsRoom(room));
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  socket.on('gsTriggerBonus', ({ team }, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsBoard.triggerBonus(room, socket.id, team, () => broadcastGsRoom(room));
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     cb && cb({ ok: true });
     broadcastGsRoom(room);
@@ -490,10 +517,10 @@ io.on('connection', (socket) => {
     broadcastGsRoom(room);
   });
 
-  socket.on('gsJudgeAnswer', ({ team, correct }, cb) => {
+  socket.on('gsJudgeAnswer', ({ correct }, cb) => {
     const room = gsRooms.findRoomBySocket(socket.id);
     if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
-    const result = gsBoard.judgeAnswer(room, socket.id, team, correct);
+    const result = gsBoard.judgeAnswer(room, socket.id, correct);
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     cb && cb({ ok: true });
     broadcastGsRoom(room);
@@ -542,6 +569,13 @@ io.on('connection', (socket) => {
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     cb && cb({ ok: true });
     broadcastGsRoom(room);
+    // Role-aware toast: the team that took the hint sees their own framing,
+    // everyone else (host, spectators, the other team) sees the team name.
+    const teamLabel = (room[team] && room[team].name) || (team === 'teamA' ? 'Team A' : 'Team B');
+    room.players.forEach((p, socketId) => {
+      const text = p.role === team ? "You've taken a HINT!" : `TEAM ${teamLabel} has taken a hint.`;
+      io.to(socketId).emit('gsNotice', { text });
+    });
   });
 
   socket.on('gsUsePhoneAFriend', ({ team, spectatorId }, cb) => {
@@ -557,6 +591,27 @@ io.on('connection', (socket) => {
     const room = gsRooms.findRoomBySocket(socket.id);
     if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
     const result = gsBoard.startComeback(room, socket.id, team, playerId);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  socket.on('gsBeginComeback', (_, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsBoard.beginComeback(room, socket.id);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  // Lightweight progress relay so the host/spectators/other team can watch
+  // the attempt live on the shared TV screen instead of only the attempting
+  // player's own view.
+  socket.on('gsComebackLive', (live, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsBoard.updateComebackLive(room, socket.id, live || {});
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     cb && cb({ ok: true });
     broadcastGsRoom(room);

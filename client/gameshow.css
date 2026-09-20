@@ -94,6 +94,27 @@ body:has(#app-gameshow) {
   letter-spacing: 1px;
 }
 
+/* Name + Continue on one row on the "Build Your Character" screen, instead
+   of the input taking its own full-width line with a big gap before the
+   button underneath. */
+#app-gameshow .gs-name-continue-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+#app-gameshow .gs-name-continue-row .gs-password-input {
+  width: auto;
+  flex: 1;
+  margin: 0;
+  text-align: left;
+  letter-spacing: normal;
+}
+#app-gameshow .gs-name-continue-row button {
+  flex-shrink: 0;
+  margin: 0;
+}
+
 #app-gameshow .avatar-builder { margin-bottom: 10px; }
 #app-gameshow .layer-label { color: #4a3d00; }
 
@@ -112,6 +133,18 @@ body:has(#app-gameshow) {
   padding: 40px 24px;
   margin-bottom: 36px;
   min-height: 260px;
+}
+
+/* Once the actual game starts, the screen holds one fixed size no matter
+   which view is showing (board grid, a question, the comeback round) --
+   content that runs long scrolls inside instead of resizing the screen and
+   shoving the podiums/seats below it around. */
+#app-gameshow .gs-tv-screen.in-game {
+  height: 460px;
+  overflow-y: auto;
+}
+#app-gameshow .gs-tv-screen.in-game .gs-tv-screen-inner {
+  min-height: 100%;
 }
 
 #app-gameshow .gs-tv-screen-inner {
@@ -163,11 +196,13 @@ body:has(#app-gameshow) {
    its own podiums internally instead. */
 #app-gameshow .gs-floor {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: auto auto auto;
+  justify-content: center;
   align-items: end;
   gap: 10px;
   margin-top: 28px;
   margin-bottom: 10px;
+  width: 100%;
 }
 
 #app-gameshow .gs-team-column {
@@ -329,6 +364,7 @@ body:has(#app-gameshow) {
   grid-auto-columns: minmax(58px, 1fr);
   gap: 8px;
   margin: 34px auto 12px;
+  width: fit-content;
   max-width: 620px;
   overflow-x: auto;
   padding-bottom: 2px;
@@ -703,6 +739,7 @@ body:has(#app-gameshow) {
    as a small island in the middle of the page. */
 @media (min-width: 900px) {
   #app-gameshow .gs-tv-screen { padding: 56px 40px; min-height: 320px; }
+  #app-gameshow .gs-tv-screen.in-game { height: 520px; }
   #app-gameshow .gs-screen-roomcode { font-size: 4rem; letter-spacing: 8px; }
   #app-gameshow .gs-floor { gap: 24px; margin-top: 40px; margin-bottom: 20px; }
   #app-gameshow .gs-team-column { gap: 24px; }
@@ -749,6 +786,12 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-score-block.teamB { background: rgba(230,57,70,0.25); }
 #app-gameshow .gs-score-label { font-size: 0.78rem; font-weight: 700; color: #fff; opacity: 0.85; }
 #app-gameshow .gs-score-value { font-size: 1.8rem; font-weight: 800; color: #fff; }
+#app-gameshow .gs-hint-inline { font-size: 0.75rem; opacity: 0.9; margin-left: 2px; }
+#app-gameshow .gs-hint-mini-btn {
+  margin-top: 2px; font-size: 0.68rem; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1); color: #fff; cursor: pointer;
+}
+#app-gameshow .gs-hint-mini-btn:disabled { opacity: 0.4; cursor: default; }
 
 #app-gameshow .gs-board-grid {
   width: 100%; border-collapse: separate; border-spacing: 6px; margin: 10px 0;
@@ -763,8 +806,16 @@ body:has(#app-gameshow) {
   border: 2px solid #0c1f3d;
 }
 #app-gameshow .gs-cell.used { background: rgba(255,255,255,0.06); color: transparent; border-color: rgba(255,255,255,0.08); }
-#app-gameshow .gs-cell.clickable { cursor: pointer; transition: transform 0.12s ease, background 0.12s ease; }
-#app-gameshow .gs-cell.clickable:hover { background: #24508f; transform: scale(1.03); }
+#app-gameshow .gs-cell.clickable { cursor: pointer; }
+#app-gameshow .gs-cell-value-btn { cursor: pointer; display: inline-block; transition: transform 0.12s ease; }
+#app-gameshow .gs-cell.clickable:hover .gs-cell-value-btn { transform: scale(1.08); }
+#app-gameshow .gs-reroll-btn {
+  display: block; margin: 4px auto 0; font-size: 0.7rem; background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; color: #ffcc00; cursor: pointer; padding: 1px 6px;
+}
+#app-gameshow .gs-board-host-controls {
+  display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+}
 
 #app-gameshow .gs-active-cell {
   background: rgba(0,0,0,0.35); border-radius: 12px; padding: 18px; color: #fff;
@@ -773,6 +824,19 @@ body:has(#app-gameshow) {
   text-align: center; color: #ffcc00; font-weight: 800; font-size: 1rem; margin: 0 0 10px;
   text-transform: uppercase; letter-spacing: 0.04em;
 }
+#app-gameshow .gs-turn-banner {
+  text-align: center; font-weight: 800; font-size: 1.05rem; color: #fff;
+  background: rgba(255,255,255,0.1); border-radius: 8px; padding: 6px 10px; margin: 0 0 10px;
+}
+#app-gameshow .gs-turn-banner #gsTurnTimer { color: #ffcc00; }
+#app-gameshow .gs-host-hint {
+  background: rgba(255,204,0,0.14); border: 1px dashed rgba(255,204,0,0.5);
+  border-radius: 8px; padding: 8px 12px; margin: 8px 0; text-align: center;
+}
+#app-gameshow .gs-host-hint-label {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; color: #ffcc00; margin: 0 0 3px;
+}
+#app-gameshow .gs-cell-screenshot.small { max-height: 160px; }
 #app-gameshow .gs-cell-prompt {
   text-align: center; font-size: 1.2rem; font-weight: 600; margin: 0 0 6px; line-height: 1.4;
 }
@@ -813,8 +877,8 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-phone-select { max-width: 130px; font-size: 0.8rem; }
 
 #app-gameshow .gs-comeback-banner {
-  text-align: center; background: rgba(198,29,61,0.18); border: 2px solid #c81d3d;
-  border-radius: 10px; padding: 10px 14px; margin: 10px 0; font-weight: 700;
+  text-align: center; background: rgba(255,204,0,0.14); border: 2px solid #ffcc00;
+  border-radius: 10px; padding: 10px 14px; margin: 10px 0; font-weight: 700; color: #fff;
 }
 #app-gameshow .gs-comeback-trigger {
   text-align: center; background: rgba(0,0,0,0.06); border-radius: 10px;
@@ -822,8 +886,13 @@ body:has(#app-gameshow) {
 }
 #app-gameshow .gs-comeback-trigger select { margin: 0 8px; }
 #app-gameshow .gs-comeback-title {
-  text-align: center; font-weight: 800; color: #c81d3d; margin: 0 0 8px; font-size: 1.1rem;
+  text-align: center; font-weight: 800; color: #ffcc00; margin: 0 0 8px; font-size: 1.1rem;
 }
+#app-gameshow .gs-comeback-live-img {
+  display: block; max-width: 140px; max-height: 140px; margin: 8px auto; border-radius: 8px;
+  border: 2px solid rgba(255,204,0,0.5);
+}
+#app-gameshow .gs-comeback-live-score { color: #ffcc00; font-weight: 800; }
 
 @media (max-width: 480px) {
   #app-gameshow .gs-board-grid { border-spacing: 4px; }
