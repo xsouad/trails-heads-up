@@ -176,6 +176,20 @@ function setAvatar(room, socketId, avatarObj) {
   return { room };
 }
 
+// Name + avatar are picked together on the "Build Your Character" screen,
+// right after joining/creating a room (not on the landing screen), so they
+// get saved together too.
+function setProfile(room, socketId, name, avatarObj) {
+  const player = room.players.get(socketId);
+  if (!player) return { error: 'Not in this room.' };
+  const clean = (name || '').trim().slice(0, 24);
+  if (!clean) return { error: 'Enter a name first.' };
+  player.name = clean;
+  const avatarResult = setAvatar(room, socketId, avatarObj);
+  if (avatarResult.error) return avatarResult;
+  return { room };
+}
+
 function toggleReady(room, socketId) {
   const player = room.players.get(socketId);
   if (!player) return { error: 'Not in this room.' };
@@ -298,7 +312,7 @@ function serialize(room) {
 
 module.exports = {
   createRoom, getRoom, joinRoom, findRoomBySocket, setRole, removeBySocket,
-  setAvatar, toggleReady, allCompetitorsReady,
+  setAvatar, setProfile, toggleReady, allCompetitorsReady,
   startNamingPhase, submitNameCandidate, voteNameCandidate, finishNamingPhase, everyoneVoted,
   serialize, MAX_TEAM_SIZE, MAX_SPECTATOR_SEATS
 };
