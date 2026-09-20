@@ -139,6 +139,18 @@ function setRole(room, socketId, role, opts = {}) {
   return { error: 'Unknown role.' };
 }
 
+function setAvatar(room, socketId, avatarObj) {
+  const player = room.players.get(socketId);
+  if (!player) return { error: 'Not in this room.' };
+  if (!avatarObj || typeof avatarObj !== 'object') return { error: 'Invalid avatar.' };
+  player.avatar = {
+    base: avatarObj.base || 1,
+    face: avatarObj.face || 1,
+    hat: avatarObj.hat || 1
+  };
+  return { room };
+}
+
 function toggleReady(room, socketId) {
   const player = room.players.get(socketId);
   if (!player) return { error: 'Not in this room.' };
@@ -249,7 +261,7 @@ function serialize(room) {
 
 module.exports = {
   createRoom, getRoom, joinRoom, findRoomBySocket, setRole, removeBySocket,
-  toggleReady, allCompetitorsReady,
+  setAvatar, toggleReady, allCompetitorsReady,
   startNamingPhase, submitNameCandidate, voteNameCandidate, finishNamingPhase,
   serialize, MAX_TEAM_SIZE, MAX_SPECTATOR_SEATS
 };

@@ -47,12 +47,13 @@ function gsShuffle(arr) {
 }
 
 let state = {
-  screen: 'landing', // landing, stage (lobby/naming/ready all live on the stage), speedIntro, speedPlaying, speedResults
+  screen: 'landing', // landing, avatarSetup, stage (lobby/naming/ready all live on the stage), speedIntro, speedPlaying, speedResults
   myName: '',
   joinCodeInput: '',
   error: '',
   room: null, // last gsRoomState payload from the server
-  showHostPasswordBox: false,
+  avatarConfirmed: false,
+  showHostModal: false,
   hostAuthError: '',
   speed: null // set by startSpeedRound() -- the standalone test harness
 };
@@ -83,7 +84,11 @@ socket.on('gsNotice', ({ text }) => showGsNotice(text));
 socket.on('gsClap', ({ name }) => showGsClapToast(name));
 socket.on('gsRoomState', (room) => {
   state.room = room;
-  if (state.screen === 'landing') state.screen = 'stage';
+  // Avatar customization happens AFTER you're in a room, not before --
+  // first time we land here this session, detour through the builder.
+  if (state.screen === 'landing') {
+    state.screen = state.avatarConfirmed ? 'stage' : 'avatarSetup';
+  }
   render();
 });
 
@@ -115,6 +120,7 @@ function playError() { gsBeep({ freq: 220, endFreq: 110, duration: 0.28, type: '
 function render() {
   let html = '';
   if (state.screen === 'landing') html = renderLanding();
+  else if (state.screen === 'avatarSetup') html = renderAvatarSetup();
   else if (state.screen === 'stage') html = renderStage();
   else if (state.screen === 'speedIntro') html = renderSpeedIntro();
   else if (state.screen === 'speedPlaying') html = renderSpeedPlaying();
@@ -141,7 +147,36 @@ function renderLanding() {
   return `
     <div class="card center">
       <h2 class="gs-gate-title">Gameshow</h2>
-      <p class="hint">Still very much a work in progress -- build your avatar, pick a name, then create or join a room.</p>
+      <p class="hint">Still very much a work in progress -- pick a name, then create or join a room. You'll build your avatar right after.</p>
+
+      <input type="text" id="gsNameInput" class="gs-password-input" placeholder="Your name" maxlength="24" value="${state.myName.replace(/"/g, '&quot;')}" autocomplete="off" />
+
+      <div class="error-msg">${state.error}</div>
+
+      <button type="button" class="primary" id="gsCreateRoomBtn">Create Room</button>
+
+      <div class="join-row gs-join-row">
+        <input type="text" id="gsJoinCodeInput" placeholder="Room code" maxlength="4" value="${state.joinCodeInput}" autocomplete="off" />
+        <button type="button" class="secondary" id="gsJoinRoomBtn">Join Room</button>
+      </div>
+    </div>
+
+    <div class="card center gs-dev-card">
+      <!-- DEV TEST BUTTON -- remove once the real board is playable. Just a
+           standalone way to try the speed-round minigame with no room. -->
+      <p class="hint">Dev-only, temporary:</p>
+      <button type="button" class="secondary" id="gsDevTestBtn">🧪 Test: Speed Round</button>
+    </div>
+  `;
+}
+
+// ---------- avatar setup (shown once, right after joining/creating a room) ----------
+function renderAvatarSetup() {
+  const room = state.room;
+  return `
+    <div class="card center">
+      <h2 class="gs-gate-title">Build Your Avatar</h2>
+      <p class="hint">Room ${room ? room.code : ''} -- this is what everyone will see standing at your podium or seat.</p>
 
       <div class="avatar-builder">
         <div class="avatar-stage" id="avatarStage"></div>
@@ -163,23 +198,7 @@ function renderLanding() {
         <button type="button" class="dice-btn" id="diceBtn">Randomize</button>
       </div>
 
-      <input type="text" id="gsNameInput" class="gs-password-input" placeholder="Your name" maxlength="24" value="${state.myName.replace(/"/g, '&quot;')}" autocomplete="off" />
-
-      <div class="error-msg">${state.error}</div>
-
-      <button type="button" class="primary" id="gsCreateRoomBtn">Create Room</button>
-
-      <div class="join-row gs-join-row">
-        <input type="text" id="gsJoinCodeInput" placeholder="Room code" maxlength="4" value="${state.joinCodeInput}" autocomplete="off" />
-        <button type="button" class="secondary" id="gsJoinRoomBtn">Join Room</button>
-      </div>
-    </div>
-
-    <div class="card center gs-dev-card">
-      <!-- DEV TEST BUTTON -- remove once the real board is playable. Just a
-           standalone way to try the speed-round minigame with no room. -->
-      <p class="hint">Dev-only, temporary:</p>
-      <button type="button" class="secondary" id="gsDevTestBtn">🧪 Test: Speed Round</button>
+      <button type="button" class="primary" id="gsConfirmAvatarBtn" style="margin-top:12px;">Continue</button>
     </div>
   `;
 }
@@ -234,13 +253,24 @@ function renderHostSlot() {
   return `
     <div class="gs-host-slot empty">
       <div class="gs-host-label">GAMESHOW HOST</div>
-      ${state.showHostPasswordBox ? `
-        <div class="join-row gs-host-password-row">
-          <input type="password" id="gsHostPasswordInput" placeholder="Host code" autocomplete="off" />
-          <button type="button" class="secondary" id="gsBecomeHostBtn">Enter</button>
-        </div>
+      <button type="button" class="secondary" id="gsOpenHostBoxBtn">Become Host</button>
+    </div>
+  `;
+}
+
+// A modal (not inline in the floor) so opening it never reflows/squashes
+// the team columns next to the host slot -- that was the "typing the host
+// code breaks the whole layout" bug.
+function renderHostModal() {
+  return `
+    <div class="zoom-overlay ${state.showHostModal ? 'active' : ''}" id="gsHostModal">
+      <div class="zoom-card">
+        <h3 style="margin-top:0;">Gameshow Host</h3>
+        <input type="password" id="gsHostPasswordInput" class="gs-password-input" placeholder="Host code" autocomplete="off" />
         <div class="error-msg">${state.hostAuthError}</div>
-      ` : `<button type="button" class="secondary" id="gsOpenHostBoxBtn">Become Host</button>`}
+        <button type="button" class="primary" id="gsBecomeHostBtn">Enter</button>
+        <button type="button" class="close-btn" id="gsCancelHostBtn">Cancel</button>
+      </div>
     </div>
   `;
 }
@@ -402,12 +432,6 @@ function renderStage() {
       ${renderPodium('teamB')}
     </div>
 
-    ${iAmCompetitor && room.phase === 'lobby' ? `
-      <div class="center gs-ready-wrap">
-        <button type="button" class="secondary ${me.ready ? 'is-ready' : ''}" id="gsReadyToggleBtn">${me.ready ? '✅ Ready' : 'Ready'}</button>
-      </div>
-    ` : ''}
-
     <div class="gs-spectator-row">
       ${Array.from({ length: room.maxSpectatorSeats }, (_, i) => i + 1).map(renderSeat).join('')}
     </div>
@@ -420,9 +444,14 @@ function renderStage() {
       </div>
     ` : ''}
 
-    <div class="center gs-leave-wrap">
-      <button type="button" class="secondary gs-leave-btn" id="gsLeaveRoomBtn">Leave Room</button>
+    <div class="center gs-bottom-row">
+      ${iAmCompetitor && room.phase === 'lobby' ? `
+        <button type="button" class="secondary gs-small-btn ${me.ready ? 'is-ready' : ''}" id="gsReadyToggleBtn">${me.ready ? '✅ Ready' : 'Ready'}</button>
+      ` : ''}
+      <button type="button" class="secondary gs-small-btn gs-leave-btn" id="gsLeaveRoomBtn">Leave Room</button>
     </div>
+
+    ${renderHostModal()}
   `;
 }
 
@@ -557,19 +586,44 @@ function attachHandlers() {
   const devBtn = document.getElementById('gsDevTestBtn');
   if (devBtn) devBtn.addEventListener('click', () => { state.screen = 'speedIntro'; render(); });
 
+  // avatar setup (shown once, right after joining/creating a room)
+  const confirmAvatarBtn = document.getElementById('gsConfirmAvatarBtn');
+  if (confirmAvatarBtn) confirmAvatarBtn.addEventListener('click', () => {
+    socket.emit('gsSetAvatar', { avatar }, (res) => {
+      if (!res.ok) { showGsNotice(res.error || "Couldn't save avatar."); return; }
+      state.avatarConfirmed = true;
+      state.screen = 'stage';
+      render();
+    });
+  });
+
   // stage: leave
   const leaveBtn = document.getElementById('gsLeaveRoomBtn');
   if (leaveBtn) leaveBtn.addEventListener('click', () => {
     socket.emit('gsLeaveRoom');
     state.room = null;
-    state.showHostPasswordBox = false;
+    state.avatarConfirmed = false;
+    state.showHostModal = false;
     state.screen = 'landing';
     render();
   });
 
-  // stage: host slot
+  // stage: host slot (modal, so it never disturbs the floor layout)
   const openHostBoxBtn = document.getElementById('gsOpenHostBoxBtn');
-  if (openHostBoxBtn) openHostBoxBtn.addEventListener('click', () => { state.showHostPasswordBox = true; render(); });
+  if (openHostBoxBtn) openHostBoxBtn.addEventListener('click', () => {
+    state.showHostModal = true;
+    state.hostAuthError = '';
+    render();
+    const pwInput = document.getElementById('gsHostPasswordInput');
+    if (pwInput) pwInput.focus();
+  });
+
+  const cancelHostBtn = document.getElementById('gsCancelHostBtn');
+  if (cancelHostBtn) cancelHostBtn.addEventListener('click', () => {
+    state.showHostModal = false;
+    state.hostAuthError = '';
+    render();
+  });
 
   const becomeHostBtn = document.getElementById('gsBecomeHostBtn');
   if (becomeHostBtn) becomeHostBtn.addEventListener('click', () => {
@@ -577,10 +631,12 @@ function attachHandlers() {
     const password = pwInput ? pwInput.value.trim().toUpperCase() : '';
     socket.emit('gsSetRole', { role: 'host', password }, (res) => {
       state.hostAuthError = res.ok ? '' : (res.error || 'Wrong password.');
-      if (res.ok) state.showHostPasswordBox = false;
+      if (res.ok) state.showHostModal = false;
       render();
     });
   });
+  const hostPwInput = document.getElementById('gsHostPasswordInput');
+  if (hostPwInput) hostPwInput.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('gsBecomeHostBtn').click(); });
 
   // stage: podiums (join team)
   document.querySelectorAll('[data-join-team]').forEach(btn => {
