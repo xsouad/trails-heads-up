@@ -69,6 +69,206 @@ body:has(#app-gameshow) {
   opacity: 0.9;
 }
 
+/* ---------- landing ---------- */
+
+#app-gameshow .gs-color-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0 14px;
+  flex-wrap: wrap;
+}
+
+#app-gameshow .gs-color-swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+#app-gameshow .gs-color-swatch.active {
+  border-color: #17140a;
+  transform: scale(1.15);
+}
+
+#app-gameshow .gs-join-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#app-gameshow .gs-join-input {
+  margin: 0;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* ---------- lobby ---------- */
+
+#app-gameshow .gs-section-title {
+  font-weight: 800;
+  margin: 0 0 8px;
+  color: #17140a;
+}
+
+#app-gameshow .gs-role-pick {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#app-gameshow .gs-role-pick .gs-password-input {
+  margin: 0;
+  flex: 1;
+}
+
+#app-gameshow .gs-teams-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#app-gameshow .gs-team-card {
+  flex: 1;
+  min-width: 220px;
+}
+
+#app-gameshow .gs-chip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+#app-gameshow .gs-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(0,0,0,0.06);
+  border-radius: 8px;
+}
+
+#app-gameshow .gs-chip-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+#app-gameshow .gs-chip-name {
+  font-weight: 600;
+}
+
+#app-gameshow .gs-role-btn {
+  width: 100%;
+}
+
+#app-gameshow .gs-seat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+#app-gameshow .gs-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 4px;
+  border-radius: 10px;
+  border: 1px dashed rgba(0,0,0,0.3);
+  background: rgba(0,0,0,0.04);
+  cursor: pointer;
+  min-height: 64px;
+}
+
+#app-gameshow .gs-seat.occupied {
+  border-style: solid;
+  background: rgba(0,0,0,0.08);
+  cursor: default;
+}
+
+#app-gameshow .gs-seat.mine {
+  border-color: #17140a;
+  border-width: 2px;
+}
+
+#app-gameshow .gs-seat-num {
+  font-weight: 700;
+  color: #4a3d00;
+}
+
+#app-gameshow .gs-seat-name {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #17140a;
+  text-align: center;
+}
+
+#app-gameshow .gs-clap-toast {
+  font-weight: 700;
+}
+
+/* ---------- naming ---------- */
+
+#app-gameshow .gs-name-submit-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+#app-gameshow .gs-name-submit-row .gs-password-input {
+  margin: 0;
+  flex: 1;
+}
+
+#app-gameshow .gs-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#app-gameshow .gs-candidate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.06);
+  flex-wrap: wrap;
+}
+
+#app-gameshow .gs-candidate-row.voted {
+  background: rgba(28,122,46,0.18);
+  border: 1px solid rgba(28,122,46,0.4);
+}
+
+#app-gameshow .gs-candidate-text {
+  flex: 1;
+  font-weight: 600;
+}
+
+#app-gameshow .gs-candidate-votes {
+  font-size: 0.8rem;
+  color: #4a3d00;
+}
+
+@media (max-width: 480px) {
+  #app-gameshow .gs-teams-row { flex-direction: column; }
+  #app-gameshow .gs-seat-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
 /* ---------- speed round ---------- */
 
 #app-gameshow .gs-speed-card {

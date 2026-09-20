@@ -10,6 +10,7 @@ const {
   markPlayerDisconnected, reconnectPlayer, removePlayerByClientId,
   requestRedraw, applyPrankSwap
 } = require('./rooms');
+const gsRooms = require('./gameshowRooms');
 
 function log(...args) { console.log(new Date().toISOString(), ...args); }
 
@@ -291,6 +292,16 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', (reason) => {
     log('DISCONNECT', socket.id, 'reason:', reason);
+
+    // Gameshow rooms don't have Heads Up's soft-disconnect/grace-period
+    // system yet -- a drop just removes them from the lobby outright, same
+    // as an explicit leave.
+    const gsResult = gsRooms.removeBySocket(socket.id);
+    if (gsResult.room) {
+      gsNotifyRoom(gsResult.room, `${gsResult.leftName} left.`);
+      broadcastGsRoom(gsResult.room);
+    }
+
     const room = findRoomBySocket(socket.id);
     if (!room) return;
     if (isSpectator(room, socket.id)) {
@@ -326,6 +337,102 @@ io.on('connection', (socket) => {
       broadcastRoom(room);
     }
   }
+
+  // ---------- Gameshow lobby (join / roles / team naming) ----------
+  // Separate room system from Heads Up's -- a Gameshow room is people
+  // picking a position (Host/Team A/Team B/Spectator) rather than a single
+  // secret-item guessing game, so it gets its own small module
+  // (gameshowRooms.js) instead of overloading rooms.js.
+
+  function broadcastGsRoom(room) {
+    if (!room) return;
+    const payload = gsRooms.serialize(room);
+    room.players.forEach((p, socketId) => io.to(socketId).emit('gsRoomState', payload));
+  }
+
+  function gsNotifyRoom(room, text) {
+    if (!room) return;
+    room.players.forEach((p, socketId) => io.to(socketId).emit('gsNotice', { text }));
+  }
+
+  socket.on('gsCreateRoom', ({ name, avatar, clientId }, cb) => {
+    const room = gsRooms.createRoom();
+    gsRooms.joinRoom(room.code, socket.id, name, avatar, clientId);
+    socket.join('gs_' + room.code);
+    cb && cb({ ok: true, code: room.code });
+    broadcastGsRoom(room);
+  });
+
+  socket.on('gsJoinRoom', ({ code, name, avatar, clientId }, cb) => {
+    const result = gsRooms.joinRoom(code, socket.id, name, avatar, clientId);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    socket.join('gs_' + result.room.code);
+    cb && cb({ ok: true, code: result.room.code });
+    broadcastGsRoom(result.room);
+    gsNotifyRoom(result.room, `${name || 'Player'} joined.`);
+  });
+
+  socket.on('gsSetRole', ({ role, password, seat }, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsRooms.setRole(room, socket.id, role, { password, seat });
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  socket.on('gsStartNaming', (_, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsRooms.startNamingPhase(room, socket.id);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  socket.on('gsSubmitTeamName', ({ team, text }, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsRooms.submitNameCandidate(room, socket.id, team, text);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  socket.on('gsVoteTeamName', ({ team, candidateIdx }, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsRooms.voteNameCandidate(room, socket.id, team, candidateIdx);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  socket.on('gsFinishNaming', (_, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsRooms.finishNamingPhase(room, socket.id);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  // Spectator clap -- purely a fun ephemeral broadcast, no state kept.
+  socket.on('gsClap', () => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) return;
+    const player = room.players.get(socket.id);
+    if (!player || player.role !== 'spectator') return;
+    room.players.forEach((p, socketId) => io.to(socketId).emit('gsClap', { name: player.name, seat: player.seat }));
+  });
+
+  socket.on('gsLeaveRoom', () => {
+    const result = gsRooms.removeBySocket(socket.id);
+    if (result.room) {
+      gsNotifyRoom(result.room, `${result.leftName} left.`);
+      broadcastGsRoom(result.room);
+    }
+  });
 });
 
 const PORT = process.env.PORT || 3000;

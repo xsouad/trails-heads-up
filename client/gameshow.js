@@ -1,20 +1,29 @@
 // ---------- Gameshow (WIP) ----------
-// This whole page is the very first slice of a much bigger "Gameshow" mode
-// (teams, host controls, quotes/trivia/screenshots rounds, hints, steals...)
-// that's still being designed. For now this file only implements:
-//   1. A password gate ("VANISVAN") in front of the real thing.
-//   2. A standalone, single-player test harness for the "That Won't Be
-//      Necessary" speed-naming minigame, reachable via a dev-only button
-//      that bypasses the gate entirely so it can be iterated on before the
-//      rest of the gameshow exists. Remove that button (search
-//      "DEV TEST BUTTON" below) once the real gameshow is playable.
-// No server/multiplayer wiring yet -- this is all local client state.
+// Slice 1 (done earlier): a standalone "That Won't Be Necessary" speed-round
+// test harness, reachable without a room via a dev button.
+// Slice 2 (this pass): the actual multiplayer lobby -- people join a room,
+// pick a position (Host, needs the VANISVAN password / Team A / Team B /
+// Spectator with a seat), and the Team A vs Team B naming minigame.
+// Still not built: the actual board (quotes/trivia/screenshots columns),
+// hints, steal, and the "That Won't Be Necessary" comeback trigger hooked
+// into a real match -- those come next.
 
-// Yellow theme, set directly on <body> (not just via CSS) so it applies
-// reliably even in browsers without :has() support.
 document.body.style.background = '#ffcc00';
 
-const GS_PASSWORD = 'VANISVAN';
+const socket = io();
+
+const STORAGE_KEY = 'trailsGameshow_clientId';
+function getClientId() {
+  let id = sessionStorage.getItem(STORAGE_KEY);
+  if (!id) {
+    id = 'gs_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    sessionStorage.setItem(STORAGE_KEY, id);
+  }
+  return id;
+}
+const clientId = getClientId();
+
+const AVATAR_COLORS = ['#e63946', '#457b9d', '#2a9d8f', '#f4a261', '#9b5de5', '#ff6392', '#606c38', '#118ab2'];
 
 // Character list, shared with Heads Up/Guess Who -- same file, same image
 // folder convention (assets/items/characters/<image>).
@@ -36,10 +45,16 @@ function gsShuffle(arr) {
 }
 
 let state = {
-  screen: 'gate', // gate, hub, speedIntro, speedPlaying, speedResults
-  passwordError: '',
-  unlocked: false,
-  speed: null // set by startSpeedRound()
+  screen: 'landing', // landing, lobby, naming, ready, speedIntro, speedPlaying, speedResults
+  myName: '',
+  myColor: AVATAR_COLORS[0],
+  joinCodeInput: '',
+  error: '',
+  room: null, // last gsRoomState payload from the server
+  hostPasswordDraft: '',
+  hostAuthError: '',
+  showSeatPicker: false,
+  speed: null // set by startSpeedRound() -- the standalone test harness
 };
 
 const gsRoot = document.getElementById('gsRoot');
@@ -53,6 +68,36 @@ function showGsNotice(text) {
   bar.appendChild(toast);
   setTimeout(() => toast.remove(), 4500);
 }
+
+function showGsClapToast(name) {
+  const bar = document.getElementById('gsNoticeBar');
+  if (!bar) return;
+  const toast = document.createElement('div');
+  toast.className = 'notice-toast gs-clap-toast';
+  toast.textContent = `👏 ${name} claps!`;
+  bar.appendChild(toast);
+  setTimeout(() => toast.remove(), 2500);
+}
+
+socket.on('gsNotice', ({ text }) => showGsNotice(text));
+socket.on('gsClap', ({ name }) => showGsClapToast(name));
+socket.on('gsRoomState', (room) => {
+  state.room = room;
+  if (state.screen === 'landing') {
+    state.screen = room.phase === 'naming' ? 'naming' : (room.phase === 'ready' ? 'ready' : 'lobby');
+  } else if (room.phase === 'naming' && state.screen === 'lobby') {
+    state.screen = 'naming';
+  } else if (room.phase === 'ready' && (state.screen === 'lobby' || state.screen === 'naming')) {
+    state.screen = 'ready';
+  } else if (room.phase === 'lobby' && (state.screen === 'naming' || state.screen === 'ready')) {
+    state.screen = 'lobby';
+  }
+  render();
+});
+
+window.addEventListener('pagehide', () => {
+  if (state.room && socket.connected) socket.emit('gsLeaveRoom');
+});
 
 // ---------- tiny synthesized sound effects (no audio files needed) ----------
 let audioCtx = null;
@@ -77,8 +122,10 @@ function playError() { gsBeep({ freq: 220, endFreq: 110, duration: 0.28, type: '
 // ---------- render ----------
 function render() {
   let html = '';
-  if (state.screen === 'gate') html = renderGate();
-  else if (state.screen === 'hub') html = renderHub();
+  if (state.screen === 'landing') html = renderLanding();
+  else if (state.screen === 'lobby') html = renderLobby();
+  else if (state.screen === 'naming') html = renderNaming();
+  else if (state.screen === 'ready') html = renderReady();
   else if (state.screen === 'speedIntro') html = renderSpeedIntro();
   else if (state.screen === 'speedPlaying') html = renderSpeedPlaying();
   else if (state.screen === 'speedResults') html = renderSpeedResults();
@@ -86,37 +133,197 @@ function render() {
   attachHandlers();
 }
 
-function renderGate() {
+function myPlayer() {
+  if (!state.room) return null;
+  return state.room.players.find(p => p.id === socket.id) || null;
+}
+
+// ---------- landing ----------
+function renderLanding() {
   return `
-    <div class="card center gs-gate-card">
-      <p class="gs-wip-note">Sorry working on this &lt;3</p>
+    <div class="card center">
       <h2 class="gs-gate-title">Gameshow</h2>
-      <p class="hint">This part of the site isn't open yet. If you know the code, go ahead.</p>
-      <input type="text" id="gsPasswordInput" class="gs-password-input" placeholder="Enter code" autocomplete="off" autocapitalize="off" spellcheck="false" />
-      <div class="error-msg">${state.passwordError}</div>
-      <button type="button" class="primary" id="gsUnlockBtn">Enter</button>
+      <p class="hint">Still very much a work in progress -- pick a name, then create or join a room.</p>
+
+      <input type="text" id="gsNameInput" class="gs-password-input" placeholder="Your name" maxlength="24" value="${state.myName.replace(/"/g, '&quot;')}" autocomplete="off" />
+
+      <div class="gs-color-row">
+        ${AVATAR_COLORS.map(c => `<button type="button" class="gs-color-swatch ${c === state.myColor ? 'active' : ''}" data-color="${c}" style="background:${c};"></button>`).join('')}
+      </div>
+
+      <div class="error-msg">${state.error}</div>
+
+      <button type="button" class="primary" id="gsCreateRoomBtn">Create Room</button>
+
+      <div class="gs-join-row">
+        <input type="text" id="gsJoinCodeInput" class="gs-password-input gs-join-input" placeholder="Room code" maxlength="4" value="${state.joinCodeInput}" autocomplete="off" />
+        <button type="button" class="secondary" id="gsJoinRoomBtn">Join Room</button>
+      </div>
     </div>
+
     <div class="card center gs-dev-card">
-      <!-- DEV TEST BUTTON -- remove this whole .gs-dev-card block once the
-           real gameshow (teams/host/rounds) is actually playable. This is
-           purely so the speed-round minigame can be tried out standalone
-           while everything else is still being built. -->
+      <!-- DEV TEST BUTTON -- remove once the real board is playable. Just a
+           standalone way to try the speed-round minigame with no room. -->
       <p class="hint">Dev-only, temporary:</p>
       <button type="button" class="secondary" id="gsDevTestBtn">🧪 Test: Speed Round</button>
     </div>
   `;
 }
 
-function renderHub() {
+// ---------- lobby ----------
+function renderPlayerChip(p) {
   return `
-    <div class="card center">
-      <h2 class="gs-gate-title">Gameshow</h2>
-      <p class="hint">You're in. Most of this is still being built -- for now, here's the one piece that's ready to try.</p>
-      <button type="button" class="primary" id="gsLaunchSpeedBtn">"That Won't Be Necessary" -- Speed Round</button>
+    <div class="gs-chip">
+      <span class="gs-chip-dot" style="background:${(p.avatar && p.avatar.color) || '#999'};">${(p.avatar && p.avatar.initial) || p.name[0].toUpperCase()}</span>
+      <span class="gs-chip-name">${p.name}</span>
     </div>
   `;
 }
 
+function renderLobby() {
+  const room = state.room;
+  const me = myPlayer();
+  const myRole = me ? me.role : 'unassigned';
+  const teamA = room.players.filter(p => p.role === 'teamA');
+  const teamB = room.players.filter(p => p.role === 'teamB');
+  const host = room.players.find(p => p.role === 'host');
+  const spectators = room.players.filter(p => p.role === 'spectator');
+  const unassigned = room.players.filter(p => p.role === 'unassigned');
+  const seatMap = {};
+  spectators.forEach(p => { seatMap[p.seat] = p; });
+
+  const iAmHost = room.hostId === socket.id;
+  const bothTeamsReady = teamA.length >= 1 && teamB.length >= 1;
+
+  return `
+    <div class="card center">
+      <h2 class="gs-gate-title">Room ${room.code}</h2>
+      <p class="hint">Share this code so everyone else can join.</p>
+      <button type="button" class="secondary" id="gsLeaveRoomBtn">Leave Room</button>
+    </div>
+
+    <div class="card">
+      <p class="gs-section-title">Host</p>
+      ${host ? renderPlayerChip(host) : `
+        <div class="gs-role-pick">
+          <input type="password" id="gsHostPasswordInput" class="gs-password-input" placeholder="Host code" ${myRole === 'host' ? 'disabled' : ''} />
+          <button type="button" class="secondary" id="gsBecomeHostBtn" ${myRole === 'host' ? 'disabled' : ''}>Become Host</button>
+        </div>
+        <div class="error-msg">${state.hostAuthError}</div>
+      `}
+      ${host && myRole === 'host' ? `<p class="hint">You're the host. Only you can start naming and (later) run the board.</p>` : ''}
+    </div>
+
+    <div class="gs-teams-row">
+      <div class="card gs-team-card">
+        <p class="gs-section-title">Team A (${teamA.length}/${room.maxTeamSize})</p>
+        <div class="gs-chip-list">${teamA.map(renderPlayerChip).join('') || '<p class="hint">No one yet.</p>'}</div>
+        <button type="button" class="secondary gs-role-btn" data-role="teamA" ${myRole === 'teamA' ? 'disabled' : ''}>${myRole === 'teamA' ? 'You\'re on this team' : 'Join Team A'}</button>
+      </div>
+      <div class="card gs-team-card">
+        <p class="gs-section-title">Team B (${teamB.length}/${room.maxTeamSize})</p>
+        <div class="gs-chip-list">${teamB.map(renderPlayerChip).join('') || '<p class="hint">No one yet.</p>'}</div>
+        <button type="button" class="secondary gs-role-btn" data-role="teamB" ${myRole === 'teamB' ? 'disabled' : ''}>${myRole === 'teamB' ? 'You\'re on this team' : 'Join Team B'}</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="gs-section-title">Spectators (${spectators.length}/${room.maxSpectatorSeats})</p>
+      <div class="gs-seat-grid">
+        ${Array.from({ length: room.maxSpectatorSeats }, (_, i) => i + 1).map(seat => {
+          const occ = seatMap[seat];
+          const isMe = occ && me && occ.id === me.id;
+          return `
+            <button type="button" class="gs-seat ${occ ? 'occupied' : ''} ${isMe ? 'mine' : ''}" data-seat="${seat}" ${occ && !isMe ? 'disabled' : ''}>
+              ${occ ? `<span class="gs-chip-dot" style="background:${occ.avatar.color};">${occ.avatar.initial}</span><span class="gs-seat-name">${occ.name}</span>` : `<span class="gs-seat-num">${seat}</span>`}
+            </button>
+          `;
+        }).join('')}
+      </div>
+      ${myRole === 'spectator' ? `<button type="button" class="primary" id="gsClapBtn">👏 Clap</button>` : ''}
+    </div>
+
+    ${unassigned.length ? `
+      <div class="card">
+        <p class="gs-section-title">Just joined</p>
+        <div class="gs-chip-list">${unassigned.map(renderPlayerChip).join('')}</div>
+      </div>
+    ` : ''}
+
+    ${iAmHost ? `
+      <div class="card center">
+        <button type="button" class="primary" id="gsStartNamingBtn" ${bothTeamsReady ? '' : 'disabled'}>Start Team Naming</button>
+        ${bothTeamsReady ? '' : '<p class="hint">Both teams need at least 1 member first.</p>'}
+      </div>
+    ` : ''}
+  `;
+}
+
+// ---------- naming ----------
+function renderNameColumn(team, label) {
+  const room = state.room;
+  const t = room[team];
+  const me = myPlayer();
+  const onThisTeam = me && me.role === team;
+  const myVote = me ? t.votes[me.id] : undefined;
+  const tally = {};
+  Object.values(t.votes).forEach(idx => { tally[idx] = (tally[idx] || 0) + 1; });
+
+  return `
+    <div class="card gs-team-card">
+      <p class="gs-section-title">${label}</p>
+      ${onThisTeam ? `
+        <div class="gs-name-submit-row">
+          <input type="text" id="gsNameInput_${team}" class="gs-password-input" placeholder="Suggest a team name" maxlength="30" />
+          <button type="button" class="secondary gs-submit-name-btn" data-team="${team}">Submit</button>
+        </div>
+      ` : ''}
+      <div class="gs-candidate-list">
+        ${t.candidates.length ? t.candidates.map((c, idx) => `
+          <div class="gs-candidate-row ${myVote === idx ? 'voted' : ''}">
+            <span class="gs-candidate-text">"${c.text}" <span class="hint">-- ${c.byName}</span></span>
+            <span class="gs-candidate-votes">${tally[idx] || 0} vote${(tally[idx] || 0) === 1 ? '' : 's'}</span>
+            ${onThisTeam ? `<button type="button" class="secondary gs-vote-btn" data-team="${team}" data-idx="${idx}">${myVote === idx ? 'Voted' : 'Vote'}</button>` : ''}
+          </div>
+        `).join('') : '<p class="hint">No suggestions yet.</p>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderNaming() {
+  const room = state.room;
+  const iAmHost = room.hostId === socket.id;
+  return `
+    <div class="card center">
+      <h2 class="gs-gate-title">Naming Your Teams</h2>
+      <p class="hint">Everyone can watch live -- only team members can suggest and vote.</p>
+    </div>
+    <div class="gs-teams-row">
+      ${renderNameColumn('teamA', 'Team A')}
+      ${renderNameColumn('teamB', 'Team B')}
+    </div>
+    ${iAmHost ? `
+      <div class="card center">
+        <button type="button" class="primary" id="gsFinishNamingBtn">Lock In Team Names</button>
+      </div>
+    ` : `<div class="card center"><p class="hint">Waiting for the host to lock in the names...</p></div>`}
+  `;
+}
+
+// ---------- ready ----------
+function renderReady() {
+  const room = state.room;
+  return `
+    <div class="card center">
+      <h2 class="gs-gate-title">${room.teamA.name || 'Team A'} vs ${room.teamB.name || 'Team B'}</h2>
+      <p class="hint">The board (quotes, trivia, screenshots, hints, steal) is being built next -- this screen will turn into the real game. For now, positions and team names are locked in.</p>
+      <button type="button" class="secondary" id="gsLeaveRoomBtn">Leave Room</button>
+    </div>
+  `;
+}
+
+// ---------- standalone speed-round test harness (unchanged mechanic) ----------
 const SPEED_ROUND_SECONDS = 60;
 const NAMES_PER_POINT = 5;
 
@@ -196,41 +403,119 @@ function renderSpeedResults() {
 
 // ---------- handlers ----------
 function attachHandlers() {
-  const unlockBtn = document.getElementById('gsUnlockBtn');
-  const pwInput = document.getElementById('gsPasswordInput');
-  if (unlockBtn && pwInput) {
-    const tryUnlock = () => {
-      const val = pwInput.value.trim().toUpperCase();
-      if (val === GS_PASSWORD) {
-        state.unlocked = true;
-        state.passwordError = '';
-        state.screen = 'hub';
-        render();
-      } else {
-        state.passwordError = "That's not it.";
-        render();
-        const again = document.getElementById('gsPasswordInput');
-        if (again) again.focus();
-      }
-    };
-    unlockBtn.addEventListener('click', tryUnlock);
-    pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
-  }
+  // landing
+  const nameInput = document.getElementById('gsNameInput');
+  if (nameInput) nameInput.addEventListener('input', e => { state.myName = e.target.value; });
+
+  document.querySelectorAll('.gs-color-swatch').forEach(btn => {
+    btn.addEventListener('click', () => { state.myColor = btn.dataset.color; render(); });
+  });
+
+  const createBtn = document.getElementById('gsCreateRoomBtn');
+  if (createBtn) createBtn.addEventListener('click', () => {
+    if (!state.myName.trim()) { state.error = 'Enter a name first.'; render(); return; }
+    const avatar = { color: state.myColor, initial: state.myName.trim()[0].toUpperCase() };
+    socket.emit('gsCreateRoom', { name: state.myName.trim(), avatar, clientId }, (res) => {
+      if (!res.ok) { state.error = res.error || 'Could not create room.'; render(); }
+    });
+  });
+
+  const joinCodeInput = document.getElementById('gsJoinCodeInput');
+  if (joinCodeInput) joinCodeInput.addEventListener('input', e => { state.joinCodeInput = e.target.value.toUpperCase(); });
+
+  const joinBtn = document.getElementById('gsJoinRoomBtn');
+  if (joinBtn) joinBtn.addEventListener('click', () => {
+    if (!state.myName.trim()) { state.error = 'Enter a name first.'; render(); return; }
+    if (!state.joinCodeInput.trim()) { state.error = 'Enter a room code.'; render(); return; }
+    const avatar = { color: state.myColor, initial: state.myName.trim()[0].toUpperCase() };
+    socket.emit('gsJoinRoom', { code: state.joinCodeInput.trim(), name: state.myName.trim(), avatar, clientId }, (res) => {
+      if (!res.ok) { state.error = res.error || 'Could not join room.'; render(); }
+    });
+  });
 
   const devBtn = document.getElementById('gsDevTestBtn');
   if (devBtn) devBtn.addEventListener('click', () => { state.screen = 'speedIntro'; render(); });
 
-  const launchBtn = document.getElementById('gsLaunchSpeedBtn');
-  if (launchBtn) launchBtn.addEventListener('click', () => { state.screen = 'speedIntro'; render(); });
-
-  const backFromIntro = document.getElementById('gsBackFromIntroBtn');
-  if (backFromIntro) backFromIntro.addEventListener('click', () => {
-    state.screen = state.unlocked ? 'hub' : 'gate';
+  // lobby
+  const leaveBtn = document.getElementById('gsLeaveRoomBtn');
+  if (leaveBtn) leaveBtn.addEventListener('click', () => {
+    socket.emit('gsLeaveRoom');
+    state.room = null;
+    state.screen = 'landing';
     render();
   });
 
+  const becomeHostBtn = document.getElementById('gsBecomeHostBtn');
+  if (becomeHostBtn) becomeHostBtn.addEventListener('click', () => {
+    const pwInput = document.getElementById('gsHostPasswordInput');
+    const password = pwInput ? pwInput.value.trim().toUpperCase() : '';
+    socket.emit('gsSetRole', { role: 'host', password }, (res) => {
+      state.hostAuthError = res.ok ? '' : (res.error || 'Wrong password.');
+      render();
+    });
+  });
+
+  document.querySelectorAll('.gs-role-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      socket.emit('gsSetRole', { role: btn.dataset.role }, (res) => {
+        if (!res.ok) { showGsNotice(res.error || "Couldn't switch roles."); }
+      });
+    });
+  });
+
+  document.querySelectorAll('.gs-seat').forEach(btn => {
+    if (btn.disabled) return;
+    btn.addEventListener('click', () => {
+      const seat = parseInt(btn.dataset.seat, 10);
+      socket.emit('gsSetRole', { role: 'spectator', seat }, (res) => {
+        if (!res.ok) { showGsNotice(res.error || "Couldn't sit there."); }
+      });
+    });
+  });
+
+  const clapBtn = document.getElementById('gsClapBtn');
+  if (clapBtn) clapBtn.addEventListener('click', () => socket.emit('gsClap'));
+
+  const startNamingBtn = document.getElementById('gsStartNamingBtn');
+  if (startNamingBtn) startNamingBtn.addEventListener('click', () => {
+    socket.emit('gsStartNaming', null, (res) => {
+      if (!res.ok) showGsNotice(res.error || "Couldn't start naming.");
+    });
+  });
+
+  // naming
+  document.querySelectorAll('.gs-submit-name-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const team = btn.dataset.team;
+      const input = document.getElementById('gsNameInput_' + team);
+      if (!input || !input.value.trim()) return;
+      socket.emit('gsSubmitTeamName', { team, text: input.value }, (res) => {
+        if (!res.ok) showGsNotice(res.error || "Couldn't submit.");
+      });
+    });
+  });
+
+  document.querySelectorAll('.gs-vote-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      socket.emit('gsVoteTeamName', { team: btn.dataset.team, candidateIdx: parseInt(btn.dataset.idx, 10) }, (res) => {
+        if (!res.ok) showGsNotice(res.error || "Couldn't vote.");
+      });
+    });
+  });
+
+  const finishNamingBtn = document.getElementById('gsFinishNamingBtn');
+  if (finishNamingBtn) finishNamingBtn.addEventListener('click', () => {
+    socket.emit('gsFinishNaming', null, (res) => {
+      if (!res.ok) showGsNotice(res.error || "Couldn't lock in names.");
+    });
+  });
+
+  // speed round test harness
   const startBtn = document.getElementById('gsStartSpeedBtn');
   if (startBtn) startBtn.addEventListener('click', startSpeedRound);
+
+  const backFromIntro = document.getElementById('gsBackFromIntroBtn');
+  if (backFromIntro) backFromIntro.addEventListener('click', () => { state.screen = 'landing'; render(); });
 
   const quitBtn = document.getElementById('gsQuitSpeedBtn');
   if (quitBtn) quitBtn.addEventListener('click', endSpeedRound);
@@ -239,10 +524,7 @@ function attachHandlers() {
   if (playAgainBtn) playAgainBtn.addEventListener('click', () => { state.screen = 'speedIntro'; render(); });
 
   const backToHub = document.getElementById('gsBackToHubBtn');
-  if (backToHub) backToHub.addEventListener('click', () => {
-    state.screen = state.unlocked ? 'hub' : 'gate';
-    render();
-  });
+  if (backToHub) backToHub.addEventListener('click', () => { state.screen = 'landing'; render(); });
 
   wireSpeedInput();
 }
@@ -251,8 +533,6 @@ function attachHandlers() {
 let speedTimerHandle = null;
 
 function gsNextTarget(s) {
-  // Draw from a shuffled queue of the whole roster so nothing repeats until
-  // everyone's been shown once, then reshuffle and keep going.
   if (!s.queue || s.queueIdx >= s.queue.length) {
     s.queue = gsShuffle(GS_CHARACTERS);
     s.queueIdx = 0;
@@ -263,13 +543,7 @@ function gsNextTarget(s) {
 }
 
 function startSpeedRound() {
-  const s = {
-    timeLeft: SPEED_ROUND_SECONDS,
-    feed: [], // { name, ok, img }
-    queue: [],
-    queueIdx: 0,
-    current: null
-  };
+  const s = { timeLeft: SPEED_ROUND_SECONDS, feed: [], queue: [], queueIdx: 0, current: null };
   s.current = gsNextTarget(s);
   state.speed = s;
   state.screen = 'speedPlaying';
@@ -280,13 +554,7 @@ function startSpeedRound() {
   clearInterval(speedTimerHandle);
   speedTimerHandle = setInterval(() => {
     state.speed.timeLeft -= 1;
-    if (state.speed.timeLeft <= 0) {
-      endSpeedRound();
-      return;
-    }
-    // Only the timer number needs to live-update every tick -- re-rendering
-    // the whole screen every second would also blow away whatever's
-    // mid-type in the input. Patch just the timer text instead.
+    if (state.speed.timeLeft <= 0) { endSpeedRound(); return; }
     const timerEl = document.getElementById('gsTimer');
     if (timerEl) {
       timerEl.textContent = state.speed.timeLeft + 's';
@@ -305,13 +573,9 @@ function endSpeedRound() {
 function gsFindMatches(query) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  // Substring match anywhere in the name (not just prefix) -- "van" should
-  // surface "Van Arkride" AND "Kurt Vander"/"Mueller Vander".
   return GS_CHARACTERS.filter(c => c.name.toLowerCase().includes(q)).slice(0, 6);
 }
 
-// Checks the typed/picked name against the character currently on screen
-// (not just "is this any known character" -- it has to be THIS one).
 function gsSubmitGuess(guessedName) {
   const s = state.speed;
   if (!s || !s.current) return;
@@ -323,8 +587,6 @@ function gsSubmitGuess(guessedName) {
   s.feed.push({ name: target.name, ok, img: gsImgUrl(target) });
   ok ? playTing() : playError();
 
-  // Move on to the next character regardless of right/wrong -- that's what
-  // keeps this a speed round rather than a stop-and-retry quiz.
   s.current = gsNextTarget(s);
 
   const input = document.getElementById('gsSpeedInput');
@@ -332,8 +594,6 @@ function gsSubmitGuess(guessedName) {
   const suggestions = document.getElementById('gsSuggestions');
   if (suggestions) suggestions.innerHTML = '';
 
-  // Patch the DOM directly instead of a full render() -- keeps focus in the
-  // input and avoids losing keystrokes typed the instant after a guess lands.
   const targetImg = document.getElementById('gsTargetImg');
   if (targetImg) targetImg.src = gsImgUrl(s.current);
 
@@ -389,9 +649,6 @@ function wireSpeedInput() {
       rows.forEach((r, i) => r.classList.toggle('active', i === activeIndex));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      // If there's a dropdown showing, Enter always takes a suggestion --
-      // the arrow-selected one if the player used the arrows, otherwise the
-      // top one -- rather than submitting whatever's raw-typed so far.
       if (rows.length) {
         const pick = rows[activeIndex >= 0 ? activeIndex : 0];
         gsSubmitGuess(pick.dataset.name);
