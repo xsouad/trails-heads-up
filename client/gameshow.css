@@ -17,6 +17,9 @@ body:has(#app-gameshow) {
 #app-gameshow .how-to-play-link {
   color: #7a4b00;
 }
+#app-gameshow .gs-landing-htp {
+  margin: 4px auto 14px;
+}
 
 #app-gameshow .gs-avatar-setup-name {
   font-size: 1.3rem;
@@ -170,6 +173,7 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-team-column {
   display: flex;
   flex-wrap: nowrap;
+  align-items: flex-end;
   gap: 14px;
 }
 #app-gameshow .gs-team-column.teamA { justify-content: flex-end; }
@@ -193,22 +197,29 @@ body:has(#app-gameshow) {
   cursor: pointer;
 }
 
-/* overflow:hidden here is a safety net -- if an avatar image is ever
-   rendered before its container has a definite size (e.g. right at the
-   moment a role changes), it gets clipped instead of blowing out the
-   whole floor layout. */
+/* Fixed size regardless of whether it holds a real avatar or just the "+"
+   -- this (plus .gs-podium-name always being present, even as a blank
+   placeholder) is what keeps every podium/host-slot at an identical
+   height. Without that, an occupied slot is taller than an empty one, the
+   grid row grows to match, and everything else visibly jumps the instant
+   someone joins. overflow:hidden also doubles as a safety net so an
+   avatar image can never blow out this fixed box. */
 #app-gameshow .gs-podium-avatar-wrap {
   position: relative;
+  width: 64px;
+  height: 64px;
   margin-bottom: 2px;
   overflow: hidden;
   border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #app-gameshow .gs-podium-avatar {
   position: relative;
-  width: 64px;
-  height: 64px;
-  overflow: hidden;
+  width: 100%;
+  height: 100%;
 }
 
 #app-gameshow .gs-podium-block {
@@ -234,7 +245,6 @@ body:has(#app-gameshow) {
 }
 
 #app-gameshow .gs-podium-plus {
-  margin-top: -32px;
   font-size: 1.4rem;
   font-weight: 800;
   color: #4a3d00;
@@ -246,6 +256,7 @@ body:has(#app-gameshow) {
   font-weight: 700;
   color: #17140a;
   max-width: 76px;
+  min-height: 1.2em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -274,8 +285,14 @@ body:has(#app-gameshow) {
   padding: 3px 10px;
 }
 
-#app-gameshow .gs-host-slot .gs-podium-avatar-wrap {
-  margin-bottom: 0;
+/* Fixed-height zone for the bit under the label that differs between
+   states (a name once hosted, a "Become Host" button until then) -- same
+   reasoning as the podium avatar box above. */
+#app-gameshow .gs-host-action {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #app-gameshow #gsReadyToggleBtn.is-ready {
@@ -690,12 +707,13 @@ body:has(#app-gameshow) {
   #app-gameshow .gs-floor { gap: 24px; margin-top: 40px; margin-bottom: 20px; }
   #app-gameshow .gs-team-column { gap: 24px; }
   #app-gameshow .gs-podium { width: 130px; gap: 6px; }
-  #app-gameshow .gs-podium-avatar { width: 110px; height: 110px; }
+  #app-gameshow .gs-podium-avatar-wrap { width: 110px; height: 110px; }
   #app-gameshow .gs-podium-block { height: 78px; border-radius: 12px 12px 6px 6px; }
   #app-gameshow .gs-podium-name { max-width: 130px; font-size: 0.95rem; }
-  #app-gameshow .gs-podium-plus { font-size: 2rem; margin-top: -50px; }
+  #app-gameshow .gs-podium-plus { font-size: 2.2rem; }
   #app-gameshow .gs-host-slot { min-width: 180px; gap: 8px; }
   #app-gameshow .gs-host-label { font-size: 0.95rem; padding: 6px 16px; }
+  #app-gameshow .gs-host-action { min-height: 38px; }
   #app-gameshow .gs-spectator-row { max-width: 760px; margin-top: 48px; }
   #app-gameshow .gs-seat { min-height: 96px; }
   #app-gameshow .gs-seat-avatar { width: 56px; height: 56px; }
@@ -707,7 +725,7 @@ body:has(#app-gameshow) {
   #app-gameshow .gs-speed-timer { font-size: 1.5rem; }
   #app-gameshow .gs-target-frame { width: 160px; height: 160px; }
   #app-gameshow .gs-podium { width: 56px; }
-  #app-gameshow .gs-podium-avatar { width: 44px; height: 44px; }
+  #app-gameshow .gs-podium-avatar-wrap { width: 44px; height: 44px; }
   #app-gameshow .gs-podium-name { max-width: 56px; font-size: 0.62rem; }
   /* Still one line of 8 -- just narrower columns and a scroll hint via
      overflow-x instead of wrapping to a second row. */
@@ -715,4 +733,102 @@ body:has(#app-gameshow) {
   #app-gameshow .gs-seat { min-height: 58px; padding: 4px 2px 6px; }
   #app-gameshow .gs-seat-avatar { width: 30px; height: 30px; }
   #app-gameshow .gs-naming-cols { flex-direction: column; }
+}
+
+/* ---------- the actual quiz board ---------- */
+
+#app-gameshow .gs-scoreboard {
+  display: flex; justify-content: center; gap: 24px; margin-bottom: 14px;
+}
+#app-gameshow .gs-score-block {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 20px; border-radius: 10px; min-width: 120px;
+  border: 2px solid rgba(0,0,0,0.25);
+}
+#app-gameshow .gs-score-block.teamA { background: rgba(69,123,157,0.25); }
+#app-gameshow .gs-score-block.teamB { background: rgba(230,57,70,0.25); }
+#app-gameshow .gs-score-label { font-size: 0.78rem; font-weight: 700; color: #fff; opacity: 0.85; }
+#app-gameshow .gs-score-value { font-size: 1.8rem; font-weight: 800; color: #fff; }
+
+#app-gameshow .gs-board-grid {
+  width: 100%; border-collapse: separate; border-spacing: 6px; margin: 10px 0;
+}
+#app-gameshow .gs-board-grid th {
+  color: #ffcc00; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em;
+  padding-bottom: 4px;
+}
+#app-gameshow .gs-cell {
+  background: #1a3a6b; color: #ffcc00; font-weight: 800; font-size: 1.1rem;
+  text-align: center; padding: 16px 6px; border-radius: 8px;
+  border: 2px solid #0c1f3d;
+}
+#app-gameshow .gs-cell.used { background: rgba(255,255,255,0.06); color: transparent; border-color: rgba(255,255,255,0.08); }
+#app-gameshow .gs-cell.clickable { cursor: pointer; transition: transform 0.12s ease, background 0.12s ease; }
+#app-gameshow .gs-cell.clickable:hover { background: #24508f; transform: scale(1.03); }
+
+#app-gameshow .gs-active-cell {
+  background: rgba(0,0,0,0.35); border-radius: 12px; padding: 18px; color: #fff;
+}
+#app-gameshow .gs-cell-value {
+  text-align: center; color: #ffcc00; font-weight: 800; font-size: 1rem; margin: 0 0 10px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+#app-gameshow .gs-cell-prompt {
+  text-align: center; font-size: 1.2rem; font-weight: 600; margin: 0 0 6px; line-height: 1.4;
+}
+#app-gameshow .gs-cell-answer {
+  text-align: center; color: #ffe38a; margin: 4px 0 12px;
+}
+#app-gameshow .gs-cell-screenshot {
+  display: block; max-width: 100%; max-height: 320px; margin: 0 auto 10px;
+  border-radius: 8px; border: 2px solid rgba(255,255,255,0.2);
+}
+#app-gameshow .gs-answer-cols {
+  display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 14px;
+}
+#app-gameshow .gs-answer-block {
+  flex: 1 1 240px; background: rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 12px;
+}
+#app-gameshow .gs-locked-answer {
+  font-style: italic; color: #ffe38a; margin: 4px 0;
+}
+#app-gameshow .gs-judge-result { font-weight: 700; margin: 6px 0 0; }
+#app-gameshow .gs-judge-result.correct { color: #6fe08a; }
+#app-gameshow .gs-judge-result.wrong { color: #ff8a8a; }
+#app-gameshow .gs-judge-btns { display: flex; gap: 8px; margin-top: 8px; }
+
+#app-gameshow .gs-steal-block {
+  margin-top: 14px; padding: 10px 12px; border-radius: 8px;
+  background: rgba(255,204,0,0.12); border: 1px dashed rgba(255,204,0,0.5);
+}
+
+#app-gameshow .gs-hint-row {
+  display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 16px;
+}
+#app-gameshow .gs-hint-block {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center;
+  background: rgba(0,0,0,0.06); border-radius: 8px; padding: 6px 10px; font-size: 0.85rem;
+}
+#app-gameshow .gs-hint-team { font-weight: 700; }
+#app-gameshow .gs-phone-select { max-width: 130px; font-size: 0.8rem; }
+
+#app-gameshow .gs-comeback-banner {
+  text-align: center; background: rgba(198,29,61,0.18); border: 2px solid #c81d3d;
+  border-radius: 10px; padding: 10px 14px; margin: 10px 0; font-weight: 700;
+}
+#app-gameshow .gs-comeback-trigger {
+  text-align: center; background: rgba(0,0,0,0.06); border-radius: 10px;
+  padding: 10px 14px; margin: 10px 0;
+}
+#app-gameshow .gs-comeback-trigger select { margin: 0 8px; }
+#app-gameshow .gs-comeback-title {
+  text-align: center; font-weight: 800; color: #c81d3d; margin: 0 0 8px; font-size: 1.1rem;
+}
+
+@media (max-width: 480px) {
+  #app-gameshow .gs-board-grid { border-spacing: 4px; }
+  #app-gameshow .gs-cell { padding: 10px 3px; font-size: 0.85rem; }
+  #app-gameshow .gs-score-block { min-width: 90px; padding: 6px 12px; }
+  #app-gameshow .gs-score-value { font-size: 1.3rem; }
+  #app-gameshow .gs-cell-prompt { font-size: 1rem; }
 }

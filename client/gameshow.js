@@ -56,7 +56,8 @@ let state = {
   showHostModal: false,
   hostAuthError: '',
   showHowToPlay: false,
-  speed: null // set by startSpeedRound() -- the standalone test harness
+  speed: null, // set by startSpeedRound() -- the standalone test harness
+  comebackMode: false // true while playing the speed round AS the in-game comeback trigger
 };
 
 // ---------- speed round leaderboard (client-side, this browser only) ----------
@@ -107,6 +108,14 @@ socket.on('gsRoomState', (room) => {
   // first time we land here this session, detour through the builder.
   if (state.screen === 'landing') {
     state.screen = state.avatarConfirmed ? 'stage' : 'avatarSetup';
+  }
+  // "That Won't Be Necessary" comeback trigger: if the host just picked ME
+  // to attempt it, drop straight into the existing speed-round mechanic --
+  // reusing the standalone minigame instead of rebuilding it.
+  if (room.board && room.board.comeback && room.board.comeback.active && room.board.comeback.playerId === socket.id && !state.comebackMode) {
+    state.comebackMode = true;
+    startSpeedRound();
+    return;
   }
   render();
 });
@@ -164,11 +173,10 @@ function myPlayer() {
 // ---------- landing ----------
 function renderLanding() {
   return `
+    <a href="#" id="gsHowToPlayBtn" class="how-to-play-link gs-landing-htp">How to Play</a>
+
     <div class="card center">
       <h2 class="gs-gate-title">Gameshow</h2>
-      <a href="#" id="gsHowToPlayBtn" class="how-to-play-link">How to Play</a>
-
-      <input type="text" id="gsNameInput" class="gs-password-input" placeholder="Your name" maxlength="24" value="${state.myName.replace(/"/g, '&quot;')}" autocomplete="off" />
 
       <div class="error-msg">${state.error}</div>
 
@@ -206,11 +214,12 @@ function renderHowToPlayModal() {
 }
 
 // ---------- avatar setup (shown once, right after joining/creating a room) ----------
+// Name and avatar are both picked here, right after the room exists --
+// not on the landing screen.
 function renderAvatarSetup() {
   return `
     <div class="card center">
-      <h2 class="gs-gate-title">Build Your Avatar</h2>
-      <p class="gs-avatar-setup-name">${state.myName}</p>
+      <h2 class="gs-gate-title">Build Your Character</h2>
 
       <div class="avatar-builder">
         <div class="avatar-stage" id="avatarStage"></div>
@@ -232,38 +241,42 @@ function renderAvatarSetup() {
         <button type="button" class="dice-btn" id="diceBtn">Randomize</button>
       </div>
 
-      <button type="button" class="primary" id="gsConfirmAvatarBtn" style="margin-top:12px;">Continue</button>
+      <input type="text" id="gsAvatarNameInput" class="gs-password-input" placeholder="Your name" maxlength="24" value="${state.myName.replace(/"/g, '&quot;')}" autocomplete="off" />
+
+      <div class="error-msg">${state.error}</div>
+
+      <button type="button" class="primary" id="gsConfirmAvatarBtn" style="margin-top:6px;">Continue</button>
     </div>
   `;
 }
 
 // ---------- stage (persistent screen + podiums + spectator seats) ----------
 
+// Empty and occupied podiums render the EXACT SAME set of elements (avatar
+// zone, block, name zone) at the same fixed sizes -- only their content
+// differs. That's what stops the "picking a podium makes everything jump"
+// bug: since every podium is always the same height whether it's taken or
+// not, the row's height (and everything's vertical position) never
+// changes when someone joins.
 function renderPodium(teamKey) {
   const room = state.room;
   const me = myPlayer();
   const members = {};
   room.players.forEach(p => { if (p.role === teamKey && p.slot != null) members[p.slot] = p; });
-  const slotOrder = teamKey === 'teamA' ? [0, 1, 2] : [0, 1, 2];
-  const slots = slotOrder.map(slotIdx => {
+  const slots = [0, 1, 2].map(slotIdx => {
     const occ = members[slotIdx];
-    if (occ) {
-      const mine = me && occ.id === me.id;
-      return `
-        <div class="gs-podium occupied ${mine ? 'mine' : ''} ${occ.ready ? 'is-ready' : ''}">
-          <div class="gs-podium-avatar-wrap">
-            <div class="gs-podium-avatar" data-avatar-for="${occ.id}"></div>
-          </div>
-          <div class="gs-podium-block ${teamKey}"></div>
-          <div class="gs-podium-name">${occ.name}</div>
-        </div>
-      `;
-    }
+    const mine = occ && me && occ.id === me.id;
+    const isEmpty = !occ;
+    const tag = isEmpty ? 'button' : 'div';
+    const attrs = isEmpty ? `type="button" data-join-team="${teamKey}" data-join-slot="${slotIdx}"` : '';
     return `
-      <button type="button" class="gs-podium empty" data-join-team="${teamKey}" data-join-slot="${slotIdx}">
+      <${tag} class="gs-podium ${isEmpty ? 'empty' : 'occupied'} ${mine ? 'mine' : ''} ${occ && occ.ready ? 'is-ready' : ''}" ${attrs}>
+        <div class="gs-podium-avatar-wrap">
+          ${occ ? `<div class="gs-podium-avatar" data-avatar-for="${occ.id}"></div>` : '<span class="gs-podium-plus">+</span>'}
+        </div>
         <div class="gs-podium-block ${teamKey}"></div>
-        <span class="gs-podium-plus">+</span>
-      </button>
+        <div class="gs-podium-name">${occ ? occ.name : ' '}</div>
+      </${tag}>
     `;
   });
   return `<div class="gs-team-column ${teamKey}">${slots.join('')}</div>`;
@@ -273,20 +286,18 @@ function renderHostSlot() {
   const room = state.room;
   const me = myPlayer();
   const host = room.players.find(p => p.role === 'host');
-  if (host) {
-    const mine = me && host.id === me.id;
-    return `
-      <div class="gs-host-slot occupied ${mine ? 'mine' : ''}">
-        <div class="gs-podium-avatar" data-avatar-for="${host.id}"></div>
-        <div class="gs-host-label">GAMESHOW HOST</div>
-        <div class="gs-podium-name">${host.name}</div>
-      </div>
-    `;
-  }
+  const mine = host && me && host.id === me.id;
   return `
-    <div class="gs-host-slot empty">
+    <div class="gs-host-slot ${host ? 'occupied' : 'empty'} ${mine ? 'mine' : ''}">
+      <div class="gs-podium-avatar-wrap">
+        ${host ? `<div class="gs-podium-avatar" data-avatar-for="${host.id}"></div>` : ''}
+      </div>
       <div class="gs-host-label">GAMESHOW HOST</div>
-      <button type="button" class="secondary" id="gsOpenHostBoxBtn">Become Host</button>
+      <div class="gs-host-action">
+        ${host
+          ? `<div class="gs-podium-name">${host.name}</div>`
+          : `<button type="button" class="secondary gs-small-btn" id="gsOpenHostBoxBtn">Become Host</button>`}
+      </div>
     </div>
   `;
 }
@@ -444,10 +455,236 @@ function renderTeamReadyRow(team) {
 }
 
 function renderScreenReady() {
+  const room = state.room;
+  const iAmHost = room.hostId === socket.id;
   return `
     ${renderTeamReadyRow('teamA')}
     ${renderTeamReadyRow('teamB')}
-    <p class="gs-screen-status">Teams are locked in. The actual quiz board isn't built yet -- that's the next piece coming.</p>
+    ${iAmHost ? `
+      <div class="center" style="margin-top:10px;">
+        <button type="button" class="primary" id="gsStartGameBtn">Start Game</button>
+      </div>
+    ` : `<p class="gs-screen-status">Teams are locked in -- waiting for the host to start the game.</p>`}
+  `;
+}
+
+// ---------- the actual quiz board (quotes / trivia / screenshots) ----------
+const COLUMN_LABELS = { quotes: 'Quotes', trivia: 'Trivia', screenshots: 'Screenshots' };
+
+function teamLabel(team) {
+  const room = state.room;
+  if (!room) return team;
+  return room[team] && room[team].name ? room[team].name : (team === 'teamA' ? 'Team A' : 'Team B');
+}
+
+function renderScoreboard() {
+  const room = state.room;
+  return `
+    <div class="gs-scoreboard">
+      <div class="gs-score-block teamA"><span class="gs-score-label">${teamLabel('teamA')}</span><span class="gs-score-value">${room.board.scores.teamA}</span></div>
+      <div class="gs-score-block teamB"><span class="gs-score-label">${teamLabel('teamB')}</span><span class="gs-score-value">${room.board.scores.teamB}</span></div>
+    </div>
+  `;
+}
+
+function renderHintsPhoneRow(iAmHost) {
+  const room = state.room;
+  const spectators = room.players.filter(p => p.role === 'spectator');
+  return `
+    <div class="gs-hint-row">
+      ${['teamA', 'teamB'].map(team => `
+        <div class="gs-hint-block">
+          <span class="gs-hint-team">${teamLabel(team)}</span>
+          <span class="gs-hint-count">💡 ${room.board.hints[team]}</span>
+          ${iAmHost ? `<button type="button" class="secondary gs-small-btn" data-hint-team="${team}" ${room.board.hints[team] <= 0 ? 'disabled' : ''}>Give Hint</button>` : ''}
+          <span class="gs-phone-status">${room.board.phoneAFriend[team].used ? `📞 used (${room.board.phoneAFriend[team].spectatorName})` : '📞 available'}</span>
+          ${iAmHost && !room.board.phoneAFriend[team].used ? `
+            <select class="gs-phone-select" data-phone-team="${team}" ${spectators.length ? '' : 'disabled'}>
+              <option value="">${spectators.length ? 'Pick spectator...' : 'No spectators'}</option>
+              ${spectators.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+            </select>
+            <button type="button" class="secondary gs-small-btn" data-phone-go="${team}" ${spectators.length ? '' : 'disabled'}>Use</button>
+          ` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderBoardGrid(iAmHost) {
+  const room = state.room;
+  const rows = [0, 1, 2, 3, 4];
+  const cols = ['quotes', 'trivia', 'screenshots'];
+  return `
+    <table class="gs-board-grid">
+      <thead><tr>${cols.map(c => `<th>${COLUMN_LABELS[c]}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${rows.map(row => `
+          <tr>
+            ${cols.map(col => {
+              const cell = room.board.cells.find(c => c.column === col && c.row === row);
+              if (!cell) return '<td></td>';
+              if (cell.used) return `<td class="gs-cell used">&nbsp;</td>`;
+              const clickable = iAmHost && !room.board.active;
+              return `<td class="gs-cell ${clickable ? 'clickable' : ''}" ${clickable ? `data-open-cell="${cell.id}"` : ''}>$${cell.value}</td>`;
+            }).join('')}
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderActiveCellPanel(iAmHost) {
+  const room = state.room;
+  const active = room.board.active;
+  const me = myPlayer();
+  const iAmTeam = (team) => me && me.role === team;
+  const promptHtml = active.column === 'quotes'
+    ? `<p class="gs-cell-prompt">"${active.content.text}"</p><p class="hint">-- from ${active.content.game || 'Trails'}</p>`
+    : active.column === 'trivia'
+      ? `<p class="gs-cell-prompt">${active.content.question}</p>`
+      : `<img class="gs-cell-screenshot" src="${active.stage === 'revealed' ? active.content.answer : active.content.hint}" alt="Screenshot" />`;
+
+  const revealedExtra = active.stage === 'revealed'
+    ? (active.column === 'quotes'
+        ? `<p class="gs-cell-answer">Said by <strong>${active.content.character}</strong></p>`
+        : active.column === 'trivia'
+          ? `<p class="gs-cell-answer">Answer: <strong>${active.content.answer}</strong>${active.content.by ? ` <span class="hint">(submitted by ${active.content.by})</span>` : ''}</p>`
+          : '')
+    : '';
+
+  const teamAnswerBox = (team) => {
+    const locked = active.locked[team];
+    const mine = iAmTeam(team);
+    return `
+      <div class="gs-answer-block">
+        <p class="gs-section-title">${teamLabel(team)}</p>
+        ${locked
+          ? `<p class="gs-locked-answer">${active.answers[team] != null ? `"${active.answers[team]}"` : '(submitted)'}</p>`
+          : mine
+            ? `<div class="join-row"><input type="text" id="gsAnswerInput_${team}" maxlength="200" placeholder="Your team's answer" /><button type="button" class="secondary gs-submit-answer-btn" data-team="${team}">Submit</button></div>`
+            : `<p class="hint">Waiting on ${teamLabel(team)}...</p>`}
+        ${active.stage === 'revealed' && active.judged[team]
+          ? `<p class="gs-judge-result ${active.judged[team]}">${active.judged[team] === 'correct' ? '✅ Correct' : '❌ Wrong'}</p>`
+          : ''}
+        ${iAmHost && active.stage === 'revealed' && !active.judged[team] ? `
+          <div class="gs-judge-btns">
+            <button type="button" class="secondary gs-small-btn" data-judge-team="${team}" data-judge-correct="1">Correct</button>
+            <button type="button" class="secondary gs-small-btn" data-judge-team="${team}" data-judge-correct="0">Wrong</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  };
+
+  const canOfferSteal = (team) => iAmHost && active.stage === 'revealed' && !active.stealTeam
+    && active.judged[otherTeam(team)] === 'wrong' && active.judged[team] !== 'correct';
+
+  const stealBlock = active.stealTeam ? `
+    <div class="gs-steal-block">
+      <p class="gs-section-title">${teamLabel(active.stealTeam)} STEAL attempt</p>
+      ${active.stealAnswer == null
+        ? (iAmTeam(active.stealTeam)
+            ? `<div class="join-row"><input type="text" id="gsStealInput" maxlength="200" placeholder="Steal answer" /><button type="button" class="secondary" id="gsSubmitStealBtn">Submit</button></div>`
+            : `<p class="hint">Waiting on ${teamLabel(active.stealTeam)}'s steal answer...</p>`)
+        : `<p class="gs-locked-answer">"${active.stealAnswer}"</p>
+           ${active.stealJudged
+             ? `<p class="gs-judge-result ${active.stealJudged}">${active.stealJudged === 'correct' ? '✅ Correct steal!' : '❌ Wrong -- other team gets a bonus hint'}</p>`
+             : iAmHost ? `
+                <div class="gs-judge-btns">
+                  <button type="button" class="secondary gs-small-btn" id="gsJudgeStealCorrect">Correct</button>
+                  <button type="button" class="secondary gs-small-btn" id="gsJudgeStealWrong">Wrong</button>
+                </div>
+             ` : ''}`}
+    </div>
+  ` : '';
+
+  const offerStealBtns = iAmHost && active.stage === 'revealed' ? `
+    <div class="center" style="margin-top:6px;">
+      ${canOfferSteal('teamA') ? `<button type="button" class="secondary gs-small-btn" data-offer-steal="teamA">Offer Steal to ${teamLabel('teamA')}</button>` : ''}
+      ${canOfferSteal('teamB') ? `<button type="button" class="secondary gs-small-btn" data-offer-steal="teamB">Offer Steal to ${teamLabel('teamB')}</button>` : ''}
+    </div>
+  ` : '';
+
+  return `
+    <div class="gs-active-cell">
+      <p class="gs-cell-value">$${active.value} -- ${COLUMN_LABELS[active.column]}</p>
+      ${promptHtml}
+      ${revealedExtra}
+      <div class="gs-answer-cols">
+        ${teamAnswerBox('teamA')}
+        ${teamAnswerBox('teamB')}
+      </div>
+      ${stealBlock}
+      ${offerStealBtns}
+      ${iAmHost ? `
+        <div class="center" style="margin-top:10px;">
+          ${active.stage === 'answering' ? `<button type="button" class="primary" id="gsRevealAnswerBtn">Reveal Answer</button>` : ''}
+          ${active.stage === 'revealed' && active.judged.teamA && active.judged.teamB && (!active.stealTeam || active.stealJudged)
+            ? `<button type="button" class="primary" id="gsCloseCellBtn">Close Question</button>` : ''}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function otherTeam(team) { return team === 'teamA' ? 'teamB' : 'teamA'; }
+
+function renderComebackBanner(iAmHost) {
+  const room = state.room;
+  const cb = room.board.comeback;
+  if (!cb) return '';
+  if (!cb.active) {
+    return `
+      <div class="gs-comeback-banner">
+        <p>${cb.playerName} scored <strong>${cb.points}</strong> point${cb.points === 1 ? '' : 's'} for ${teamLabel(cb.team)} in the comeback round!</p>
+        ${iAmHost ? `<button type="button" class="secondary gs-small-btn" id="gsClearComebackBtn">Dismiss</button>` : ''}
+      </div>
+    `;
+  }
+  return `
+    <div class="gs-comeback-banner">
+      <p>🎤 ${cb.playerName} is attempting "That Won't Be Necessary" for ${teamLabel(cb.team)}...</p>
+    </div>
+  `;
+}
+
+function renderComebackTrigger(iAmHost) {
+  const room = state.room;
+  const gap = Math.abs(room.board.scores.teamA - room.board.scores.teamB);
+  if (!iAmHost || gap < 10 || room.board.active || (room.board.comeback && room.board.comeback.active)) return '';
+  const losingTeam = room.board.scores.teamA < room.board.scores.teamB ? 'teamA' : 'teamB';
+  const members = room.players.filter(p => p.role === losingTeam);
+  if (!members.length) return '';
+  return `
+    <div class="gs-comeback-trigger">
+      <p class="hint">${teamLabel(losingTeam)} is down by ${gap} -- trigger the comeback round?</p>
+      <select id="gsComebackPlayerSelect">
+        ${members.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}
+      </select>
+      <button type="button" class="secondary gs-small-btn" id="gsStartComebackBtn" data-team="${losingTeam}">That Won't Be Necessary</button>
+    </div>
+  `;
+}
+
+function renderScreenBoard() {
+  const room = state.room;
+  const iAmHost = room.hostId === socket.id;
+  if (room.phase === 'finished') {
+    const winner = room.board.scores.teamA === room.board.scores.teamB ? null : (room.board.scores.teamA > room.board.scores.teamB ? 'teamA' : 'teamB');
+    return `
+      ${renderScoreboard()}
+      <h3 class="gs-screen-title">Game Over!</h3>
+      <p class="gs-screen-status">${winner ? `${teamLabel(winner)} wins!` : "It's a tie!"}</p>
+    `;
+  }
+  return `
+    ${renderScoreboard()}
+    ${renderComebackBanner(iAmHost)}
+    ${renderComebackTrigger(iAmHost)}
+    ${room.board.active ? renderActiveCellPanel(iAmHost) : renderBoardGrid(iAmHost)}
+    ${!room.board.active ? renderHintsPhoneRow(iAmHost) : ''}
   `;
 }
 
@@ -456,6 +693,7 @@ function renderStage() {
   let screenInner = '';
   if (room.phase === 'naming') screenInner = renderScreenNaming();
   else if (room.phase === 'ready') screenInner = renderScreenReady();
+  else if (room.phase === 'playing' || room.phase === 'finished') screenInner = renderScreenBoard();
   else screenInner = renderScreenLobby();
 
   const me = myPlayer();
@@ -541,6 +779,7 @@ function renderSpeedPlaying() {
   const progressInTier = correctCount % NAMES_PER_POINT;
   return `
     <div class="card gs-speed-card">
+      ${state.comebackMode ? '<p class="gs-comeback-title">🎤 That Won\'t Be Necessary -- Comeback Round!</p>' : ''}
       <div class="gs-speed-topbar">
         <div class="gs-speed-timer ${s.timeLeft <= 10 ? 'urgent' : ''}" id="gsTimer">${s.timeLeft}s</div>
         <div class="gs-speed-score">
@@ -629,14 +868,11 @@ function attachHandlers() {
     if (stageEl) renderAvatarStage(stageEl, avatar);
   });
 
-  // landing
-  const nameInput = document.getElementById('gsNameInput');
-  if (nameInput) nameInput.addEventListener('input', e => { state.myName = e.target.value; });
-
+  // landing -- just create/join here; name + avatar happen next, together,
+  // on the Build Your Character screen.
   const createBtn = document.getElementById('gsCreateRoomBtn');
   if (createBtn) createBtn.addEventListener('click', () => {
-    if (!state.myName.trim()) { state.error = 'Enter a name first.'; render(); return; }
-    socket.emit('gsCreateRoom', { name: state.myName.trim(), avatar, clientId }, (res) => {
+    socket.emit('gsCreateRoom', { name: 'Player', avatar, clientId }, (res) => {
       if (!res.ok) { state.error = res.error || 'Could not create room.'; render(); }
     });
   });
@@ -646,9 +882,8 @@ function attachHandlers() {
 
   const joinBtn = document.getElementById('gsJoinRoomBtn');
   if (joinBtn) joinBtn.addEventListener('click', () => {
-    if (!state.myName.trim()) { state.error = 'Enter a name first.'; render(); return; }
     if (!state.joinCodeInput.trim()) { state.error = 'Enter a room code.'; render(); return; }
-    socket.emit('gsJoinRoom', { code: state.joinCodeInput.trim(), name: state.myName.trim(), avatar, clientId }, (res) => {
+    socket.emit('gsJoinRoom', { code: state.joinCodeInput.trim(), name: 'Player', avatar, clientId }, (res) => {
       if (!res.ok) { state.error = res.error || 'Could not join room.'; render(); }
     });
   });
@@ -662,10 +897,15 @@ function attachHandlers() {
   if (closeHowToPlayBtn) closeHowToPlayBtn.addEventListener('click', () => { state.showHowToPlay = false; render(); });
 
   // avatar setup (shown once, right after joining/creating a room)
+  const avatarNameInput = document.getElementById('gsAvatarNameInput');
+  if (avatarNameInput) avatarNameInput.addEventListener('input', e => { state.myName = e.target.value; });
+
   const confirmAvatarBtn = document.getElementById('gsConfirmAvatarBtn');
   if (confirmAvatarBtn) confirmAvatarBtn.addEventListener('click', () => {
-    socket.emit('gsSetAvatar', { avatar }, (res) => {
-      if (!res.ok) { showGsNotice(res.error || "Couldn't save avatar."); return; }
+    if (!state.myName.trim()) { state.error = 'Enter a name first.'; render(); return; }
+    state.error = '';
+    socket.emit('gsSetProfile', { name: state.myName.trim(), avatar }, (res) => {
+      if (!res.ok) { showGsNotice(res.error || "Couldn't save your character."); return; }
       state.avatarConfirmed = true;
       state.screen = 'stage';
       render();
@@ -777,6 +1017,122 @@ function attachHandlers() {
     });
   });
 
+  // board: start game
+  const startGameBtn = document.getElementById('gsStartGameBtn');
+  if (startGameBtn) startGameBtn.addEventListener('click', () => {
+    socket.emit('gsStartGame', null, (res) => {
+      if (!res.ok) showGsNotice(res.error || "Couldn't start the game.");
+    });
+  });
+
+  // board: open a cell
+  document.querySelectorAll('[data-open-cell]').forEach(td => {
+    td.addEventListener('click', () => {
+      socket.emit('gsOpenCell', { cellId: td.dataset.openCell }, (res) => {
+        if (!res.ok) showGsNotice(res.error || "Couldn't open that question.");
+      });
+    });
+  });
+
+  // board: submit team answer
+  document.querySelectorAll('.gs-submit-answer-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const team = btn.dataset.team;
+      const input = document.getElementById('gsAnswerInput_' + team);
+      if (!input || !input.value.trim()) return;
+      socket.emit('gsSubmitAnswer', { team, text: input.value }, (res) => {
+        if (!res.ok) showGsNotice(res.error || "Couldn't submit.");
+      });
+    });
+  });
+
+  const revealBtn = document.getElementById('gsRevealAnswerBtn');
+  if (revealBtn) revealBtn.addEventListener('click', () => {
+    socket.emit('gsRevealAnswer', null, (res) => {
+      if (!res.ok) showGsNotice(res.error || "Couldn't reveal.");
+    });
+  });
+
+  document.querySelectorAll('[data-judge-team]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      socket.emit('gsJudgeAnswer', { team: btn.dataset.judgeTeam, correct: btn.dataset.judgeCorrect === '1' }, (res) => {
+        if (!res.ok) showGsNotice(res.error || "Couldn't judge.");
+      });
+    });
+  });
+
+  document.querySelectorAll('[data-offer-steal]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      socket.emit('gsOpenSteal', { team: btn.dataset.offerSteal }, (res) => {
+        if (!res.ok) showGsNotice(res.error || "Couldn't offer steal.");
+      });
+    });
+  });
+
+  const submitStealBtn = document.getElementById('gsSubmitStealBtn');
+  if (submitStealBtn) submitStealBtn.addEventListener('click', () => {
+    const input = document.getElementById('gsStealInput');
+    if (!input || !input.value.trim()) return;
+    socket.emit('gsSubmitSteal', { text: input.value }, (res) => {
+      if (!res.ok) showGsNotice(res.error || "Couldn't submit steal.");
+    });
+  });
+
+  const judgeStealCorrect = document.getElementById('gsJudgeStealCorrect');
+  if (judgeStealCorrect) judgeStealCorrect.addEventListener('click', () => {
+    socket.emit('gsJudgeSteal', { correct: true }, (res) => { if (!res.ok) showGsNotice(res.error || 'Error.'); });
+  });
+  const judgeStealWrong = document.getElementById('gsJudgeStealWrong');
+  if (judgeStealWrong) judgeStealWrong.addEventListener('click', () => {
+    socket.emit('gsJudgeSteal', { correct: false }, (res) => { if (!res.ok) showGsNotice(res.error || 'Error.'); });
+  });
+
+  const closeCellBtn = document.getElementById('gsCloseCellBtn');
+  if (closeCellBtn) closeCellBtn.addEventListener('click', () => {
+    socket.emit('gsCloseCell', null, (res) => {
+      if (!res.ok) showGsNotice(res.error || "Couldn't close.");
+    });
+  });
+
+  // board: hints + phone a friend
+  document.querySelectorAll('[data-hint-team]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      socket.emit('gsGiveHint', { team: btn.dataset.hintTeam }, (res) => {
+        if (!res.ok) showGsNotice(res.error || "Couldn't give hint.");
+      });
+    });
+  });
+
+  document.querySelectorAll('[data-phone-go]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const team = btn.dataset.phoneGo;
+      const select = document.querySelector(`[data-phone-team="${team}"]`);
+      const spectatorId = select ? select.value : '';
+      if (!spectatorId) { showGsNotice('Pick a spectator first.'); return; }
+      socket.emit('gsUsePhoneAFriend', { team, spectatorId }, (res) => {
+        if (!res.ok) showGsNotice(res.error || "Couldn't use Phone a Friend.");
+      });
+    });
+  });
+
+  // board: comeback trigger
+  const startComebackBtn = document.getElementById('gsStartComebackBtn');
+  if (startComebackBtn) startComebackBtn.addEventListener('click', () => {
+    const select = document.getElementById('gsComebackPlayerSelect');
+    const playerId = select ? select.value : '';
+    if (!playerId) { showGsNotice('Pick a player first.'); return; }
+    socket.emit('gsStartComeback', { team: startComebackBtn.dataset.team, playerId }, (res) => {
+      if (!res.ok) showGsNotice(res.error || "Couldn't start the comeback round.");
+    });
+  });
+
+  const clearComebackBtn = document.getElementById('gsClearComebackBtn');
+  if (clearComebackBtn) clearComebackBtn.addEventListener('click', () => {
+    socket.emit('gsClearComebackBanner', null, (res) => {
+      if (!res.ok) showGsNotice(res.error || 'Error.');
+    });
+  });
+
   // speed round test harness
   const startBtn = document.getElementById('gsStartSpeedBtn');
   if (startBtn) startBtn.addEventListener('click', startSpeedRound);
@@ -846,6 +1202,15 @@ function startSpeedRound() {
 function endSpeedRound() {
   clearInterval(speedTimerHandle);
   speedTimerHandle = null;
+  if (state.comebackMode) {
+    const correctCount = state.speed.feed.filter(f => f.ok).length;
+    const points = Math.floor(correctCount / NAMES_PER_POINT);
+    socket.emit('gsFinishComeback', { points }, () => {});
+    state.comebackMode = false;
+    state.screen = 'stage';
+    render();
+    return;
+  }
   state.screen = 'speedResults';
   render();
 }
