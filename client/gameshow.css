@@ -988,17 +988,21 @@ body:has(#app-gameshow) {
    right back around, which is what put the hints/phone on the wrong side. */
 #app-gameshow .gs-score-row { display: flex; align-items: center; gap: 10px; }
 #app-gameshow .gs-icon-stack { display: flex; flex-direction: column; gap: 3px; }
-/* Bare icons, no background box behind them -- opacity alone shows
-   used/available state. */
+/* Each icon gets its own small team-colored pill, matching the reference --
+   same color family as that team's score box, just a smaller accent. This
+   is a colored accent, not a gray box, so it doesn't conflict with the
+   "no gray boxes" rule elsewhere on the screen. */
 #app-gameshow .gs-icon-box {
-  font-size: 1rem; width: 22px; height: 22px; display: flex; align-items: center;
-  justify-content: center;
+  font-size: 1rem; width: 26px; height: 26px; display: flex; align-items: center;
+  justify-content: center; border-radius: 6px;
 }
-#app-gameshow .gs-icon-box.spent { opacity: 0.25; filter: grayscale(1); }
+#app-gameshow .gs-icon-box.teamA { background: #1a3a66; }
+#app-gameshow .gs-icon-box.teamB { background: #5c1620; }
+#app-gameshow .gs-icon-box.spent { opacity: 0.35; filter: grayscale(1); }
 #app-gameshow .gs-icon-box.lit { opacity: 1; }
-/* Phone a Friend is visually distinct from the hint icons -- its own
-   button, not part of the hint stack. */
-#app-gameshow .gs-phone-icon { width: 26px; height: 30px; font-size: 1.1rem; }
+/* Phone a Friend is visually distinct from the hint icons -- its own,
+   taller button, not part of the hint stack. */
+#app-gameshow .gs-phone-icon { width: 30px; height: 88px; font-size: 1.3rem; }
 
 /* Screenshot: always a big, uniform box regardless of source size -- the
    image fills it completely (object-fit: cover, scales small images UP and

@@ -698,7 +698,7 @@ function renderHintStack(team) {
   const hintsLeft = room.board.hints[team];
   const hintIcons = Array.from({ length: STARTING_HINTS_CLIENT }, (_, i) => {
     const lit = i < hintsLeft;
-    return `<span class="gs-icon-box ${lit ? 'lit' : 'spent'}" title="${lit ? 'Hint available' : 'Hint used'}">💡</span>`;
+    return `<span class="gs-icon-box ${team} ${lit ? 'lit' : 'spent'}" title="${lit ? 'Hint available' : 'Hint used'}">💡</span>`;
   }).join('');
   return `<div class="gs-icon-stack">${hintIcons}</div>`;
 }
@@ -707,23 +707,25 @@ function renderHintStack(team) {
 function renderPhoneButton(team) {
   const room = state.room;
   const pf = room.board.phoneAFriend[team];
-  return `<span class="gs-icon-box gs-phone-icon ${pf.used ? 'spent' : 'lit'}" title="${pf.used ? `Phone a Friend used (${pf.spectatorName})` : 'Phone a Friend available'}">📞</span>`;
+  return `<span class="gs-icon-box gs-phone-icon ${team} ${pf.used ? 'spent' : 'lit'}" title="${pf.used ? `Phone a Friend used (${pf.spectatorName})` : 'Phone a Friend available'}">📞</span>`;
 }
 
 function renderScoreboard() {
   const room = state.room;
   const iAmHost = room.hostId === socket.id;
+  // Reference order, outer-to-inner: Phone, Hints, Box -- phone is the
+  // outermost icon on each side, hints sit between it and the box.
   const block = (team, alignEnd) => `
     <div class="gs-score-row ${alignEnd ? 'reversed' : ''}">
-      ${!alignEnd ? renderHintStack(team) : ''}
       ${!alignEnd ? renderPhoneButton(team) : ''}
+      ${!alignEnd ? renderHintStack(team) : ''}
       <div class="gs-score-block ${team}">
         <span class="gs-score-label">${teamLabel(team)}</span>
         <span class="gs-score-value">${room.board.scores[team]}</span>
         ${iAmHost ? `<button type="button" class="gs-hint-mini-btn" data-hint-team="${team}" ${room.board.hints[team] <= 0 ? 'disabled' : ''} title="Give ${teamLabel(team)} a hint">+Hint</button>` : ''}
       </div>
-      ${alignEnd ? renderPhoneButton(team) : ''}
       ${alignEnd ? renderHintStack(team) : ''}
+      ${alignEnd ? renderPhoneButton(team) : ''}
     </div>
   `;
   return `<div class="gs-scoreboard">${block('teamA', false)}${block('teamB', true)}</div>`;
