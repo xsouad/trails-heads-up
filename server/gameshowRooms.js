@@ -106,6 +106,11 @@ function setRole(room, socketId, role, opts = {}) {
   }
 
   if (role === 'teamA' || role === 'teamB') {
+    // Teams lock in once the actual game starts -- no switching podiums or
+    // jumping to the other team mid-game. Spectating is still always open.
+    if ((room.phase === 'playing' || room.phase === 'finished')) {
+      return { error: 'Teams are locked in for this game -- you can still spectate.' };
+    }
     if (player.role !== role && teamCount(room, role) >= MAX_TEAM_SIZE) {
       return { error: `That team is already full (${MAX_TEAM_SIZE}/${MAX_TEAM_SIZE}).` };
     }

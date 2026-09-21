@@ -206,7 +206,7 @@ function renderHowToPlayModal() {
         <h3 style="margin-top:0; text-align:center;">Gameshow (WIP)</h3>
         <p>Create or join a room, then build your avatar. Pick Host (needs the code), Team A, Team B, or a spectator seat.</p>
         <p>Once both teams have people in and everyone's hit Ready, the host starts a quick minigame where each team names itself and votes on the winner.</p>
-        <p>The actual quiz board (quotes, trivia, screenshots) is still being built -- this is just the lobby so far.</p>
+        <p>The actual quiz board (quotes, trivia, screenshots) is still being built. This is just the lobby so far.</p>
         <button type="button" class="close-btn" id="gsCloseHowToPlayBtn" style="margin-top:10px; display:block; margin-left:auto; margin-right:auto;">Close</button>
       </div>
     </div>
@@ -363,7 +363,7 @@ function renderScreenLobby() {
   let statusLine;
   if (!competitors.length) statusLine = 'Waiting for players to join a team.';
   else if (readyCount < competitors.length) statusLine = `${readyCount}/${competitors.length} competitors ready.`;
-  else statusLine = 'Everyone is ready -- waiting on the host.';
+  else statusLine = 'Everyone is ready. Waiting on the host.';
   return `
     <div class="gs-screen-roomcode">${room.code}</div>
     <p class="gs-screen-sub">Share this code with everyone joining. Pick your spot below.</p>
@@ -392,7 +392,7 @@ function renderNameColumn(team, label) {
       <div class="gs-candidate-list">
         ${t.candidates.length ? t.candidates.map((c, idx) => `
           <div class="gs-candidate-row ${myVote === idx ? 'voted' : ''}">
-            <span class="gs-candidate-text">"${c.text}" <span class="hint">-- ${c.byName}</span></span>
+            <span class="gs-candidate-text">"${c.text}" <span class="hint">by ${c.byName}</span></span>
             <span class="gs-candidate-votes">${tally[idx] || 0} vote${(tally[idx] || 0) === 1 ? '' : 's'}</span>
             ${onThisTeam ? `<button type="button" class="secondary gs-vote-btn" data-team="${team}" data-idx="${idx}">${myVote === idx ? 'Voted' : 'Vote'}</button>` : ''}
           </div>
@@ -465,7 +465,7 @@ function renderScreenReady() {
       <div class="center" style="margin-top:10px;">
         <button type="button" class="primary" id="gsStartGameBtn">Start Game</button>
       </div>
-    ` : `<p class="gs-screen-status">Teams are locked in -- waiting for the host to start the game.</p>`}
+    ` : `<p class="gs-screen-status">Teams are locked in. Waiting for the host to start the game.</p>`}
   `;
 }
 
@@ -559,21 +559,36 @@ function renderBoardGrid(iAmHost) {
   `;
 }
 
-function renderTurnBanner(active) {
+function renderTurnBanner(active, viewerKind) {
+  if (viewerKind === 'spectator') return ''; // spectators just watch -- no turn/timer clutter
   if (active.stage !== 'answering') return '';
   const secs = Math.max(0, Math.ceil((active.deadline - Date.now()) / 1000));
-  return `<p class="gs-turn-banner">🎯 ${teamLabel(active.turnTeam)}'s turn -- <span id="gsTurnTimer">${secs}s</span></p>`;
+  return `<p class="gs-turn-banner">${teamLabel(active.turnTeam)}'s turn: <span id="gsTurnTimer">${secs}s</span></p>`;
+}
+
+// A short one-line status for the audience (spectators) -- no boxes, no
+// controls, just what's happening right now.
+function spectatorStatusLine(active) {
+  if (active.stage === 'answering') return `${teamLabel(active.turnTeam)} is answering...`;
+  if (active.stealTeam) {
+    if (active.stealJudged) return active.stealJudged === 'correct' ? `${teamLabel(active.stealTeam)} stole it!` : `${teamLabel(active.stealTeam)} missed the steal.`;
+    return `${teamLabel(active.stealTeam)} is attempting a steal...`;
+  }
+  if (active.turnJudged === 'correct') return `${teamLabel(active.turnTeam)} got it right!`;
+  if (active.turnJudged === 'wrong') return `${teamLabel(active.turnTeam)} was wrong.`;
+  if (active.timedOut) return `${teamLabel(active.turnTeam)} ran out of time.`;
+  return 'Judging...';
 }
 
 function renderHostHint(active) {
   if (active.column === 'quotes') {
-    return `<div class="gs-host-hint"><p class="gs-host-hint-label">HOST ONLY</p><p>Said by <strong>${active.content.character}</strong> -- <em>${active.content.game || ''}</em></p></div>`;
+    return `<div class="gs-host-hint"><p class="gs-host-hint-label">HOST ONLY</p><p>Said by <strong>${active.content.character}</strong> (<em>${active.content.game || ''}</em>)</p></div>`;
   }
   if (active.column === 'trivia' || active.column === 'bonus') {
     return `<div class="gs-host-hint"><p class="gs-host-hint-label">HOST ONLY</p><p>Answer: <strong>${active.content.answer}</strong>${active.content.by ? ` <span class="hint">(submitted by ${active.content.by})</span>` : ''}</p></div>`;
   }
   if (active.column === 'screenshots') {
-    return `<div class="gs-host-hint"><p class="gs-host-hint-label">HOST ONLY -- Answer</p><img class="gs-cell-screenshot small" src="${active.content.answer}" alt="Answer" /></div>`;
+    return `<div class="gs-host-hint"><p class="gs-host-hint-label">HOST ONLY: Answer</p><img class="gs-cell-screenshot small" src="${active.content.answer}" alt="Answer" /></div>`;
   }
   return '';
 }
@@ -583,16 +598,16 @@ function renderAnswerArea(iAmHost, active) {
   const turnTeam = active.turnTeam;
   const isMyTurnTeam = me && me.role === turnTeam;
   let box;
-  if (active.stage === 'answering') {
+  if (active.stage === 'answering' && !active.timedOut) {
     if (active.turnLocked) {
-      box = `<p class="gs-locked-answer">${teamLabel(turnTeam)} locked in an answer -- waiting on the host to reveal.</p>`;
+      box = `<p class="gs-locked-answer">${teamLabel(turnTeam)} locked in an answer. Waiting on the host.</p>`;
     } else if (isMyTurnTeam) {
       box = `<div class="join-row"><input type="text" id="gsAnswerInput" maxlength="200" placeholder="Your team's answer" /><button type="button" class="secondary" id="gsSubmitAnswerBtn">Submit</button></div>`;
     } else {
       box = `<p class="hint">Waiting on ${teamLabel(turnTeam)}...</p>`;
     }
   } else if (active.timedOut) {
-    box = `<p class="gs-judge-result wrong">⏱️ Time ran out -- no answer given.</p>`;
+    box = `<p class="gs-judge-result wrong">Time ran out. No answer given.</p>`;
   } else {
     box = `<p class="gs-locked-answer">"${active.turnAnswer}"</p>`;
     if (active.turnJudged) {
@@ -601,7 +616,7 @@ function renderAnswerArea(iAmHost, active) {
       box += `<div class="gs-judge-btns"><button type="button" class="secondary gs-small-btn" id="gsJudgeCorrectBtn">Correct</button><button type="button" class="secondary gs-small-btn" id="gsJudgeWrongBtn">Wrong</button></div>`;
     }
   }
-  return `<div class="gs-answer-block"><p class="gs-section-title">${teamLabel(turnTeam)}'s Answer</p>${box}</div>`;
+  return `<div class="gs-answer-block"><p class="gs-section-title">${teamLabel(turnTeam)}</p>${box}</div>`;
 }
 
 function renderStealArea(iAmHost, active) {
@@ -621,24 +636,39 @@ function renderStealArea(iAmHost, active) {
       : `<p class="hint">Waiting on ${teamLabel(active.stealTeam)}'s steal answer...</p>`;
   } else {
     inner = `<p class="gs-locked-answer">"${active.stealAnswer}"</p>` + (active.stealJudged
-      ? `<p class="gs-judge-result ${active.stealJudged}">${active.stealJudged === 'correct' ? '✅ Stole it!' : `❌ Wrong -- loses ${Math.floor(active.value / 2)} pts`}</p>`
+      ? `<p class="gs-judge-result ${active.stealJudged}">${active.stealJudged === 'correct' ? '✅ Stole it!' : `❌ Wrong. Loses ${Math.floor(active.value / 2)} pts.`}</p>`
       : iAmHost ? `<div class="gs-judge-btns"><button type="button" class="secondary gs-small-btn" id="gsJudgeStealCorrect">Correct</button><button type="button" class="secondary gs-small-btn" id="gsJudgeStealWrong">Wrong</button></div>` : '');
   }
-  return `<div class="gs-steal-block"><p class="gs-section-title">${teamLabel(active.stealTeam)} STEAL attempt</p>${inner}</div>`;
+  return `<div class="gs-steal-block"><p class="gs-section-title">Steal: ${teamLabel(active.stealTeam)}</p>${inner}</div>`;
 }
 
 function renderActiveCellPanel(iAmHost) {
   const room = state.room;
   const active = room.board.active;
+  const me = myPlayer();
+  const viewerKind = iAmHost ? 'host' : (me && (me.role === 'teamA' || me.role === 'teamB') ? 'competitor' : 'spectator');
   const promptHtml = active.column === 'screenshots'
     ? `<img class="gs-cell-screenshot" src="${active.content.hint}" alt="Screenshot hint" />`
     : `<p class="gs-cell-prompt">${active.column === 'quotes' ? `"${active.content.text}"` : active.content.question}</p>`;
+
+  // Spectators (and, by extension, anyone just watching) get the bare
+  // minimum: category, prompt, one line of status. No boxes, no controls.
+  if (viewerKind === 'spectator') {
+    return `
+      <div class="gs-active-cell">
+        <p class="gs-cell-value">$${active.value}: ${COLUMN_LABELS[active.column] || 'Bonus'}</p>
+        ${promptHtml}
+        <p class="gs-status-line">${spectatorStatusLine(active)}</p>
+      </div>
+    `;
+  }
+
   const canClose = active.turnJudged === 'correct' || (active.turnJudged && (!active.stealTeam || active.stealJudged));
 
   return `
     <div class="gs-active-cell">
-      <p class="gs-cell-value">$${active.value} -- ${COLUMN_LABELS[active.column] || 'Bonus'}</p>
-      ${renderTurnBanner(active)}
+      <p class="gs-cell-value">$${active.value}: ${COLUMN_LABELS[active.column] || 'Bonus'}</p>
+      ${renderTurnBanner(active, viewerKind)}
       ${promptHtml}
       ${iAmHost ? renderHostHint(active) : ''}
       ${renderAnswerArea(iAmHost, active)}
@@ -647,6 +677,7 @@ function renderActiveCellPanel(iAmHost) {
         <div class="center" style="margin-top:10px;">
           ${active.stage === 'answering' ? `<button type="button" class="primary" id="gsRevealAnswerBtn">Reveal Answer</button>` : ''}
           ${active.stage === 'revealed' && canClose ? `<button type="button" class="primary" id="gsCloseCellBtn">Close Question</button>` : ''}
+          <button type="button" class="secondary gs-small-btn" id="gsAbandonCellBtn">Cancel Question</button>
         </div>
       ` : ''}
     </div>
@@ -692,7 +723,7 @@ function renderComebackArea(iAmHost) {
   if (!members.length) return '';
   return `
     <div class="gs-comeback-trigger">
-      <p class="hint">${teamLabel(losingTeam)} is down by ${gap} -- trigger the comeback round?</p>
+      <p class="hint">${teamLabel(losingTeam)} is down by ${gap}. Trigger the comeback round?</p>
       <select id="gsComebackPlayerSelect">
         ${members.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}
       </select>
@@ -779,7 +810,7 @@ const POINTS_PER_TIER = 100; // each tier of 5 correct names is worth 100 game p
 
 function renderLeaderboard() {
   const board = loadLeaderboard();
-  if (!board.length) return '<p class="hint">No scores yet -- be the first!</p>';
+  if (!board.length) return '<p class="hint">No scores yet. Be the first!</p>';
   return `
     <ol class="gs-leaderboard-list">
       ${board.map(entry => `<li><span class="gs-leaderboard-name">${entry.name}</span><span class="gs-leaderboard-points">${entry.points} pt${entry.points === 1 ? '' : 's'}</span></li>`).join('')}
@@ -792,7 +823,7 @@ function renderSpeedIntro() {
     <div class="card center">
       <h2 class="gs-gate-title">That Won't Be Necessary</h2>
       <p class="hint">
-        A character's picture shows up on screen -- type their name (or pick
+        A character's picture shows up on screen. Type their name (or pick
         it from the dropdown) as fast as you can, then the next one appears.
         Every ${NAMES_PER_POINT} correct names earns ${POINTS_PER_TIER} points. ${SPEED_ROUND_SECONDS} seconds on the clock.
       </p>
@@ -812,8 +843,8 @@ function renderSpeedPlaying() {
   const points = Math.floor(correctCount / NAMES_PER_POINT) * POINTS_PER_TIER;
   const progressInTier = correctCount % NAMES_PER_POINT;
   return `
-    <div class="card gs-speed-card">
-      ${state.comebackMode ? '<p class="gs-comeback-title">🎤 That Won\'t Be Necessary -- Comeback Round!</p>' : ''}
+    <div class="${state.comebackMode ? 'gs-comeback-screen' : 'card gs-speed-card'}">
+      ${state.comebackMode ? '<p class="gs-comeback-onscreen-title">That Won\'t Be Necessary</p>' : ''}
       <div class="gs-speed-topbar">
         <div class="gs-speed-timer ${s.timeLeft <= 10 ? 'urgent' : ''}" id="gsTimer">${s.timeLeft}s</div>
         <div class="gs-speed-score">
@@ -1155,6 +1186,15 @@ function attachHandlers() {
   if (closeCellBtn) closeCellBtn.addEventListener('click', () => {
     socket.emit('gsCloseCell', null, (res) => {
       if (!res.ok) showGsNotice(res.error || "Couldn't close.");
+    });
+  });
+
+  // Escape hatch: if a question ever gets stuck (mid-judgment, mid-steal,
+  // whatever), the host can always bail out and get the board back.
+  const abandonCellBtn = document.getElementById('gsAbandonCellBtn');
+  if (abandonCellBtn) abandonCellBtn.addEventListener('click', () => {
+    socket.emit('gsAbandonCell', null, (res) => {
+      if (!res.ok) showGsNotice(res.error || "Couldn't cancel.");
     });
   });
 

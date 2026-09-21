@@ -102,17 +102,21 @@ body:has(#app-gameshow) {
   align-items: stretch;
   gap: 8px;
   margin: 14px 0 4px;
+  width: 100%;
+  box-sizing: border-box;
 }
 #app-gameshow .gs-name-continue-row .gs-password-input {
   width: auto;
-  flex: 1;
+  min-width: 0;
+  flex: 1 1 auto;
   margin: 0;
   text-align: left;
   letter-spacing: normal;
 }
 #app-gameshow .gs-name-continue-row button {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   margin: 0;
+  white-space: nowrap;
 }
 
 #app-gameshow .avatar-builder { margin-bottom: 10px; }
@@ -135,16 +139,13 @@ body:has(#app-gameshow) {
   min-height: 260px;
 }
 
-/* Once the actual game starts, the screen holds one fixed size no matter
-   which view is showing (board grid, a question, the comeback round) --
-   content that runs long scrolls inside instead of resizing the screen and
-   shoving the podiums/seats below it around. */
+/* Once the actual game starts, the screen holds AT LEAST this size no
+   matter which view is showing (board grid, a question, the comeback
+   round) -- short content never shrinks the box and jumps the podiums/
+   seats below it, but nothing ever scrolls (spectators should never have
+   to scroll to see the screen). */
 #app-gameshow .gs-tv-screen.in-game {
-  height: 460px;
-  overflow-y: auto;
-}
-#app-gameshow .gs-tv-screen.in-game .gs-tv-screen-inner {
-  min-height: 100%;
+  min-height: 460px;
 }
 
 #app-gameshow .gs-tv-screen-inner {
@@ -264,8 +265,8 @@ body:has(#app-gameshow) {
   border: 2px solid rgba(0,0,0,0.35);
   transition: background 0.2s ease;
 }
-#app-gameshow .gs-podium-block.teamA { background: #457b9d; }
-#app-gameshow .gs-podium-block.teamB { background: #e63946; }
+#app-gameshow .gs-podium-block.teamA { background: #1e6fe0; }
+#app-gameshow .gs-podium-block.teamB { background: #e51c2e; }
 
 /* Ready shows as the podium itself turning green -- simpler and more
    readable at a glance than a little checkmark icon. */
@@ -739,7 +740,7 @@ body:has(#app-gameshow) {
    as a small island in the middle of the page. */
 @media (min-width: 900px) {
   #app-gameshow .gs-tv-screen { padding: 56px 40px; min-height: 320px; }
-  #app-gameshow .gs-tv-screen.in-game { height: 520px; }
+  #app-gameshow .gs-tv-screen.in-game { min-height: 520px; }
   #app-gameshow .gs-screen-roomcode { font-size: 4rem; letter-spacing: 8px; }
   #app-gameshow .gs-floor { gap: 24px; margin-top: 40px; margin-bottom: 20px; }
   #app-gameshow .gs-team-column { gap: 24px; }
@@ -782,8 +783,8 @@ body:has(#app-gameshow) {
   padding: 8px 20px; border-radius: 10px; min-width: 120px;
   border: 2px solid rgba(0,0,0,0.25);
 }
-#app-gameshow .gs-score-block.teamA { background: rgba(69,123,157,0.25); }
-#app-gameshow .gs-score-block.teamB { background: rgba(230,57,70,0.25); }
+#app-gameshow .gs-score-block.teamA { background: rgba(30,111,224,0.3); }
+#app-gameshow .gs-score-block.teamB { background: rgba(229,28,46,0.3); }
 #app-gameshow .gs-score-label { font-size: 0.78rem; font-weight: 700; color: #fff; opacity: 0.85; }
 #app-gameshow .gs-score-value { font-size: 1.8rem; font-weight: 800; color: #fff; }
 #app-gameshow .gs-hint-inline { font-size: 0.75rem; opacity: 0.9; margin-left: 2px; }
@@ -830,8 +831,11 @@ body:has(#app-gameshow) {
 }
 #app-gameshow .gs-turn-banner #gsTurnTimer { color: #ffcc00; }
 #app-gameshow .gs-host-hint {
-  background: rgba(255,204,0,0.14); border: 1px dashed rgba(255,204,0,0.5);
-  border-radius: 8px; padding: 8px 12px; margin: 8px 0; text-align: center;
+  border-top: 1px dashed rgba(255,204,0,0.35); border-bottom: 1px dashed rgba(255,204,0,0.35);
+  padding: 6px 4px; margin: 8px 0; text-align: center;
+}
+#app-gameshow .gs-status-line {
+  text-align: center; color: #ffe38a; font-weight: 700; font-size: 1.05rem; margin-top: 14px;
 }
 #app-gameshow .gs-host-hint-label {
   font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; color: #ffcc00; margin: 0 0 3px;
@@ -851,8 +855,9 @@ body:has(#app-gameshow) {
   display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 14px;
 }
 #app-gameshow .gs-answer-block {
-  flex: 1 1 240px; background: rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 12px;
+  padding: 8px 0; text-align: center;
 }
+#app-gameshow .gs-answer-block .gs-section-title { text-align: center; }
 #app-gameshow .gs-locked-answer {
   font-style: italic; color: #ffe38a; margin: 4px 0;
 }
@@ -862,8 +867,8 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-judge-btns { display: flex; gap: 8px; margin-top: 8px; }
 
 #app-gameshow .gs-steal-block {
-  margin-top: 14px; padding: 10px 12px; border-radius: 8px;
-  background: rgba(255,204,0,0.12); border: 1px dashed rgba(255,204,0,0.5);
+  margin-top: 14px; padding: 8px 10px; border-radius: 8px; text-align: center;
+  border: 1px dashed rgba(255,204,0,0.5);
 }
 
 #app-gameshow .gs-hint-row {
@@ -893,6 +898,29 @@ body:has(#app-gameshow) {
   border: 2px solid rgba(255,204,0,0.5);
 }
 #app-gameshow .gs-comeback-live-score { color: #ffcc00; font-weight: 800; }
+
+/* The comeback player's own private view plays on the same black screen
+   look as the TV screen (not the yellow lobby card), per spec -- just the
+   game title in yellow on black, then the mechanic itself. */
+#app-gameshow .gs-comeback-screen {
+  background: #0c0c0c;
+  border: 10px solid #050505;
+  border-radius: 20px;
+  padding: 32px 20px;
+  color: #fff;
+}
+#app-gameshow .gs-comeback-onscreen-title {
+  text-align: center; color: #ffcc00; font-weight: 800; font-size: 1.5rem; margin: 0 0 16px;
+}
+#app-gameshow .gs-comeback-screen .gs-speed-score,
+#app-gameshow .gs-comeback-screen .gs-speed-timer,
+#app-gameshow .gs-comeback-screen .gs-speed-points,
+#app-gameshow .gs-comeback-screen .gs-speed-feed,
+#app-gameshow .gs-comeback-screen .gs-feed-name {
+  color: #fff;
+}
+#app-gameshow .gs-comeback-screen .gs-speed-progress { color: #d8d8d8; }
+#app-gameshow .gs-comeback-screen .gs-feed-row { background: rgba(255,255,255,0.08); }
 
 @media (max-width: 480px) {
   #app-gameshow .gs-board-grid { border-spacing: 4px; }

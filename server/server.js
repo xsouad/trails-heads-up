@@ -562,6 +562,15 @@ io.on('connection', (socket) => {
     broadcastGsRoom(room);
   });
 
+  socket.on('gsAbandonCell', (_, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsBoard.abandonCell(room, socket.id);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
   socket.on('gsGiveHint', ({ team }, cb) => {
     const room = gsRooms.findRoomBySocket(socket.id);
     if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }

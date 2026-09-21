@@ -148,6 +148,10 @@ function openCellInternal(room, cell, scheduleTimeout) {
       if (!cs || cs.cellId !== cell.id || cs.turnLocked || cs.stage !== 'answering') return;
       cs.timedOut = true;
       cs.turnJudged = 'timeout';
+      // Nothing was answered, so there's nothing to hide -- auto-advance to
+      // 'revealed' too, so the steal option shows up immediately instead of
+      // requiring the host to remember to click Reveal first.
+      cs.stage = 'revealed';
       scheduleTimeout(room);
     }, ANSWER_SECONDS * 1000);
   }
@@ -285,6 +289,20 @@ function closeCell(room, socketId) {
   return { room };
 }
 
+// Escape hatch: no matter what state the current question is stuck in
+// (mid-judgment, mid-steal, whatever), the host can always bail out and
+// get the board back so more questions can be opened. Doesn't award or
+// deduct anything -- it's a "never mind, skip it" button, not a ruling.
+function abandonCell(room, socketId) {
+  if (room.hostId !== socketId) return { error: 'Only the host can do that.' };
+  if (!room.cellState) return { error: 'No question is open.' };
+  clearActiveTimer(room);
+  room.activeCell = null;
+  room.cellState = null;
+  if (room.board.every(c => c.used)) room.phase = 'finished';
+  return { room };
+}
+
 function giveHint(room, socketId, team) {
   if (room.hostId !== socketId) return { error: 'Only the host can give hints.' };
   if (room.hints[team] <= 0) return { error: 'No hints left for that team.' };
@@ -401,7 +419,7 @@ function serializeBoard(room, forHost) {
 module.exports = {
   startGame, replayGame, rerollCell, openCell, triggerBonus,
   submitAnswer, revealAnswer, judgeAnswer,
-  openSteal, submitSteal, judgeSteal, closeCell, giveHint, usePhoneAFriend,
+  openSteal, submitSteal, judgeSteal, closeCell, abandonCell, giveHint, usePhoneAFriend,
   startComeback, beginComeback, updateComebackLive, finishComeback, clearComebackBanner,
   serializeBoard, COMEBACK_GAP, STARTING_HINTS, ANSWER_SECONDS
 };
