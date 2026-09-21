@@ -252,32 +252,15 @@ function gsBeep({ freq, duration, type = 'sine', endFreq = null, volume = 0.18 }
 function playTing() { gsBeep({ freq: 880, endFreq: 1320, duration: 0.18, type: 'sine', volume: 0.2 }); }
 function playError() { gsBeep({ freq: 220, endFreq: 110, duration: 0.28, type: 'sawtooth', volume: 0.14 }); }
 
-// A "clap" isn't a nice sine tone -- it's a short burst of filtered noise.
-// Layer a handful of these with tiny random offsets to sound like a little
-// crowd clapping rather than one single slap.
+// A real recorded clap sound instead of the old synthesized noise-burst
+// (which the user said sounded terrible). A fresh Audio() each play so
+// rapid claps can overlap instead of cutting each other off.
 function playClap() {
-  if (state.clapMuted) return;
+  if (state.clapMuted || state.clapVolume <= 0) return;
   try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const claps = 3 + Math.floor(Math.random() * 3);
-    for (let i = 0; i < claps; i++) {
-      const delay = i * (0.03 + Math.random() * 0.03);
-      const bufSize = audioCtx.sampleRate * 0.06;
-      const buffer = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let j = 0; j < bufSize; j++) data[j] = (Math.random() * 2 - 1) * (1 - j / bufSize);
-      const noise = audioCtx.createBufferSource();
-      noise.buffer = buffer;
-      const filter = audioCtx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.value = 1500 + Math.random() * 800;
-      const gain = audioCtx.createGain();
-      gain.gain.setValueAtTime(state.clapVolume * 0.5, audioCtx.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + 0.08);
-      noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
-      noise.start(audioCtx.currentTime + delay);
-    }
+    const audio = new Audio('assets/gameshow/clap.mp3');
+    audio.volume = Math.max(0, Math.min(1, state.clapVolume));
+    audio.play().catch(() => { /* autoplay blocked or file missing -- silently skip */ });
   } catch (e) { /* audio not available -- silently skip */ }
 }
 
@@ -472,14 +455,6 @@ function renderPodium(teamKey) {
   const me = myPlayer();
   const members = {};
   room.players.forEach(p => { if (p.role === teamKey && p.slot != null) members[p.slot] = p; });
-  const board = room.board;
-  // Persistent-for-the-game podium markers: a lightbulb once this team has
-  // used ANY hint, a caution triangle once they've pulled off ANY steal --
-  // shown once, on whichever slot is occupied first, not repeated per
-  // player.
-  const hintUsed = !!(board && board.hints && board.hints[teamKey] < STARTING_HINTS_CLIENT);
-  const stealUsed = !!(board && board.stealUsedBy && board.stealUsedBy[teamKey]);
-  const firstOccupiedSlot = [0, 1, 2].find(i => members[i]);
   const slots = [0, 1, 2].map(slotIdx => {
     const occ = members[slotIdx];
     const mine = occ && me && occ.id === me.id;
@@ -492,15 +467,12 @@ function renderPodium(teamKey) {
     // after the game actually started instead of reverting to the team's
     // own blue/red.
     const showReady = room.phase === 'lobby' && occ && occ.ready;
-    const showMarkers = occ && slotIdx === firstOccupiedSlot && (hintUsed || stealUsed);
     return `
       <${tag} class="gs-podium ${isEmpty ? 'empty' : 'occupied'} ${mine ? 'mine' : ''} ${showReady ? 'is-ready' : ''}" ${attrs}>
         <div class="gs-podium-avatar-wrap">
           ${occ ? `<div class="gs-podium-avatar" data-avatar-for="${occ.id}"></div>` : '<span class="gs-podium-plus">+</span>'}
         </div>
-        <div class="gs-podium-block ${teamKey}">
-          ${showMarkers ? `<span class="gs-podium-markers">${hintUsed ? '<span class="gs-podium-marker" title="This team has used a hint">💡</span>' : ''}${stealUsed ? '<span class="gs-podium-marker" title="This team has stolen a question">⚠️</span>' : ''}</span>` : ''}
-        </div>
+        <div class="gs-podium-block ${teamKey}"></div>
         <div class="gs-podium-name">${occ ? occ.name : ' '}</div>
       </${tag}>
     `;
@@ -511,31 +483,20 @@ function renderPodium(teamKey) {
 // Once Phone a Friend is used, the called spectator's avatar moves to stand
 // next to the host -- a little visual "they're on the phone with the host"
 // touch instead of just a text label.
-function calledPhoneFriend(room) {
-  if (!room.board || !room.board.phoneAFriend) return null;
-  for (const team of ['teamA', 'teamB']) {
-    const pf = room.board.phoneAFriend[team];
-    if (pf && pf.used && pf.spectatorId) return pf;
-  }
-  return null;
-}
-
+// The old "called spectator stands next to the host" duplicate avatar +
+// phone icon has been removed entirely -- it squished the host slot and
+// left the spectator permanently stuck there with no way to undo it. The
+// called spectator now just stays in their own seat; the scoreboard's
+// grayed-out phone icon already communicates who's been used.
 function renderHostSlot() {
   const room = state.room;
   const me = myPlayer();
   const host = room.players.find(p => p.role === 'host');
   const mine = host && me && host.id === me.id;
-  const calledFriend = calledPhoneFriend(room);
   return `
     <div class="gs-host-slot ${host ? 'occupied' : 'empty'} ${mine ? 'mine' : ''}">
       <div class="gs-podium-avatar-wrap">
         ${host ? `<div class="gs-podium-avatar" data-avatar-for="${host.id}"></div>` : ''}
-        ${calledFriend ? `
-          <div class="gs-phone-friend-avatar" title="${calledFriend.spectatorName}: Phone a Friend">
-            <div class="gs-podium-avatar small" data-avatar-for="${calledFriend.spectatorId}"></div>
-            <span class="gs-phone-friend-icon">📞</span>
-          </div>
-        ` : ''}
       </div>
       <div class="gs-host-label">GAMESHOW HOST</div>
       <div class="gs-host-action">
@@ -591,6 +552,8 @@ function clapVolIcon() {
   return '🔊';
 }
 
+// Small button, real volume slider next to it -- not a big full-width
+// button with a click-to-cycle mute toggle.
 function renderClapArea() {
   const room = state.room;
   const me = myPlayer();
@@ -600,10 +563,12 @@ function renderClapArea() {
   // entirely (not just grayed out) until then.
   const allowed = room.phase !== 'lobby' && room.phase !== 'naming';
   if (!allowed) return '';
+  const sliderValue = state.clapMuted ? 0 : Math.round(state.clapVolume * 100);
   return `
     <div class="center gs-clap-area">
-      <button type="button" class="primary" id="gsClapBtn">👏 Clap</button>
-      <button type="button" class="secondary gs-tiny-btn" id="gsClapVolBtn" title="Clap volume: click to cycle">${clapVolIcon()}</button>
+      <button type="button" class="secondary gs-small-btn" id="gsClapBtn">👏 Clap</button>
+      <span class="gs-clap-vol-icon">${clapVolIcon()}</span>
+      <input type="range" class="gs-clap-vol-slider" id="gsClapVolSlider" min="0" max="100" value="${sliderValue}" title="Clap volume" />
     </div>
   `;
 }
@@ -663,8 +628,13 @@ function renderNameVoteScreen(team, label, interactive) {
   const t = room[team];
   const me = myPlayer();
   const myVote = me ? t.votes[me.id] : undefined;
+  // Only the voting team gets an instruction ("Vote for your favorite") --
+  // everyone else still sees the candidate list (read-only, disabled) but
+  // gets a status line instead, since "Vote for your favorite" would
+  // misleadingly suggest they can participate too.
+  const title = interactive ? 'Vote for your favorite' : `${label} is voting.`;
   return `
-    <h3 class="gs-screen-title">Vote for your favorite</h3>
+    <h3 class="gs-screen-title">${title}</h3>
     <div class="gs-candidate-list">
       ${t.candidates.map((c, idx) => `
         <button type="button" class="secondary gs-vote-btn gs-vote-pill ${myVote === idx ? 'voted' : ''}" ${interactive ? `data-team="${team}" data-idx="${idx}"` : 'disabled'}>${c.text}</button>
@@ -819,35 +789,10 @@ function renderScoreboard() {
   return `<div class="gs-scoreboard">${block('teamA', false)}${block('teamB', true)}</div>`;
 }
 
-function renderPhoneRow(iAmHost) {
-  const room = state.room;
-  const spectators = room.players.filter(p => p.role === 'spectator');
-  const teamsToShow = ['teamA', 'teamB'].filter(team => {
-    const pf = room.board.phoneAFriend[team];
-    return pf.used || spectators.length > 0;
-  });
-  if (!teamsToShow.length) return ''; // nobody in the audience and nothing used -- nothing to show
-  return `
-    <div class="gs-hint-row">
-      ${teamsToShow.map(team => {
-        const pf = room.board.phoneAFriend[team];
-        return `
-          <div class="gs-hint-block">
-            <span class="gs-hint-team">${teamLabel(team)}</span>
-            <span class="gs-phone-status">${pf.used ? `📞 used (${pf.spectatorName})` : '📞 available'}</span>
-            ${iAmHost && !pf.used ? `
-              <select class="gs-phone-select" data-phone-team="${team}">
-                <option value="">Pick spectator...</option>
-                ${spectators.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
-              </select>
-              <button type="button" class="secondary gs-small-btn" data-phone-go="${team}">Use</button>
-            ` : ''}
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
+// renderPhoneRow removed entirely per user request -- the grayed-out
+// scoreboard phone icon already shows used/available, this text row was
+// redundant leftover UI.
+
 
 function renderBoardGrid(iAmHost) {
   const room = state.room;
@@ -1296,7 +1241,6 @@ function renderScreenBoard() {
     ${iAmHost ? renderHostConsole() : ''}
     ${renderComebackArea(iAmHost)}
     ${room.board.active ? renderActiveCellPanel(iAmHost) : renderBoardGrid(iAmHost)}
-    ${!room.board.active && !cb ? renderPhoneRow(iAmHost) : ''}
   `;
 }
 
@@ -1648,15 +1592,16 @@ function attachHandlers() {
   const clapBtn = document.getElementById('gsClapBtn');
   if (clapBtn) clapBtn.addEventListener('click', () => socket.emit('gsClap'));
 
-  const clapVolBtn = document.getElementById('gsClapVolBtn');
-  if (clapVolBtn) clapVolBtn.addEventListener('click', () => {
-    // Cycle full -> half -> muted -> full, so one button covers both
-    // "turn it down" and "turn it off" without a slider.
-    if (state.clapMuted) { state.clapMuted = false; state.clapVolume = 1; }
-    else if (state.clapVolume > 0.5) { state.clapVolume = 0.4; }
-    else { state.clapMuted = true; }
+  // Actual volume slider instead of a click-to-cycle mute button --
+  // dragging sets clapVolume directly; dragging to 0 counts as muted.
+  const clapVolSlider = document.getElementById('gsClapVolSlider');
+  if (clapVolSlider) clapVolSlider.addEventListener('input', () => {
+    const v = parseInt(clapVolSlider.value, 10) / 100;
+    state.clapVolume = v;
+    state.clapMuted = v <= 0;
     saveClapPrefs();
-    render();
+    const icon = document.querySelector('.gs-clap-vol-icon');
+    if (icon) icon.textContent = clapVolIcon();
   });
 
   const startNamingBtn = document.getElementById('gsStartNamingBtn');
@@ -1861,20 +1806,10 @@ function attachHandlers() {
     });
   });
 
-  document.querySelectorAll('[data-phone-go]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const team = btn.dataset.phoneGo;
-      const select = document.querySelector(`[data-phone-team="${team}"]`);
-      const spectatorId = select ? select.value : '';
-      if (!spectatorId) { showGsNotice('Pick a spectator first.'); return; }
-      socket.emit('gsUsePhoneAFriend', { team, spectatorId }, (res) => {
-        if (!res.ok) showGsNotice(res.error || "Couldn't use Phone a Friend.");
-      });
-    });
-  });
-
   // Self-service: a competitor taking their own team's hint or Phone a
-  // Friend directly, instead of waiting on the host's console above.
+  // Friend directly -- the old host-console picker (renderPhoneRow) that
+  // used to wire [data-phone-go]/[data-phone-team] has been removed
+  // entirely, this is the only way to use Phone a Friend now.
   document.querySelectorAll('[data-take-hint]').forEach(el => {
     el.addEventListener('click', () => {
       socket.emit('gsGiveHint', { team: el.dataset.takeHint }, (res) => {

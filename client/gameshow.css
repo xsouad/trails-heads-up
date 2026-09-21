@@ -129,17 +129,15 @@ body:has(#app-gameshow) {
 
 /* ---------- lobby: TV screen ---------- */
 
-/* The screen is a genuinely FIXED size now, not just a shared min-height --
+/* The screen is a genuinely FIXED size, not just a shared min-height --
    min-height only ever stopped things from being SMALLER than the floor,
    it never stopped them from being taller, which is exactly why every
-   round of "fix the screen size" kept surfacing a new spot that grew (or,
-   as it turned out, sometimes even shrank) past whatever the floor was.
-   `height` + `overflow-y: auto` makes this the one true size: shorter
-   content just leaves blank space below it, and if something genuinely
-   needs more room than this, it scrolls WITHIN the fixed box instead of
-   resizing the box itself. .gs-tv-screen-inner and .gs-takeover both fill
-   this height exactly (see below) so every state -- board, naming,
-   every full-screen takeover -- renders at this one pixel-identical size. */
+   round of "fix the screen size" kept surfacing a new spot that grew (or
+   shrank) past whatever the floor was. `height` makes this the one true
+   size. overflow:hidden (not auto) -- auto was showing a persistent
+   scrollbar track even when nothing needed to scroll, which nobody wanted
+   to see; the fixed height plus vertical centering below is generous
+   enough that real content shouldn't need to scroll anyway. */
 #app-gameshow .gs-tv-screen {
   background: #0c0c0c;
   border: 10px solid #050505;
@@ -149,19 +147,26 @@ body:has(#app-gameshow) {
   margin-bottom: 36px;
   height: 520px;
   box-sizing: border-box;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 #app-gameshow .gs-tv-screen.in-game {
   height: 520px;
 }
 
+/* Vertically centers whatever's inside the fixed frame -- short screens
+   (naming submit/vote, ready roster) used to sit pinned to the top with a
+   big empty gap below; this centers them instead. Content that's actually
+   tall enough to fill the frame (board grid, active question) just ends
+   up looking the same as before since it already occupies the space. */
 #app-gameshow .gs-tv-screen-inner {
   color: #fff;
   text-align: center;
   height: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 #app-gameshow .gs-tv-screen-inner .hint {
@@ -269,18 +274,8 @@ body:has(#app-gameshow) {
   height: 100%;
 }
 
-/* Persistent-for-the-game badges: a hint used, a steal pulled off. Sits on
-   the podium block itself (not the avatar/character), fully inside its
-   bounds so nothing clips it, each in its own small box like the
-   scoreboard's hint/phone icons. */
-#app-gameshow .gs-podium-markers {
-  position: absolute; top: 2px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 3px; z-index: 2;
-}
-#app-gameshow .gs-podium-marker {
-  font-size: 0.8rem; background: rgba(0,0,0,0.45); border-radius: 5px;
-  padding: 1px 4px; line-height: 1.4; box-shadow: 0 0 0 1px rgba(255,255,255,0.2);
-}
+/* Podium hint/steal markers removed entirely per user request -- not
+   worth trying to make them look right, just gone. */
 
 #app-gameshow .gs-podium-block {
   position: relative;
@@ -454,7 +449,10 @@ body:has(#app-gameshow) {
 
 #app-gameshow .gs-clap-area {
   margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
 }
+#app-gameshow .gs-clap-vol-icon { font-size: 1.1rem; }
+#app-gameshow .gs-clap-vol-slider { width: 100px; accent-color: #ffcc00; }
 
 #app-gameshow .gs-clap-toast {
   font-weight: 700;
@@ -498,7 +496,9 @@ body:has(#app-gameshow) {
   color: #17140a;
 }
 #app-gameshow .gs-vote-btn.voted { background: #4caf50; color: #fff; border-color: #4caf50; }
-#app-gameshow .gs-vote-pill:disabled { opacity: 0.85; cursor: default; }
+/* Read-only for anyone who isn't on the voting team -- visibly grayed out
+   and clearly not clickable, so it doesn't read as "you can vote too". */
+#app-gameshow .gs-vote-pill:disabled { opacity: 0.5; cursor: default; filter: grayscale(0.4); }
 
 /* ---------- ready (rendered inside the TV screen) ---------- */
 
@@ -1005,14 +1005,8 @@ body:has(#app-gameshow) {
 #app-gameshow .public-room-row span { color: #fff; }
 #app-gameshow .gs-pending-status { font-style: normal; font-size: 0.72rem; opacity: 0.75; margin-left: 6px; }
 
-/* Phone-a-friend avatar standing next to the host once called */
-#app-gameshow .gs-podium-avatar-wrap { display: flex; align-items: center; justify-content: center; gap: 4px; }
-#app-gameshow .gs-phone-friend-avatar { position: relative; width: 40px; height: 40px; flex-shrink: 0; }
-#app-gameshow .gs-podium-avatar.small { width: 40px; height: 40px; }
-#app-gameshow .gs-phone-friend-icon {
-  position: absolute; bottom: -2px; right: -2px; font-size: 0.8rem;
-  background: #fff9e0; border-radius: 50%; padding: 1px 2px; line-height: 1;
-}
+/* Phone-a-friend-standing-next-to-host feature removed entirely -- the
+   duplicate avatar/icon rules that supported it are gone too. */
 
 /* Icon-based hints (grays out when used) and a separate Phone a Friend
    button, both OUTSIDE the team's colored score box -- not touching or
@@ -1072,7 +1066,15 @@ body:has(#app-gameshow) {
 
 /* Self-service steal button */
 #app-gameshow .gs-steal-wait { margin-top: 14px; }
-#app-gameshow .gs-steal-btn { font-size: 1.1rem; padding: 10px 28px; }
+/* Was inheriting button.primary's width:100% (same root cause as every
+   other "button too long" complaint in this app -- see .gs-small-btn's
+   note above) and its green background. Explicit width:auto + gold to
+   match the app's accent color instead of green. */
+#app-gameshow .gs-steal-btn {
+  width: auto; display: inline-block;
+  font-size: 1.1rem; padding: 10px 28px;
+  background: #ffcc00; color: #17140a;
+}
 #app-gameshow .gs-steal-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Generic full-screen takeover: shared by the steal claim, correct/wrong
