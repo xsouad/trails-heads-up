@@ -299,7 +299,9 @@ io.on('connection', (socket) => {
     // as an explicit leave.
     const gsResult = gsRooms.removeBySocket(socket.id);
     if (gsResult.room) {
-      gsNotifyRoom(gsResult.room, `${gsResult.leftName} left.`);
+      // No toast here -- the on-screen player roster (sent as part of
+      // gsRoomState) already reflects who's still in the room, so a
+      // separate "X left" notice would just be noise.
       broadcastGsRoom(gsResult.room);
     }
 
@@ -356,11 +358,6 @@ io.on('connection', (socket) => {
     });
   }
 
-  function gsNotifyRoom(room, text) {
-    if (!room) return;
-    room.players.forEach((p, socketId) => io.to(socketId).emit('gsNotice', { text }));
-  }
-
   socket.on('gsCreateRoom', ({ name, avatar, clientId }, cb) => {
     const room = gsRooms.createRoom();
     gsRooms.joinRoom(room.code, socket.id, name, avatar, clientId);
@@ -375,7 +372,6 @@ io.on('connection', (socket) => {
     socket.join('gs_' + result.room.code);
     cb && cb({ ok: true, code: result.room.code });
     broadcastGsRoom(result.room);
-    gsNotifyRoom(result.room, `${name || 'Player'} joined.`);
   });
 
   socket.on('gsSetRole', ({ role, password, seat, slot }, cb) => {
@@ -655,10 +651,22 @@ io.on('connection', (socket) => {
 
   socket.on('gsLeaveRoom', () => {
     const result = gsRooms.removeBySocket(socket.id);
-    if (result.room) {
-      gsNotifyRoom(result.room, `${result.leftName} left.`);
-      broadcastGsRoom(result.room);
-    }
+    if (result.room) broadcastGsRoom(result.room);
+  });
+
+  socket.on('gsClaimSteal', ({ team }, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsBoard.claimSteal(room, socket.id, team);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  // Pending Gameshow rooms awaiting players, for the landing screen -- same
+  // idea as Heads Up's public room browser.
+  socket.on('gsListPendingRooms', (_, cb) => {
+    cb && cb(gsRooms.listPendingRooms());
   });
 });
 

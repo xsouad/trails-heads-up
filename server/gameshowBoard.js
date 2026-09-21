@@ -114,7 +114,7 @@ function rerollCell(room, socketId, cellId) {
   if (room.hostId !== socketId) return { error: 'Only the host can swap a question.' };
   const cell = findCell(room, cellId);
   if (!cell || cell.column === 'bonus') return { error: "That question doesn't exist." };
-  if (cell.used) return { error: 'Already used -- nothing to swap.' };
+  if (cell.used) return { error: 'Already used, nothing to swap.' };
   const pool = POOLS[cell.column];
   const usedIds = new Set(room.board.filter(c => c.column === cell.column).map(c => c.content.id));
   const candidates = pool.filter(item => !usedIds.has(item.id));
@@ -191,7 +191,7 @@ function submitAnswer(room, socketId, team, text) {
   const cs = room.cellState;
   if (!cs || cs.cellId !== room.activeCell) return { error: 'No question is open.' };
   if (cs.stage !== 'answering') return { error: 'Answers are locked in for this question.' };
-  if (cs.timedOut || cs.turnLocked) return { error: "Time's up -- can't answer anymore." };
+  if (cs.timedOut || cs.turnLocked) return { error: "Time's up. Can't answer anymore." };
   if (team !== cs.turnTeam) return { error: "It's not your team's turn." };
   const player = room.players.get(socketId);
   if (!player || player.role !== team) return { error: 'Not on this team.' };
@@ -216,7 +216,7 @@ function judgeAnswer(room, socketId, correct) {
   if (room.hostId !== socketId) return { error: 'Only the host can judge the answer.' };
   const cs = room.cellState;
   if (!cs || cs.stage !== 'revealed') return { error: 'Reveal the answer first.' };
-  if (cs.timedOut) return { error: 'That team ran out of time -- nothing to judge.' };
+  if (cs.timedOut) return { error: 'That team ran out of time. Nothing to judge.' };
   if (cs.turnJudged) return { error: 'Already judged.' };
   const cell = findCell(room, cs.cellId);
   cs.turnJudged = correct ? 'correct' : 'wrong';
@@ -243,6 +243,31 @@ function openSteal(room, socketId, stealingTeam) {
   cs.stealTeam = stealingTeam;
   cs.stealAnswer = null;
   cs.stealJudged = null;
+  return { room };
+}
+
+// Self-service steal: no host offer needed. The non-turn team gets a STEAL
+// button the whole time the question is open, but it only becomes usable
+// once the full ANSWER_SECONDS clock has elapsed (checked server-side, not
+// just hidden client-side) -- and only if the turn team didn't already get
+// it right. A 5-second full-screen "TEAM X is stealing" takeover is driven
+// by stealAnnouncedAt, which every client times locally off the same
+// timestamp.
+function claimSteal(room, socketId, team) {
+  const cs = room.cellState;
+  if (!cs) return { error: 'No question is open.' };
+  if (Date.now() < cs.deadline) return { error: "Can't steal yet. Wait for the full minute." };
+  if (cs.turnJudged !== 'wrong' && cs.turnJudged !== 'timeout') {
+    return { error: 'Nothing to steal here.' };
+  }
+  if (team !== otherTeam(cs.turnTeam)) return { error: "That team wasn't waiting on this question." };
+  if (cs.stealTeam) return { error: 'Steal already claimed.' };
+  const player = room.players.get(socketId);
+  if (!player || player.role !== team) return { error: 'Not on that team.' };
+  cs.stealTeam = team;
+  cs.stealAnswer = null;
+  cs.stealJudged = null;
+  cs.stealAnnouncedAt = Date.now();
   return { room };
 }
 
@@ -411,7 +436,8 @@ function serializeBoard(room, forHost) {
       turnJudged: cs.turnJudged,
       stealTeam: cs.stealTeam,
       stealAnswer: cs.stealAnswer,
-      stealJudged: cs.stealJudged
+      stealJudged: cs.stealJudged,
+      stealAnnouncedAt: cs.stealAnnouncedAt || null
     } : null
   };
 }
@@ -419,7 +445,7 @@ function serializeBoard(room, forHost) {
 module.exports = {
   startGame, replayGame, rerollCell, openCell, triggerBonus,
   submitAnswer, revealAnswer, judgeAnswer,
-  openSteal, submitSteal, judgeSteal, closeCell, abandonCell, giveHint, usePhoneAFriend,
+  openSteal, claimSteal, submitSteal, judgeSteal, closeCell, abandonCell, giveHint, usePhoneAFriend,
   startComeback, beginComeback, updateComebackLive, finishComeback, clearComebackBanner,
   serializeBoard, COMEBACK_GAP, STARTING_HINTS, ANSWER_SECONDS
 };

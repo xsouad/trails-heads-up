@@ -929,3 +929,115 @@ body:has(#app-gameshow) {
   #app-gameshow .gs-score-value { font-size: 1.3rem; }
   #app-gameshow .gs-cell-prompt { font-size: 1rem; }
 }
+
+/* ---------- v44 additions ---------- */
+
+/* Build Your Character: name input + Continue stacked, both full-size,
+   instead of squeezed into one row (which clipped the button and shrank
+   the input to nothing). */
+#app-gameshow .gs-name-continue-stack {
+  display: flex; flex-direction: column; gap: 10px; align-items: stretch;
+  max-width: 320px; margin: 14px auto 0;
+}
+#app-gameshow .gs-name-input-full { width: 100%; box-sizing: border-box; }
+#app-gameshow .gs-continue-btn { width: 100%; }
+
+/* Small pill buttons (Leave Room, clap volume, refresh) */
+#app-gameshow .gs-tiny-btn { padding: 5px 12px; font-size: 0.75rem; border-radius: 999px; }
+#app-gameshow .gs-leave-btn.gs-tiny-btn { background: #c81d3d; color: #fff; }
+
+/* On-screen notices (hint taken, etc.) -- an overlay pinned to the top of
+   the TV screen instead of a bar floating above the whole app. */
+#app-gameshow .gs-tv-screen { position: relative; }
+#app-gameshow .gs-screen-notices {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  z-index: 5; display: flex; flex-direction: column; gap: 6px; align-items: center;
+  pointer-events: none; width: 90%;
+}
+#app-gameshow .gs-onscreen-notice {
+  background: rgba(255,204,0,0.95); color: #17140a; font-weight: 800;
+  padding: 6px 16px; border-radius: 999px; font-size: 0.85rem;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.3);
+  animation: gsNoticeIn 0.2s ease;
+}
+@keyframes gsNoticeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Player roster -- small, persistent, sits above Start Team Naming/Leave */
+#app-gameshow .gs-roster { margin: 14px auto 6px; max-width: 640px; text-align: center; }
+#app-gameshow .gs-roster-title { font-size: 0.75rem; font-weight: 700; color: #4a3d00; opacity: 0.8; margin: 0 0 6px; }
+#app-gameshow .gs-roster-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+#app-gameshow .gs-roster-chip {
+  background: rgba(0,0,0,0.08); border-radius: 999px; padding: 3px 10px;
+  font-size: 0.72rem; font-weight: 700; color: #17140a;
+}
+#app-gameshow .gs-roster-chip em { font-style: normal; opacity: 0.7; margin-left: 4px; }
+
+/* Pending Games list (landing screen) */
+#app-gameshow .gs-pending-card { margin-top: 16px; }
+#app-gameshow .gs-pending-list { margin-top: 10px; }
+
+/* Phone-a-friend avatar standing next to the host once called */
+#app-gameshow .gs-podium-avatar-wrap { display: flex; align-items: center; justify-content: center; gap: 4px; }
+#app-gameshow .gs-phone-friend-avatar { position: relative; width: 40px; height: 40px; flex-shrink: 0; }
+#app-gameshow .gs-podium-avatar.small { width: 40px; height: 40px; }
+#app-gameshow .gs-phone-friend-icon {
+  position: absolute; bottom: -2px; right: -2px; font-size: 0.8rem;
+  background: #fff9e0; border-radius: 50%; padding: 1px 2px; line-height: 1;
+}
+
+/* Icon-based hints + phone (grays out / crosses when used), flanking the
+   team's colored score block. */
+#app-gameshow .gs-score-block { flex-direction: row; align-items: center; gap: 10px; }
+#app-gameshow .gs-score-block.reversed { flex-direction: row-reverse; }
+#app-gameshow .gs-score-center { display: flex; flex-direction: column; align-items: center; }
+#app-gameshow .gs-icon-stack { display: flex; flex-direction: column; gap: 3px; }
+#app-gameshow .gs-icon-box {
+  font-size: 0.9rem; width: 22px; height: 22px; display: flex; align-items: center;
+  justify-content: center; border-radius: 5px; background: rgba(255,255,255,0.15);
+}
+#app-gameshow .gs-icon-box.spent { opacity: 0.25; filter: grayscale(1); }
+#app-gameshow .gs-icon-box.lit { background: rgba(255,255,255,0.28); }
+
+/* Screenshot: always a big, uniform box regardless of source size, and
+   clickable to zoom. */
+#app-gameshow .gs-cell-screenshot-frame {
+  position: relative; width: 100%; max-width: 480px; height: 300px; margin: 0 auto 10px;
+  background: rgba(0,0,0,0.4); border-radius: 8px; border: 2px solid rgba(255,255,255,0.2);
+  display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: zoom-in;
+}
+#app-gameshow .gs-cell-screenshot-frame .gs-cell-screenshot {
+  max-width: 100%; max-height: 100%; width: auto; height: auto; margin: 0; border: none;
+}
+#app-gameshow .gs-zoom-hint {
+  position: absolute; bottom: 6px; right: 8px; font-size: 0.68rem; color: #fff;
+  background: rgba(0,0,0,0.55); padding: 2px 8px; border-radius: 999px;
+}
+#app-gameshow .gs-zoom-card img { max-width: 90vw; max-height: 80vh; display: block; margin: 0 auto 10px; border-radius: 8px; }
+
+/* Uniform grid cells across all three columns */
+#app-gameshow .gs-board-grid td.gs-cell { min-width: 90px; }
+
+/* Self-service steal button */
+#app-gameshow .gs-steal-wait { margin-top: 14px; }
+#app-gameshow .gs-steal-btn { font-size: 1.1rem; padding: 10px 28px; }
+#app-gameshow .gs-steal-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Full-screen 5s "TEAM X has stolen the question" takeover */
+#app-gameshow .gs-steal-takeover {
+  display: flex; align-items: center; justify-content: center; min-height: 380px; padding: 20px;
+}
+#app-gameshow .gs-steal-takeover-box {
+  border: 3px dashed #ffcc00; border-radius: 10px; padding: 32px 28px;
+  animation: gsStealPulse 0.9s ease-in-out infinite alternate;
+}
+#app-gameshow .gs-steal-takeover-text {
+  color: #ffcc00; font-weight: 800; text-align: center; font-size: 1.6rem;
+  text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.5; margin: 0;
+}
+@keyframes gsStealPulse { from { box-shadow: 0 0 0 rgba(255,204,0,0); } to { box-shadow: 0 0 24px rgba(255,204,0,0.5); } }
+
+/* Make sure the panel behind the active question/board always reads as a
+   lit "screen" for every viewer (host, competitors, spectators alike) --
+   not flat black. */
+#app-gameshow .gs-tv-screen-inner { background: rgba(255,255,255,0.03); border-radius: 10px; padding: 6px; }
+#app-gameshow .gs-active-cell { background: rgba(255,255,255,0.09); }

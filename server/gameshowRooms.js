@@ -109,7 +109,7 @@ function setRole(room, socketId, role, opts = {}) {
     // Teams lock in once the actual game starts -- no switching podiums or
     // jumping to the other team mid-game. Spectating is still always open.
     if ((room.phase === 'playing' || room.phase === 'finished')) {
-      return { error: 'Teams are locked in for this game -- you can still spectate.' };
+      return { error: 'Teams are locked in for this game. You can still spectate.' };
     }
     if (player.role !== role && teamCount(room, role) >= MAX_TEAM_SIZE) {
       return { error: `That team is already full (${MAX_TEAM_SIZE}/${MAX_TEAM_SIZE}).` };
@@ -302,6 +302,28 @@ function finishNamingPhase(room, socketId) {
   return { room };
 }
 
+// For the landing screen's "Pending Games" list -- rooms still filling up
+// (lobby/naming/ready), mirroring Heads Up's public room browser.
+function listPendingRooms() {
+  return Array.from(rooms.values())
+    .filter(r => r.phase === 'lobby' || r.phase === 'naming' || r.phase === 'ready')
+    .map(r => {
+      const host = r.hostId ? r.players.get(r.hostId) : null;
+      let teamACount = 0, teamBCount = 0, spectatorCount = 0;
+      r.players.forEach(p => {
+        if (p.role === 'teamA') teamACount += 1;
+        else if (p.role === 'teamB') teamBCount += 1;
+        else if (p.role === 'spectator') spectatorCount += 1;
+      });
+      return {
+        code: r.code,
+        hostName: host ? host.name : 'No host yet',
+        teamACount, teamBCount, spectatorCount,
+        phase: r.phase
+      };
+    });
+}
+
 function serialize(room) {
   return {
     code: room.code,
@@ -319,5 +341,5 @@ module.exports = {
   createRoom, getRoom, joinRoom, findRoomBySocket, setRole, removeBySocket,
   setAvatar, setProfile, toggleReady, allCompetitorsReady,
   startNamingPhase, submitNameCandidate, voteNameCandidate, finishNamingPhase, everyoneVoted,
-  serialize, MAX_TEAM_SIZE, MAX_SPECTATOR_SEATS
+  serialize, listPendingRooms, MAX_TEAM_SIZE, MAX_SPECTATOR_SEATS
 };
