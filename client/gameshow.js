@@ -235,7 +235,34 @@ function playClap() {
 }
 
 // ---------- render ----------
+// render() rebuilds the ENTIRE screen from a string template on every call
+// (every socket broadcast, every timer tick, every other player's action --
+// not just your own). That's fine for static content, but it destroys and
+// recreates every <input> from scratch each time, wiping out whatever the
+// person was mid-typing into it and stealing focus -- with live-typing now
+// broadcasting on every keystroke, that could fire many times a second and
+// made every input field in the app effectively unusable. Save/restore the
+// focused input's identity, value and cursor position across the rebuild so
+// typing is never interrupted by a re-render that has nothing to do with
+// what you're typing.
+function captureFocusedInput() {
+  const el = document.activeElement;
+  if (!el || !gsRoot.contains(el)) return null;
+  if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') return null;
+  if (!el.id) return null;
+  return { id: el.id, value: el.value, selectionStart: el.selectionStart, selectionEnd: el.selectionEnd };
+}
+function restoreFocusedInput(saved) {
+  if (!saved) return;
+  const el = document.getElementById(saved.id);
+  if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA')) return;
+  el.value = saved.value;
+  el.focus();
+  try { el.setSelectionRange(saved.selectionStart, saved.selectionEnd); } catch (e) { /* ignore */ }
+}
+
 function render() {
+  const focused = captureFocusedInput();
   let html = '';
   if (state.screen === 'landing') html = renderLanding();
   else if (state.screen === 'avatarSetup') html = renderAvatarSetup();
@@ -254,6 +281,7 @@ function render() {
   if (stage) renderAvatarStage(stage, avatar);
   renderScreenNotices();
   attachHandlers();
+  restoreFocusedInput(focused);
 }
 
 function myPlayer() {
@@ -518,37 +546,6 @@ function renderScreenLobby() {
   `;
 }
 
-function renderNameColumn(team, label) {
-  const room = state.room;
-  const t = room[team];
-  const me = myPlayer();
-  const onThisTeam = me && me.role === team;
-  const myVote = me ? t.votes[me.id] : undefined;
-  const tally = {};
-  Object.values(t.votes).forEach(idx => { tally[idx] = (tally[idx] || 0) + 1; });
-
-  return `
-    <div class="gs-team-card">
-      <p class="gs-section-title">${label}</p>
-      ${onThisTeam ? `
-        <div class="join-row gs-name-submit-row">
-          <input type="text" id="gsNameInput_${team}" placeholder="Suggest a team name" maxlength="30" />
-          <button type="button" class="secondary gs-submit-name-btn" data-team="${team}">Submit</button>
-        </div>
-      ` : ''}
-      <div class="gs-candidate-list">
-        ${t.candidates.length ? t.candidates.map((c, idx) => `
-          <div class="gs-candidate-row ${myVote === idx ? 'voted' : ''}">
-            <span class="gs-candidate-text">"${c.text}" <span class="hint">by ${c.byName}</span></span>
-            <span class="gs-candidate-votes">${tally[idx] || 0} vote${(tally[idx] || 0) === 1 ? '' : 's'}</span>
-            ${onThisTeam ? `<button type="button" class="secondary gs-vote-btn" data-team="${team}" data-idx="${idx}">${myVote === idx ? 'Voted' : 'Vote'}</button>` : ''}
-          </div>
-        `).join('') : '<p class="hint">No suggestions yet.</p>'}
-      </div>
-    </div>
-  `;
-}
-
 function everyoneVotedClient(room, team) {
   const t = room[team];
   if (!t.candidates.length) return false;
@@ -556,32 +553,96 @@ function everyoneVotedClient(room, team) {
   return members.every(p => Object.prototype.hasOwnProperty.call(t.votes, p.id));
 }
 
+function everyoneSubmittedClient(room, team) {
+  const t = room[team];
+  const members = room.players.filter(p => p.role === team);
+  if (!members.length) return false;
+  return members.every(p => t.candidates.some(c => c.by === p.id));
+}
+
+// Sequential naming, one team at a time -- Team A does its whole
+// submit-then-vote cycle before Team B even starts. Two screens only, and
+// each one shows NOTHING beyond what's described below (no boxes, no
+// mixed submit+vote view):
+//
+// Screen 1 (submit): title, team label, one input. Nothing else -- Enter
+// submits, there's no separate button.
+// Screen 2 (vote): "Vote for your favorite" + every submitted name as a
+// stacked pill. Clicking your pick turns it green; everyone not on this
+// team (spectators, the other team, host) watches the same pill list
+// read-only, so they can see what got submitted.
+const NAMING_ANNOUNCE_MS = 2200;
+
+function renderNameSubmitScreen(team, label) {
+  return `
+    <h3 class="gs-screen-title">Recommend a name for your Team</h3>
+    <p class="gs-section-title" style="text-align:center;">${label}</p>
+    <input type="text" id="gsNameInput_${team}" class="gs-name-solo-input" placeholder="Suggest a team name" maxlength="30" autocomplete="off" />
+  `;
+}
+
+function renderNameVoteScreen(team, label, interactive) {
+  const room = state.room;
+  const t = room[team];
+  const me = myPlayer();
+  const myVote = me ? t.votes[me.id] : undefined;
+  return `
+    <h3 class="gs-screen-title">Vote for your favorite</h3>
+    <div class="gs-candidate-list">
+      ${t.candidates.map((c, idx) => `
+        <button type="button" class="secondary gs-vote-btn gs-vote-pill ${myVote === idx ? 'voted' : ''}" ${interactive ? `data-team="${team}" data-idx="${idx}"` : 'disabled'}>${c.text}</button>
+      `).join('')}
+    </div>
+  `;
+}
+
 function renderScreenNaming() {
   const room = state.room;
   const me = myPlayer();
   const iAmHost = room.hostId === socket.id;
-  // Competitors only see their own team's suggestions -- host and
-  // spectators watch both live.
-  const canSee = (team) => iAmHost || !me || me.role === 'spectator' || me.role === team;
 
-  const cols = ['teamA', 'teamB'].map(team => {
-    const label = team === 'teamA' ? 'Team A' : 'Team B';
-    if (canSee(team)) return renderNameColumn(team, label);
-    return `<div class="gs-team-card gs-hidden-col"><p class="gs-section-title">${label}</p><p class="hint">Only ${label} can see their own suggestions.</p></div>`;
-  }).join('');
+  const announce = room.namingAnnounce;
+  if (announce && Date.now() - announce.at < NAMING_ANNOUNCE_MS) {
+    const label = announce.team === 'teamA' ? 'Team A' : 'Team B';
+    return `
+      <div class="gs-takeover">
+        <div class="gs-takeover-box good">
+          <p class="gs-takeover-text">${label} is now ${announce.name}!</p>
+        </div>
+      </div>
+    `;
+  }
 
-  const readyToLock = everyoneVotedClient(room, 'teamA') && everyoneVotedClient(room, 'teamB');
+  const team = room.namingTeam;
+  if (!team) return `<p class="hint center-text">Locking in names...</p>`;
+  const label = team === 'teamA' ? 'Team A' : 'Team B';
+  const onThisTeam = me && me.role === team;
+  const iSubmitted = onThisTeam && room[team].candidates.some(c => c.by === me.id);
 
-  return `
-    <h3 class="gs-screen-title">Recommend a name for your Team</h3>
-    <div class="gs-naming-cols">${cols}</div>
-    ${iAmHost
-      ? `<div class="center">
-          <button type="button" class="primary" id="gsFinishNamingBtn" ${readyToLock ? '' : 'disabled'}>Lock In Team Names</button>
-          ${readyToLock ? '' : '<p class="hint">Waiting for everyone on both teams to vote.</p>'}
-        </div>`
-      : `<p class="hint center-text">Waiting for the host to lock in the names...</p>`}
-  `;
+  // "Nothing else" applies to the submit screen and the spectator takeover
+  // (screenshots 42/44) -- the host's lock-in control only ever appears
+  // alongside the vote screen, never on top of those two.
+  if (onThisTeam && !iSubmitted) {
+    return renderNameSubmitScreen(team, label);
+  }
+  if (!onThisTeam && !everyoneSubmittedClient(room, team)) {
+    return `
+      <div class="gs-takeover">
+        <div class="gs-takeover-box">
+          <p class="gs-takeover-text">${label} is coming up with a name!</p>
+        </div>
+      </div>
+    `;
+  }
+
+  const readyToLock = everyoneVotedClient(room, team);
+  const lockBtn = iAmHost ? `
+    <div class="center" style="margin-top:14px;">
+      <button type="button" class="primary gs-small-btn" id="gsFinishNamingBtn" ${readyToLock ? '' : 'disabled'}>Lock In ${label}'s Name</button>
+    </div>
+  ` : '';
+
+  return `${renderNameVoteScreen(team, label, onThisTeam)}${lockBtn}`;
 }
 
 function renderTeamReadyRow(team) {
@@ -784,7 +845,7 @@ function renderAnswerArea(iAmHost, active) {
   const turnTeam = active.turnTeam;
   const isMyTurnTeam = me && me.role === turnTeam;
   let box;
-  if (active.stage === 'answering' && !active.timedOut) {
+  if (active.stage === 'answering') {
     if (active.turnLocked) {
       box = `<p class="gs-locked-answer">Locked in. Waiting on host.</p>`;
     } else if (isMyTurnTeam) {
@@ -795,8 +856,15 @@ function renderAnswerArea(iAmHost, active) {
     } else {
       box = `<p class="hint">Waiting...</p>`;
     }
-  } else if (active.timedOut) {
+  } else if (active.turnJudged === 'timeout' && !active.stealTeam) {
+    // "Time ran out" is a status for the moment right after the clock
+    // expires -- once a steal is claimed, the steal block below takes over
+    // as the thing to look at, so this stops showing rather than sticking
+    // around next to it (turnJudged stays 'timeout' forever, it never
+    // resets, so gating on !stealTeam is what makes this go away).
     box = `<p class="gs-judge-result wrong">Time ran out.</p>`;
+  } else if (active.turnJudged === 'timeout') {
+    box = '';
   } else {
     // Guard against a null/empty answer rendering as the literal text
     // "null" (happens when the host judges without a submitted answer,
@@ -958,12 +1026,28 @@ function renderComebackTakeover(iAmHost, cb) {
       </div>
     `;
   }
-  // active
-  const live = cb.live || { points: 0, timeLeft: SPEED_ROUND_SECONDS, typing: '' };
+  if (cb.stage === 'done') {
+    // Same full-screen treatment as every other announcement (steal claim,
+    // host felt nice, etc) instead of an inline banner that grew the
+    // screen taller than the rest of the game.
+    return `
+      <div class="gs-takeover">
+        <div class="gs-takeover-box good">
+          <p class="gs-takeover-text">${cb.playerName} got ${teamLabel(cb.team)} ${cb.points} point${cb.points === 1 ? '' : 's'}!</p>
+          ${iAmHost ? `<button type="button" class="secondary gs-small-btn" id="gsClearComebackBtn">Dismiss</button>` : ''}
+        </div>
+      </div>
+    `;
+  }
+  // active -- spectators/host/other team get the same live view the
+  // attempting player sees on their own screen, including the character
+  // picture (was missing here before, text-only).
+  const live = cb.live || { points: 0, timeLeft: SPEED_ROUND_SECONDS, typing: '', img: null };
   return `
     <div class="gs-takeover">
       <div class="gs-takeover-box">
         <p class="gs-takeover-timer">${live.timeLeft != null ? live.timeLeft : ''}s</p>
+        ${live.img ? `<img class="gs-comeback-live-img" src="${live.img}" alt="" />` : ''}
         <p class="gs-takeover-text">${cb.playerName}: ${live.points} pt${live.points === 1 ? '' : 's'}</p>
         ${live.typing ? `<p class="gs-takeover-typing">"${live.typing}"</p>` : ''}
       </div>
@@ -975,17 +1059,9 @@ function renderComebackArea(iAmHost) {
   const room = state.room;
   const cb = room.board.comeback;
   if (cb) {
-    // announcing/active are handled by renderComebackTakeover from
-    // renderScreenBoard (full-screen, scoreboard hidden) -- only the "done"
-    // dismiss banner lives here.
-    if (cb.stage === 'done') {
-      return `
-        <div class="gs-comeback-banner">
-          <p>${cb.playerName} scored <strong>${cb.points}</strong> point${cb.points === 1 ? '' : 's'} for ${teamLabel(cb.team)}!</p>
-          ${iAmHost ? `<button type="button" class="secondary gs-small-btn" id="gsClearComebackBtn">Dismiss</button>` : ''}
-        </div>
-      `;
-    }
+    // announcing/active/done are ALL handled by renderComebackTakeover from
+    // renderScreenBoard now (full-screen, scoreboard hidden, uniform size)
+    // -- nothing left for this function to draw while a comeback exists.
     return '';
   }
 
@@ -1068,7 +1144,7 @@ function renderScreenBoard() {
   if (hostNiceActive) return renderHostNiceTakeover();
 
   const cb = room.board.comeback;
-  if (cb && (cb.stage === 'announcing' || cb.stage === 'active')) return renderComebackTakeover(iAmHost, cb);
+  if (cb && (cb.stage === 'announcing' || cb.stage === 'active' || cb.stage === 'done')) return renderComebackTakeover(iAmHost, cb);
 
   const cellTakeover = room.board.active ? activeTakeover(room.board.active) : null;
   if (cellTakeover) {
@@ -1087,7 +1163,11 @@ function renderScreenBoard() {
 function renderStage() {
   const room = state.room;
   let screenInner = '';
-  if (room.phase === 'naming') screenInner = renderScreenNaming();
+  // Team B's "is now X!" announce fires in the same tick the room flips to
+  // 'ready' -- catch it here too, or the announce would never actually be
+  // seen before the screen jumps straight to the ready view.
+  const namingAnnounceLive = room.namingAnnounce && Date.now() - room.namingAnnounce.at < NAMING_ANNOUNCE_MS;
+  if (room.phase === 'naming' || (room.phase === 'ready' && namingAnnounceLive)) screenInner = renderScreenNaming();
   else if (room.phase === 'ready') screenInner = renderScreenReady();
   else if (room.phase === 'playing' || room.phase === 'finished') screenInner = renderScreenBoard();
   else screenInner = renderScreenLobby();
@@ -1447,11 +1527,12 @@ function attachHandlers() {
   });
 
   // naming
-  document.querySelectorAll('.gs-submit-name-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const team = btn.dataset.team;
-      const input = document.getElementById('gsNameInput_' + team);
-      if (!input || !input.value.trim()) return;
+  // Naming's submit screen is deliberately just the one input, nothing
+  // else -- Enter is the only way to submit.
+  document.querySelectorAll('.gs-name-solo-input').forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' || !input.value.trim()) return;
+      const team = input.id.replace('gsNameInput_', '');
       socket.emit('gsSubmitTeamName', { team, text: input.value }, (res) => {
         if (!res.ok) showGsNotice(res.error || "Couldn't submit.");
       });
@@ -1717,7 +1798,15 @@ function wireTurnTimer() {
   clearInterval(turnTimerHandle);
   turnTimerHandle = null;
   const room = state.room;
-  if (!room || !room.board) return;
+  if (!room) return;
+
+  // "Team X is now Y!" naming announce expiry.
+  if (room.namingAnnounce) {
+    const msLeft = NAMING_ANNOUNCE_MS - (Date.now() - room.namingAnnounce.at);
+    if (msLeft > 0) { turnTimerHandle = setTimeout(render, msLeft + 50); return; }
+  }
+
+  if (!room.board) return;
 
   // "Host felt nice" takeover expiry.
   if (room.board.hostNice) {

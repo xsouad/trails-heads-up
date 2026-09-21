@@ -436,74 +436,44 @@ body:has(#app-gameshow) {
 }
 
 
-/* ---------- naming (rendered inside the TV screen) ---------- */
+/* ---------- naming (rendered inside the TV screen) ----------
+   Sequential, one team at a time, two screens only -- exactly:
+   1) submit: title + team label + one input, nothing else.
+   2) vote: title + a stack of name pills, no per-row boxes. */
 
-#app-gameshow .gs-naming-cols {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+/* Scoped to inside the black TV screen only -- .gs-section-title's global
+   rule (dark text, for use on the yellow card background elsewhere, e.g.
+   Pending Games) would be illegible here otherwise. */
+#app-gameshow .gs-tv-screen-inner .gs-section-title { color: #fff; text-align: center; }
+
+#app-gameshow .gs-name-solo-input {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 18px auto 0;
   text-align: left;
-}
-
-#app-gameshow .gs-team-card {
-  flex: 1;
-  min-width: 220px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 12px;
-  padding: 14px;
-  color: #fff;
-}
-
-#app-gameshow .gs-team-card .gs-section-title { color: #fff; }
-
-#app-gameshow .gs-team-card.gs-hidden-col {
-  opacity: 0.6;
-  border-style: dashed;
-}
-
-#app-gameshow .gs-name-submit-row {
-  margin-bottom: 10px;
-}
-/* Reset the global .join-row input[type=text] { text-transform: uppercase }
-   rule from style.css -- team names are normal mixed-case text, not a room
-   code. */
-#app-gameshow .gs-name-submit-row input[type=text] {
   text-transform: none;
-  text-align: left;
 }
 
 #app-gameshow .gs-candidate-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
+  max-width: 360px;
+  margin: 14px auto 0;
 }
 
-#app-gameshow .gs-candidate-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(255,255,255,0.08);
-  flex-wrap: wrap;
+/* Each suggestion is its own pill button -- no row background, no vote
+   count shown alongside it. Picking one turns it green; that's the only
+   feedback needed. */
+#app-gameshow .gs-vote-pill {
+  width: 100%;
+  border-radius: 999px;
+  background: #fff9e0;
+  color: #17140a;
 }
-
-#app-gameshow .gs-candidate-row.voted {
-  background: rgba(76,175,80,0.25);
-  border: 1px solid rgba(76,175,80,0.5);
-}
-
-#app-gameshow .gs-candidate-text {
-  flex: 1;
-  font-weight: 600;
-}
-#app-gameshow .gs-candidate-text .hint { color: #cfcfcf; }
-
-#app-gameshow .gs-candidate-votes {
-  font-size: 0.8rem;
-  color: #d8d8d8;
-}
+#app-gameshow .gs-vote-btn.voted { background: #4caf50; color: #fff; border-color: #4caf50; }
+#app-gameshow .gs-vote-pill:disabled { opacity: 0.85; cursor: default; }
 
 /* ---------- ready (rendered inside the TV screen) ---------- */
 
@@ -796,8 +766,10 @@ body:has(#app-gameshow) {
   padding: 8px 20px; border-radius: 10px; min-width: 120px;
   border: 2px solid rgba(0,0,0,0.25);
 }
-#app-gameshow .gs-score-block.teamA { background: rgba(30,111,224,0.3); }
-#app-gameshow .gs-score-block.teamB { background: rgba(229,28,46,0.3); }
+/* Bumped from 0.3 opacity -- against the dark screen background that read
+   as a muted, almost-gray box instead of a clear team blue/red. */
+#app-gameshow .gs-score-block.teamA { background: rgba(30,111,224,0.75); }
+#app-gameshow .gs-score-block.teamB { background: rgba(229,28,46,0.75); }
 #app-gameshow .gs-score-label { font-size: 0.78rem; font-weight: 700; color: #fff; opacity: 0.85; }
 #app-gameshow .gs-score-value { font-size: 1.8rem; font-weight: 800; color: #fff; }
 #app-gameshow .gs-hint-inline { font-size: 0.75rem; opacity: 0.9; margin-left: 2px; }
@@ -891,18 +863,17 @@ body:has(#app-gameshow) {
 }
 #app-gameshow .gs-hint-block {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center;
-  background: rgba(0,0,0,0.06); border-radius: 8px; padding: 6px 10px; font-size: 0.85rem;
+  padding: 6px 10px; font-size: 0.85rem;
 }
 #app-gameshow .gs-hint-team { font-weight: 700; }
 #app-gameshow .gs-phone-select { max-width: 130px; font-size: 0.8rem; }
 
-#app-gameshow .gs-comeback-banner {
-  text-align: center; background: rgba(255,204,0,0.14); border: 2px solid #ffcc00;
-  border-radius: 10px; padding: 10px 14px; margin: 10px 0; font-weight: 700; color: #fff;
-}
+/* .gs-comeback-banner is no longer used -- the comeback result now shows as
+   a full-screen takeover (see renderComebackResultTakeover / .gs-takeover),
+   same as every other announcement, instead of a banner that grew the
+   screen. Selector kept only so nothing errors if referenced. */
 #app-gameshow .gs-comeback-trigger {
-  text-align: center; background: rgba(0,0,0,0.06); border-radius: 10px;
-  padding: 10px 14px; margin: 10px 0;
+  text-align: center; padding: 10px 14px; margin: 10px 0;
 }
 #app-gameshow .gs-comeback-trigger select { margin: 0 8px; }
 #app-gameshow .gs-comeback-title {
@@ -992,6 +963,12 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-pending-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 #app-gameshow .gs-pending-header .gs-section-title { margin: 0; }
 #app-gameshow .gs-pending-list { margin-top: 10px; }
+/* .public-room-row keeps its dark-navy background from the shared
+   style.css, but this page's default text color is dark (for the yellow
+   card background elsewhere) -- that made the room name unreadable against
+   the dark row. Force it light here only. */
+#app-gameshow .public-room-row { color: #fff; }
+#app-gameshow .public-room-row span { color: #fff; }
 
 /* Phone-a-friend avatar standing next to the host once called */
 #app-gameshow .gs-podium-avatar-wrap { display: flex; align-items: center; justify-content: center; gap: 4px; }
@@ -1005,18 +982,23 @@ body:has(#app-gameshow) {
 /* Icon-based hints (grays out when used) and a separate Phone a Friend
    button, both OUTSIDE the team's colored score box -- not touching or
    overlapping its border. */
+/* Team B's row is already built in the mirrored DOM order (box, then
+   phone, then hints, so the colored box lands next to Team A's box in the
+   center and the icons fan outward) -- row-reverse here was flipping that
+   right back around, which is what put the hints/phone on the wrong side. */
 #app-gameshow .gs-score-row { display: flex; align-items: center; gap: 10px; }
-#app-gameshow .gs-score-row.reversed { flex-direction: row-reverse; }
 #app-gameshow .gs-icon-stack { display: flex; flex-direction: column; gap: 3px; }
+/* Bare icons, no background box behind them -- opacity alone shows
+   used/available state. */
 #app-gameshow .gs-icon-box {
-  font-size: 0.9rem; width: 22px; height: 22px; display: flex; align-items: center;
-  justify-content: center; border-radius: 5px; background: rgba(255,255,255,0.15);
+  font-size: 1rem; width: 22px; height: 22px; display: flex; align-items: center;
+  justify-content: center;
 }
 #app-gameshow .gs-icon-box.spent { opacity: 0.25; filter: grayscale(1); }
-#app-gameshow .gs-icon-box.lit { background: rgba(255,255,255,0.28); }
+#app-gameshow .gs-icon-box.lit { opacity: 1; }
 /* Phone a Friend is visually distinct from the hint icons -- its own
    button, not part of the hint stack. */
-#app-gameshow .gs-phone-icon { width: 26px; height: 30px; border-radius: 8px; font-size: 1rem; }
+#app-gameshow .gs-phone-icon { width: 26px; height: 30px; font-size: 1.1rem; }
 
 /* Screenshot: always a big, uniform box regardless of source size -- the
    image fills it completely (object-fit: cover, scales small images UP and
@@ -1074,17 +1056,17 @@ body:has(#app-gameshow) {
 }
 @keyframes gsStealPulse { from { box-shadow: 0 0 0 rgba(255,204,0,0); } to { box-shadow: 0 0 24px rgba(255,204,0,0.5); } }
 
-/* Compact bottom bar: timer left, team name right -- replaces the old
-   full-width turn banner (which used to repeat the team name elsewhere too). */
+/* Timer + team name as one tight, centered pair of yellow pills sitting
+   right next to each other -- NOT spread to opposite edges of the screen.
+   These are the reference's own accent-yellow pills, not gray boxes. */
 #app-gameshow .gs-status-bar {
-  display: flex; align-items: center; justify-content: space-between;
-  margin: 10px 0 8px; padding: 0 2px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 14px 0 8px;
 }
-#app-gameshow .gs-timer-box {
-  font-weight: 800; color: #ffcc00; font-size: 1rem;
-}
+#app-gameshow .gs-timer-box,
 #app-gameshow .gs-team-box {
-  font-weight: 700; color: #fff; font-size: 0.95rem;
+  background: #ffcc00; color: #17140a; font-weight: 800;
+  padding: 8px 18px; border-radius: 10px; font-size: 1rem;
 }
 
 /* Cosmetic live-typing mirror of an in-progress answer -- never used for
@@ -1114,9 +1096,7 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-preview-text { color: #fff; font-size: 1.05rem; margin: 0 0 8px; }
 #app-gameshow .gs-preview-answer { color: #ffe38a; font-weight: 700; margin: 0 0 12px; }
 
-/* Only 2 gray colors should ever exist on the TV screen: the outer BORDER
-   (.gs-tv-screen's own border-color, unchanged) and this one screen
-   background. Everything else (active-cell panel, turn banner, etc.) sits
-   directly on this same background instead of having its own separately
-   shaded box -- that's what was making it look like "boxes inside boxes". */
-#app-gameshow .gs-tv-screen-inner { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px; }
+/* ZERO boxes inside the screen -- not even a subtly different shade. The
+   only visible rectangle anywhere on the TV is .gs-tv-screen's own outer
+   border; everything else sits directly on that same plain black
+   background with no background/border-radius/padding of its own. */

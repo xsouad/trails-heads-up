@@ -27,6 +27,8 @@ function newRoom(code) {
     players: new Map(), // socketId -> { id, name, avatar, clientId, role, seat }
     teamA: { name: null, locked: false, candidates: [], votes: {} },
     teamB: { name: null, locked: false, candidates: [], votes: {} },
+    namingTeam: null, // 'teamA' | 'teamB' | null -- whose turn it is to name, sequential not simultaneous
+    namingAnnounce: null, // { team, name, at } -- brief "Team X is now Y!" takeover after a team locks in
     phase: 'lobby', // lobby -> naming -> ready
     createdAt: Date.now()
   };
@@ -242,12 +244,17 @@ function startNamingPhase(room, socketId) {
   room.phase = 'naming';
   room.teamA = { name: null, locked: false, candidates: [], votes: {} };
   room.teamB = { name: null, locked: false, candidates: [], votes: {} };
+  // Sequential, not simultaneous: Team A names itself completely (submit,
+  // then vote) before Team B even starts.
+  room.namingTeam = 'teamA';
+  room.namingAnnounce = null;
   return { room };
 }
 
 function submitNameCandidate(room, socketId, team, text) {
   const t = room[team];
   if (!t || room.phase !== 'naming' || t.locked) return { error: 'Naming is closed for this team.' };
+  if (team !== room.namingTeam) return { error: "It's not your team's turn to name yet." };
   const player = room.players.get(socketId);
   if (!player || player.role !== team) return { error: 'Not on this team.' };
   const clean = (text || '').trim().slice(0, 30);
@@ -261,11 +268,23 @@ function submitNameCandidate(room, socketId, team, text) {
 function voteNameCandidate(room, socketId, team, candidateIdx) {
   const t = room[team];
   if (!t || room.phase !== 'naming' || t.locked) return { error: 'Naming is closed for this team.' };
+  if (team !== room.namingTeam) return { error: "It's not your team's turn to name yet." };
   const player = room.players.get(socketId);
   if (!player || player.role !== team) return { error: 'Not on this team.' };
   if (!t.candidates[candidateIdx]) return { error: "That option doesn't exist." };
   t.votes[socketId] = candidateIdx;
   return { room };
+}
+
+// Everyone on the team has submitted at least one suggestion -- this is
+// what flips spectators/the other team over from the "Team X is coming up
+// with a name!" takeover to being able to watch the vote screen.
+function everyoneSubmitted(room, team) {
+  const t = room[team];
+  for (const p of room.players.values()) {
+    if (p.role === team && !t.candidates.some(c => c.by === p.id)) return false;
+  }
+  return teamCount(room, team) > 0;
 }
 
 function tallyTeamName(room, team) {
@@ -291,14 +310,24 @@ function everyoneVoted(room, team) {
   return true;
 }
 
+// Locks in whichever team currently has the turn (room.namingTeam), shows a
+// brief "Team X is now Y!" takeover, then either hands the turn to Team B
+// or -- if Team B just finished -- moves the room on to the ready phase.
 function finishNamingPhase(room, socketId) {
-  if (room.hostId !== socketId) return { error: 'Only the host can lock in team names.' };
-  if (!everyoneVoted(room, 'teamA') || !everyoneVoted(room, 'teamB')) {
-    return { error: 'Everyone on both teams needs to vote first.' };
+  if (room.hostId !== socketId) return { error: 'Only the host can lock in a team name.' };
+  const team = room.namingTeam;
+  if (!team) return { error: 'Naming is already finished.' };
+  if (!everyoneVoted(room, team)) {
+    return { error: 'Everyone on this team needs to vote first.' };
   }
-  tallyTeamName(room, 'teamA');
-  tallyTeamName(room, 'teamB');
-  room.phase = 'ready';
+  tallyTeamName(room, team);
+  room.namingAnnounce = { team, name: room[team].name, at: Date.now() };
+  if (team === 'teamA') {
+    room.namingTeam = 'teamB';
+  } else {
+    room.namingTeam = null;
+    room.phase = 'ready';
+  }
   return { room };
 }
 
@@ -332,6 +361,8 @@ function serialize(room) {
     players: Array.from(room.players.values()),
     teamA: room.teamA,
     teamB: room.teamB,
+    namingTeam: room.namingTeam || null,
+    namingAnnounce: room.namingAnnounce || null,
     maxTeamSize: MAX_TEAM_SIZE,
     maxSpectatorSeats: MAX_SPECTATOR_SEATS
   };
@@ -340,6 +371,6 @@ function serialize(room) {
 module.exports = {
   createRoom, getRoom, joinRoom, findRoomBySocket, setRole, removeBySocket,
   setAvatar, setProfile, toggleReady, allCompetitorsReady,
-  startNamingPhase, submitNameCandidate, voteNameCandidate, finishNamingPhase, everyoneVoted,
+  startNamingPhase, submitNameCandidate, voteNameCandidate, finishNamingPhase, everyoneVoted, everyoneSubmitted,
   serialize, listPendingRooms, MAX_TEAM_SIZE, MAX_SPECTATOR_SEATS
 };
