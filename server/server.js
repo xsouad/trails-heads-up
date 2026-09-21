@@ -12,6 +12,7 @@ const {
 } = require('./rooms');
 const gsRooms = require('./gameshowRooms');
 const gsBoard = require('./gameshowBoard');
+const gsLeaderboard = require('./gameshowLeaderboard');
 
 function log(...args) { console.log(new Date().toISOString(), ...args); }
 
@@ -601,14 +602,10 @@ io.on('connection', (socket) => {
     const result = gsBoard.giveHint(room, socket.id, team);
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     cb && cb({ ok: true });
+    // Hint use now shows as a full-screen takeover (room.board.hintAnnounce,
+    // set inside gsBoard.giveHint) instead of this small toast -- everyone
+    // sees the same big "Team X has taken a hint." moment together.
     broadcastGsRoom(room);
-    // Role-aware toast: the team that took the hint sees their own framing,
-    // everyone else (host, spectators, the other team) sees the team name.
-    const teamLabel = (room[team] && room[team].name) || (team === 'teamA' ? 'Team A' : 'Team B');
-    room.players.forEach((p, socketId) => {
-      const text = p.role === team ? "You've taken a HINT!" : `TEAM ${teamLabel} has taken a hint.`;
-      io.to(socketId).emit('gsNotice', { text });
-    });
   });
 
   socket.on('gsUsePhoneAFriend', ({ team, spectatorId }, cb) => {
@@ -704,6 +701,20 @@ io.on('connection', (socket) => {
   // idea as Heads Up's public room browser.
   socket.on('gsListPendingRooms', (_, cb) => {
     cb && cb(gsRooms.listPendingRooms());
+  });
+
+  // ---------- global "That Won't Be Necessary" leaderboard ----------
+  // Not room-scoped -- every visitor to the site shares the same list, so
+  // this reads/writes gsLeaderboard directly and broadcasts to literally
+  // everyone connected (io.emit), not just one Gameshow room.
+  socket.on('gsGetLeaderboard', (_, cb) => {
+    cb && cb(gsLeaderboard.getEntries());
+  });
+
+  socket.on('gsSubmitLeaderboardScore', ({ name, points, correctCount, wrongCount }, cb) => {
+    const entries = gsLeaderboard.addEntry(name, points, correctCount, wrongCount);
+    cb && cb({ ok: true });
+    io.emit('gsLeaderboardUpdate', entries);
   });
 });
 

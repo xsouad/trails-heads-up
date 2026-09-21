@@ -129,6 +129,13 @@ body:has(#app-gameshow) {
 
 /* ---------- lobby: TV screen ---------- */
 
+/* The screen holds the EXACT same size on every phase of the game --
+   lobby, naming, ready, board, every takeover -- not just once it's
+   "in-game". Previously the lobby/naming views used a smaller min-height
+   than the takeovers ever needed, so a takeover (which always demands at
+   least .gs-takeover's own min-height) would blow past this box and grow
+   the whole screen taller than it was a second earlier. Unifying the
+   value here is what stops that. */
 #app-gameshow .gs-tv-screen {
   background: #0c0c0c;
   border: 10px solid #050505;
@@ -136,14 +143,9 @@ body:has(#app-gameshow) {
   box-shadow: 0 6px 0 rgba(0,0,0,0.3), inset 0 0 30px rgba(255,255,255,0.03);
   padding: 40px 24px;
   margin-bottom: 36px;
-  min-height: 260px;
+  min-height: 460px;
 }
 
-/* Once the actual game starts, the screen holds AT LEAST this size no
-   matter which view is showing (board grid, a question, the comeback
-   round) -- short content never shrinks the box and jumps the podiums/
-   seats below it, but nothing ever scrolls (spectators should never have
-   to scroll to see the screen). */
 #app-gameshow .gs-tv-screen.in-game {
   min-height: 460px;
 }
@@ -256,6 +258,16 @@ body:has(#app-gameshow) {
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+/* Persistent-for-the-game badges: a hint used, a steal pulled off. Sits in
+   the corner of the avatar box, small enough not to compete with it. */
+#app-gameshow .gs-podium-markers {
+  position: absolute; top: -4px; right: -4px; display: flex; gap: 2px; z-index: 2;
+}
+#app-gameshow .gs-podium-marker {
+  font-size: 0.75rem; background: rgba(0,0,0,0.6); border-radius: 999px;
+  padding: 1px 3px; line-height: 1.3;
 }
 
 #app-gameshow .gs-podium-block {
@@ -717,12 +729,13 @@ body:has(#app-gameshow) {
 }
 #app-gameshow .gs-leaderboard-name { flex: 1; font-weight: 600; }
 #app-gameshow .gs-leaderboard-points { font-weight: 800; color: #7a4b00; }
+#app-gameshow .gs-leaderboard-detail { font-weight: 400; font-size: 0.72rem; color: #8a6a1f; display: block; }
 
 /* Desktop: there's a lot of unused horizontal space at the 1100px
    container width, so the stage scales up noticeably rather than sitting
    as a small island in the middle of the page. */
 @media (min-width: 900px) {
-  #app-gameshow .gs-tv-screen { padding: 56px 40px; min-height: 320px; }
+  #app-gameshow .gs-tv-screen { padding: 56px 40px; min-height: 520px; }
   #app-gameshow .gs-tv-screen.in-game { min-height: 520px; }
   #app-gameshow .gs-screen-roomcode { font-size: 4rem; letter-spacing: 8px; }
   #app-gameshow .gs-floor { gap: 24px; margin-top: 40px; margin-bottom: 20px; }
@@ -807,7 +820,7 @@ body:has(#app-gameshow) {
   color: #fff;
 }
 #app-gameshow .gs-cell-value {
-  text-align: center; color: #ffcc00; font-weight: 800; font-size: 1rem; margin: 0 0 10px;
+  text-align: center; color: #ffcc00; font-weight: 800; font-size: 1.25rem; margin: 0 0 10px;
   text-transform: uppercase; letter-spacing: 0.04em;
 }
 /* No box background here anymore -- sits directly on the screen. Timer +
@@ -829,7 +842,7 @@ body:has(#app-gameshow) {
 }
 #app-gameshow .gs-cell-screenshot.small { max-height: 160px; }
 #app-gameshow .gs-cell-prompt {
-  text-align: center; font-size: 1.2rem; font-weight: 600; margin: 0 0 6px; line-height: 1.4;
+  text-align: center; font-size: 1.55rem; font-weight: 600; margin: 0 0 6px; line-height: 1.4;
 }
 #app-gameshow .gs-cell-answer {
   text-align: center; color: #ffe38a; margin: 4px 0 12px;
@@ -846,9 +859,14 @@ body:has(#app-gameshow) {
 }
 #app-gameshow .gs-answer-block .gs-section-title { text-align: center; color: #fff; }
 #app-gameshow .gs-locked-answer {
-  font-style: italic; color: #ffe38a; margin: 4px 0;
+  font-style: italic; color: #ffe38a; margin: 4px 0; font-size: 1.15rem;
 }
-#app-gameshow .gs-judge-result { font-weight: 700; margin: 6px 0 0; }
+/* The room-code/host-code join-row inputs are meant to show as caps, but
+   answer/steal typing shouldn't force that -- it just LOOKS like the input
+   only accepts capitals since everything typed displays uppercased. */
+#app-gameshow #gsAnswerInput,
+#app-gameshow #gsStealInput { text-transform: none; }
+#app-gameshow .gs-judge-result { font-weight: 700; margin: 6px 0 0; font-size: 1.1rem; }
 #app-gameshow .gs-judge-result.correct { color: #6fe08a; }
 #app-gameshow .gs-judge-result.wrong { color: #ff8a8a; }
 #app-gameshow .gs-judge-btns { display: flex; gap: 8px; margin-top: 8px; }
@@ -993,16 +1011,19 @@ body:has(#app-gameshow) {
    is a colored accent, not a gray box, so it doesn't conflict with the
    "no gray boxes" rule elsewhere on the screen. */
 #app-gameshow .gs-icon-box {
-  font-size: 1rem; width: 26px; height: 26px; display: flex; align-items: center;
-  justify-content: center; border-radius: 6px;
+  font-size: 1.15rem; width: 32px; height: 32px; display: flex; align-items: center;
+  justify-content: center; border-radius: 8px;
 }
 #app-gameshow .gs-icon-box.teamA { background: #1a3a66; }
 #app-gameshow .gs-icon-box.teamB { background: #5c1620; }
 #app-gameshow .gs-icon-box.spent { opacity: 0.35; filter: grayscale(1); }
 #app-gameshow .gs-icon-box.lit { opacity: 1; }
+#app-gameshow .gs-icon-box.clickable { cursor: pointer; box-shadow: 0 0 0 2px rgba(255,204,0,0.6); }
+#app-gameshow .gs-icon-box.clickable:hover { filter: brightness(1.2); }
+#app-gameshow .gs-phone-picker-list { display: flex; flex-direction: column; gap: 8px; max-width: 220px; margin: 0 auto; }
 /* Phone a Friend is visually distinct from the hint icons -- its own,
    taller button, not part of the hint stack. */
-#app-gameshow .gs-phone-icon { width: 30px; height: 88px; font-size: 1.3rem; }
+#app-gameshow .gs-phone-icon { width: 36px; height: 102px; font-size: 1.5rem; }
 
 /* Screenshot: always a big, uniform box regardless of source size -- the
    image fills it completely (object-fit: cover, scales small images UP and
@@ -1016,7 +1037,17 @@ body:has(#app-gameshow) {
   display: block; width: 100%; height: 100%; object-fit: cover; margin: 0; border: none; border-radius: 0;
 }
 #app-gameshow .gs-zoom-hint { display: none; }
-#app-gameshow .gs-zoom-card img { max-width: 90vw; max-height: 80vh; display: block; margin: 0 auto 10px; border-radius: 8px; }
+/* The base .zoom-card caps out at 340px wide, which is fine for a text
+   confirmation dialog but kept the "full picture" zoom tiny no matter how
+   big the source image actually was. Let this one grow much larger and let
+   the image scale UP to fill it, not just sit at its native size. */
+#app-gameshow .gs-zoom-card {
+  max-width: min(92vw, 900px); width: auto; background: #0c0c0c; padding: 16px;
+}
+#app-gameshow .gs-zoom-card img {
+  width: 100%; height: auto; max-width: 92vw; max-height: 85vh;
+  display: block; margin: 0 auto 10px; border-radius: 8px; object-fit: contain;
+}
 
 /* Uniform grid cells across all three columns -- table-layout:fixed above
    already forces equal column widths; this just keeps cell content centered. */
@@ -1035,7 +1066,7 @@ body:has(#app-gameshow) {
    background -- no separate gray box, just the dashed accent border. */
 #app-gameshow .gs-takeover {
   display: flex; align-items: center; justify-content: center;
-  min-height: 440px; padding: 20px; box-sizing: border-box;
+  min-height: 380px; padding: 20px; box-sizing: border-box;
 }
 #app-gameshow .gs-takeover-box {
   border: 3px dashed #ffcc00; border-radius: 10px; padding: 32px 28px;
@@ -1070,7 +1101,7 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-timer-box,
 #app-gameshow .gs-team-box {
   background: #ffcc00; color: #17140a; font-weight: 800;
-  padding: 8px 18px; border-radius: 10px; font-size: 1rem;
+  padding: 9px 20px; border-radius: 10px; font-size: 1.25rem;
 }
 
 /* Cosmetic live-typing mirror of an in-progress answer -- never used for

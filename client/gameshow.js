@@ -62,7 +62,8 @@ let state = {
   pendingRooms: [], // Pending Games list on the landing screen
   clapMuted: false,
   clapVolume: 0.6,
-  zoomImageSrc: null // set to open the screenshot lightbox
+  zoomImageSrc: null, // set to open the screenshot lightbox
+  leaderboard: [] // global speed-round leaderboard, shared by every visitor
 };
 
 // ---------- clap volume / mute (persisted across visits) ----------
@@ -80,23 +81,20 @@ function saveClapPrefs() {
   try { localStorage.setItem(GS_CLAP_PREF_KEY, JSON.stringify({ muted: state.clapMuted, volume: state.clapVolume })); } catch (e) { /* ignore */ }
 }
 
-// ---------- speed round leaderboard (client-side, this browser only) ----------
-const GS_LEADERBOARD_KEY = 'trailsGameshow_speedLeaderboard';
-function loadLeaderboard() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(GS_LEADERBOARD_KEY));
-    if (Array.isArray(parsed)) return parsed;
-  } catch (e) { /* ignore malformed/missing data */ }
-  return [];
+// ---------- speed round leaderboard (global, shared server-side) ----------
+// Used to be per-browser (localStorage) -- now the server keeps one shared
+// list and broadcasts it to everyone whenever a new score is saved, so
+// every visitor sees the same leaderboard instead of only their own runs.
+function refreshGsLeaderboard() {
+  socket.emit('gsGetLeaderboard', null, (entries) => {
+    state.leaderboard = entries || [];
+    if (state.screen === 'speedIntro' || state.screen === 'speedResults') render();
+  });
 }
-function saveScoreToLeaderboard(name, points, correctCount) {
-  const board = loadLeaderboard();
-  board.push({ name: (name || 'Player').slice(0, 24), points, correctCount, date: Date.now() });
-  board.sort((a, b) => (b.points - a.points) || (b.correctCount - a.correctCount));
-  const trimmed = board.slice(0, 10);
-  try { localStorage.setItem(GS_LEADERBOARD_KEY, JSON.stringify(trimmed)); } catch (e) { /* storage unavailable -- skip */ }
-  return trimmed;
-}
+socket.on('gsLeaderboardUpdate', (entries) => {
+  state.leaderboard = entries || [];
+  if (state.screen === 'speedIntro' || state.screen === 'speedResults') render();
+});
 
 const gsRoot = document.getElementById('gsRoot');
 
@@ -161,6 +159,43 @@ function showGsCellPreview(content, column) {
   const closeBtn = document.getElementById('gsClosePreviewBtn');
   if (closeBtn) closeBtn.addEventListener('click', () => overlay.remove());
 }
+
+// Self-service Phone a Friend: a competitor clicking their own team's
+// unused phone icon gets a quick "who do you want to call" picker instead
+// of having to ask the host to do it for them. Same overlay mechanics as
+// the cell preview above.
+function showGsPhonePicker(team) {
+  const room = state.room;
+  if (!room) return;
+  const spectators = room.players.filter(p => p.role === 'spectator');
+  const existing = document.getElementById('gsPhonePickerOverlay');
+  if (existing) existing.remove();
+  if (!spectators.length) { showGsNotice('No one in the audience to call yet.'); return; }
+  const host = document.querySelector('.gs-tv-screen') || document.getElementById('gsRoot');
+  const overlay = document.createElement('div');
+  overlay.id = 'gsPhonePickerOverlay';
+  overlay.className = 'gs-preview-overlay';
+  overlay.innerHTML = `
+    <div class="gs-preview-box">
+      <p class="gs-preview-text" style="margin-bottom:10px;">Who do you want to call?</p>
+      <div class="gs-phone-picker-list">
+        ${spectators.map(s => `<button type="button" class="secondary gs-small-btn" data-phone-pick="${s.id}">${s.name}</button>`).join('')}
+      </div>
+      <button type="button" class="secondary gs-tiny-btn" id="gsClosePhonePickerBtn" style="margin-top:10px;">Cancel</button>
+    </div>
+  `;
+  (host || document.body).appendChild(overlay);
+  overlay.querySelectorAll('[data-phone-pick]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      socket.emit('gsUsePhoneAFriend', { team, spectatorId: btn.dataset.phonePick }, (res) => {
+        if (!res || !res.ok) showGsNotice((res && res.error) || "Couldn't place the call.");
+      });
+      overlay.remove();
+    });
+  });
+  const closeBtn = document.getElementById('gsClosePhonePickerBtn');
+  if (closeBtn) closeBtn.addEventListener('click', () => overlay.remove());
+}
 socket.on('gsClap', ({ name }) => { playClap(); });
 socket.on('connect', () => { if (!state.room) refreshGsPendingRooms(); });
 socket.on('gsRoomState', (room) => {
@@ -178,6 +213,18 @@ socket.on('gsRoomState', (room) => {
     startSpeedRound();
     return;
   }
+  // While the attempting player is mid-comeback-round, that screen is
+  // owned entirely by the local speed-round harness (its own timer,
+  // its own DOM updates on every keystroke/guess) -- it never needs a
+  // fresh render from room state. Their own throttled gsComebackTyping/
+  // gsComebackLive emits were causing a gsRoomState broadcast to bounce
+  // straight back at them roughly every 150ms, which rebuilt the whole
+  // screen (render() replaces gsRoot.innerHTML) and wiped out the
+  // autocomplete suggestions list and any in-flight dropdown selection
+  // out from under them every time -- that's the "dropdown glitching,
+  // can't press Enter to pick a name" bug. Skipping the render entirely
+  // here removes the cause instead of patching around the symptom.
+  if (state.comebackMode) return;
   render();
 });
 
@@ -412,16 +459,32 @@ function renderPodium(teamKey) {
   const me = myPlayer();
   const members = {};
   room.players.forEach(p => { if (p.role === teamKey && p.slot != null) members[p.slot] = p; });
+  const board = room.board;
+  // Persistent-for-the-game podium markers: a lightbulb once this team has
+  // used ANY hint, a caution triangle once they've pulled off ANY steal --
+  // shown once, on whichever slot is occupied first, not repeated per
+  // player.
+  const hintUsed = !!(board && board.hints && board.hints[teamKey] < STARTING_HINTS_CLIENT);
+  const stealUsed = !!(board && board.stealUsedBy && board.stealUsedBy[teamKey]);
+  const firstOccupiedSlot = [0, 1, 2].find(i => members[i]);
   const slots = [0, 1, 2].map(slotIdx => {
     const occ = members[slotIdx];
     const mine = occ && me && occ.id === me.id;
     const isEmpty = !occ;
     const tag = isEmpty ? 'button' : 'div';
     const attrs = isEmpty ? `type="button" data-join-team="${teamKey}" data-join-slot="${slotIdx}"` : '';
+    // The green "ready" tint is a lobby-only signal -- a player's `ready`
+    // flag itself is never cleared server-side once set, so without gating
+    // this on phase === 'lobby' the podium block stayed green forever
+    // after the game actually started instead of reverting to the team's
+    // own blue/red.
+    const showReady = room.phase === 'lobby' && occ && occ.ready;
+    const showMarkers = occ && slotIdx === firstOccupiedSlot && (hintUsed || stealUsed);
     return `
-      <${tag} class="gs-podium ${isEmpty ? 'empty' : 'occupied'} ${mine ? 'mine' : ''} ${occ && occ.ready ? 'is-ready' : ''}" ${attrs}>
+      <${tag} class="gs-podium ${isEmpty ? 'empty' : 'occupied'} ${mine ? 'mine' : ''} ${showReady ? 'is-ready' : ''}" ${attrs}>
         <div class="gs-podium-avatar-wrap">
           ${occ ? `<div class="gs-podium-avatar" data-avatar-for="${occ.id}"></div>` : '<span class="gs-podium-plus">+</span>'}
+          ${showMarkers ? `<span class="gs-podium-markers">${hintUsed ? '<span class="gs-podium-marker" title="This team has used a hint">💡</span>' : ''}${stealUsed ? '<span class="gs-podium-marker" title="This team has stolen a question">⚠️</span>' : ''}</span>` : ''}
         </div>
         <div class="gs-podium-block ${teamKey}"></div>
         <div class="gs-podium-name">${occ ? occ.name : ' '}</div>
@@ -693,21 +756,32 @@ function otherTeam(team) { return team === 'teamA' ? 'teamB' : 'teamA'; }
 // Hints and Phone a Friend show as discrete icon boxes -- lit while
 // available, grayed out/crossed once used -- instead of a single "count"
 // number, matching the reference board layout.
+// A competitor can now take their OWN team's hint directly (clicking a
+// still-lit bulb), not just wait on the host to give it -- matches the
+// same self-service pattern the STEAL button already used.
 function renderHintStack(team) {
   const room = state.room;
+  const me = myPlayer();
+  const canSelfServe = me && me.role === team;
   const hintsLeft = room.board.hints[team];
   const hintIcons = Array.from({ length: STARTING_HINTS_CLIENT }, (_, i) => {
     const lit = i < hintsLeft;
-    return `<span class="gs-icon-box ${team} ${lit ? 'lit' : 'spent'}" title="${lit ? 'Hint available' : 'Hint used'}">💡</span>`;
+    const clickable = lit && canSelfServe && i === hintsLeft - 1; // only the next one to spend is clickable
+    return `<span class="gs-icon-box ${team} ${lit ? 'lit' : 'spent'} ${clickable ? 'clickable' : ''}" ${clickable ? `data-take-hint="${team}"` : ''} title="${lit ? (clickable ? 'Click to take this hint' : 'Hint available') : 'Hint used'}">💡</span>`;
   }).join('');
   return `<div class="gs-icon-stack">${hintIcons}</div>`;
 }
 
 // Phone a Friend is its own separate button, not grouped with the hints.
+// Same self-service idea -- a competitor can click their own unused phone
+// icon to place the call themselves instead of waiting on the host.
 function renderPhoneButton(team) {
   const room = state.room;
+  const me = myPlayer();
+  const canSelfServe = me && me.role === team;
   const pf = room.board.phoneAFriend[team];
-  return `<span class="gs-icon-box gs-phone-icon ${team} ${pf.used ? 'spent' : 'lit'}" title="${pf.used ? `Phone a Friend used (${pf.spectatorName})` : 'Phone a Friend available'}">📞</span>`;
+  const clickable = !pf.used && canSelfServe;
+  return `<span class="gs-icon-box gs-phone-icon ${team} ${pf.used ? 'spent' : 'lit'} ${clickable ? 'clickable' : ''}" ${clickable ? `data-take-phone="${team}"` : ''} title="${pf.used ? `Phone a Friend used (${pf.spectatorName})` : (clickable ? 'Click to call a spectator' : 'Phone a Friend available')}">📞</span>`;
 }
 
 function renderScoreboard() {
@@ -767,6 +841,7 @@ function renderBoardGrid(iAmHost) {
   const cols = ['quotes', 'trivia', 'screenshots'];
   const canAct = iAmHost && !room.board.active && room.phase === 'playing';
   return `
+    ${iAmHost ? `<p class="gs-status-line" style="margin-bottom:8px;">Up next: <strong>${teamLabel(room.board.turnTeam)}</strong></p>` : ''}
     <table class="gs-board-grid">
       <thead><tr>${cols.map(c => `<th>${COLUMN_LABELS[c]}</th>`).join('')}</tr></thead>
       <tbody>
@@ -873,7 +948,7 @@ function renderAnswerArea(iAmHost, active) {
     // e.g. a screenshots question judged purely on the picture).
     box = active.turnAnswer ? `<p class="gs-locked-answer">"${active.turnAnswer}"</p>` : '';
     if (active.turnJudged) {
-      box += `<p class="gs-judge-result ${active.turnJudged}">${active.turnJudged === 'correct' ? '✅ Correct' : '❌ Wrong'}</p>`;
+      box += `<p class="gs-judge-result ${active.turnJudged}">${active.turnJudged === 'correct' ? 'Correct' : 'Wrong'}</p>`;
     } else if (iAmHost) {
       box += `<div class="gs-judge-btns"><button type="button" class="secondary gs-small-btn" id="gsJudgeCorrectBtn">Correct</button><button type="button" class="secondary gs-small-btn" id="gsJudgeWrongBtn">Wrong</button></div>`;
     }
@@ -914,7 +989,7 @@ function renderStealArea(iAmHost, active, viewerKind) {
       : `<p class="hint">Waiting on ${teamLabel(active.stealTeam)}'s steal answer...</p>`;
   } else {
     inner = `<p class="gs-locked-answer">"${active.stealAnswer}"</p>` + (active.stealJudged
-      ? `<p class="gs-judge-result ${active.stealJudged}">${active.stealJudged === 'correct' ? '✅ Stole it!' : `❌ Wrong. Loses ${Math.floor(active.value / 2)} pts.`}</p>`
+      ? `<p class="gs-judge-result ${active.stealJudged}">${active.stealJudged === 'correct' ? 'Stole it!' : `Wrong. Loses ${Math.floor(active.value / 2)} pts.`}</p>`
       : iAmHost ? `<div class="gs-judge-btns"><button type="button" class="secondary gs-small-btn" id="gsJudgeStealCorrect">Correct</button><button type="button" class="secondary gs-small-btn" id="gsJudgeStealWrong">Wrong</button></div>` : '');
   }
   return `<div class="gs-steal-block"><p class="gs-section-title">Steal: ${teamLabel(active.stealTeam)}</p>${inner}</div>`;
@@ -937,8 +1012,7 @@ function renderJudgeTakeover(correct) {
   return `
     <div class="gs-takeover">
       <div class="gs-takeover-box ${correct ? 'good' : 'bad'}">
-        <p class="gs-takeover-text">${correct ? 'CORRECT' : "Bruh that's wrong."}</p>
-        <p class="gs-takeover-icon">${correct ? '✅' : '❌'}</p>
+        <p class="gs-takeover-text">${correct ? 'Correct' : 'Wrong'}</p>
       </div>
     </div>
   `;
@@ -1122,6 +1196,23 @@ function renderHostNiceTakeover() {
   `;
 }
 
+// Hint-taken / Phone a Friend both show as a big-screen takeover now
+// instead of a small toast, same treatment as every other announcement.
+const HINT_ANNOUNCE_MS = 3200;
+function renderHintAnnounceTakeover(announce) {
+  const label = teamLabel(announce.team);
+  const text = announce.kind === 'phone'
+    ? `${label} is calling a friend from the audience!`
+    : `${label} has taken a hint.`;
+  return `
+    <div class="gs-takeover">
+      <div class="gs-takeover-box">
+        <p class="gs-takeover-text">${text}</p>
+      </div>
+    </div>
+  `;
+}
+
 // Host-only correction console: add/subtract points for either team.
 function renderHostConsole() {
   return `
@@ -1144,6 +1235,9 @@ function renderScreenBoard() {
 
   const hostNiceActive = room.board.hostNice && (Date.now() - room.board.hostNice.at < HOST_NICE_MS);
   if (hostNiceActive) return renderHostNiceTakeover();
+
+  const hintAnnounceActive = room.board.hintAnnounce && (Date.now() - room.board.hintAnnounce.at < HINT_ANNOUNCE_MS);
+  if (hintAnnounceActive) return renderHintAnnounceTakeover(room.board.hintAnnounce);
 
   const cb = room.board.comeback;
   if (cb && (cb.stage === 'announcing' || cb.stage === 'active' || cb.stage === 'done')) return renderComebackTakeover(iAmHost, cb);
@@ -1250,11 +1344,11 @@ const NAMES_PER_POINT = 5;
 const POINTS_PER_TIER = 100; // each tier of 5 correct names is worth 100 game points
 
 function renderLeaderboard() {
-  const board = loadLeaderboard();
+  const board = state.leaderboard || [];
   if (!board.length) return '<p class="hint">No scores yet. Be the first!</p>';
   return `
     <ol class="gs-leaderboard-list">
-      ${board.map(entry => `<li><span class="gs-leaderboard-name">${entry.name}</span><span class="gs-leaderboard-points">${entry.points} pt${entry.points === 1 ? '' : 's'}</span></li>`).join('')}
+      ${board.map(entry => `<li><span class="gs-leaderboard-name">${entry.name}</span><span class="gs-leaderboard-points">${entry.points} pt${entry.points === 1 ? '' : 's'} <span class="gs-leaderboard-detail">(${entry.correctCount} correct, ${entry.wrongCount} wrong)</span></span></li>`).join('')}
     </ol>
   `;
 }
@@ -1272,7 +1366,7 @@ function renderSpeedIntro() {
       <div style="margin-top:10px;"><button type="button" class="secondary" id="gsBackFromIntroBtn">Back</button></div>
     </div>
     <div class="card center">
-      <p class="gs-section-title">Leaderboard (this browser)</p>
+      <p class="gs-section-title">Leaderboard</p>
       ${renderLeaderboard()}
     </div>
   `;
@@ -1342,7 +1436,7 @@ function renderSpeedResults() {
       <div style="margin-top:10px;"><button type="button" class="secondary" id="gsBackToHubBtn">Back</button></div>
     </div>
     <div class="card center">
-      <p class="gs-section-title">Leaderboard (this browser)</p>
+      <p class="gs-section-title">Leaderboard</p>
       ${renderLeaderboard()}
     </div>
   `;
@@ -1395,7 +1489,7 @@ function attachHandlers() {
   });
 
   const devBtn = document.getElementById('gsDevTestBtn');
-  if (devBtn) devBtn.addEventListener('click', () => { state.screen = 'speedIntro'; render(); });
+  if (devBtn) devBtn.addEventListener('click', () => { state.screen = 'speedIntro'; refreshGsLeaderboard(); render(); });
 
   const refreshPendingBtn = document.getElementById('gsRefreshPendingBtn');
   if (refreshPendingBtn) refreshPendingBtn.addEventListener('click', refreshGsPendingRooms);
@@ -1735,6 +1829,20 @@ function attachHandlers() {
     });
   });
 
+  // Self-service: a competitor taking their own team's hint or Phone a
+  // Friend directly, instead of waiting on the host's console above.
+  document.querySelectorAll('[data-take-hint]').forEach(el => {
+    el.addEventListener('click', () => {
+      socket.emit('gsGiveHint', { team: el.dataset.takeHint }, (res) => {
+        if (!res.ok) showGsNotice(res.error || "Couldn't take that hint.");
+      });
+    });
+  });
+
+  document.querySelectorAll('[data-take-phone]').forEach(el => {
+    el.addEventListener('click', () => showGsPhonePicker(el.dataset.takePhone));
+  });
+
   // board: comeback trigger
   const startComebackBtn = document.getElementById('gsStartComebackBtn');
   if (startComebackBtn) startComebackBtn.addEventListener('click', () => {
@@ -1777,14 +1885,17 @@ function attachHandlers() {
     if (!name) { showGsNotice('Enter a name first.'); return; }
     const s = state.speed;
     const correctCount = s.feed.filter(f => f.ok).length;
+    const wrongCount = s.feed.length - correctCount;
     const points = Math.floor(correctCount / NAMES_PER_POINT) * POINTS_PER_TIER;
-    saveScoreToLeaderboard(name, points, correctCount);
-    s.savedToLeaderboard = true;
-    render();
+    socket.emit('gsSubmitLeaderboardScore', { name, points, correctCount, wrongCount }, (res) => {
+      if (!res || !res.ok) { showGsNotice('Could not save your score.'); return; }
+      s.savedToLeaderboard = true;
+      render();
+    });
   });
 
   const playAgainBtn = document.getElementById('gsPlayAgainBtn');
-  if (playAgainBtn) playAgainBtn.addEventListener('click', () => { state.screen = 'speedIntro'; render(); });
+  if (playAgainBtn) playAgainBtn.addEventListener('click', () => { state.screen = 'speedIntro'; refreshGsLeaderboard(); render(); });
 
   const backToHub = document.getElementById('gsBackToHubBtn');
   if (backToHub) backToHub.addEventListener('click', () => { state.screen = 'landing'; render(); });
@@ -1813,6 +1924,12 @@ function wireTurnTimer() {
   // "Host felt nice" takeover expiry.
   if (room.board.hostNice) {
     const msLeft = HOST_NICE_MS - (Date.now() - room.board.hostNice.at);
+    if (msLeft > 0) { turnTimerHandle = setTimeout(render, msLeft + 50); return; }
+  }
+
+  // Hint-taken / Phone a Friend takeover expiry.
+  if (room.board.hintAnnounce) {
+    const msLeft = HINT_ANNOUNCE_MS - (Date.now() - room.board.hintAnnounce.at);
     if (msLeft > 0) { turnTimerHandle = setTimeout(render, msLeft + 50); return; }
   }
 
@@ -1907,6 +2024,7 @@ function endSpeedRound() {
     return;
   }
   state.screen = 'speedResults';
+  refreshGsLeaderboard();
   render();
 }
 

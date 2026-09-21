@@ -66,6 +66,13 @@ function initBoardState(room) {
   room.cellState = null;
   room.comeback = null;
   room.turnTeam = 'teamA';
+  // Persistent-for-the-game podium markers: once a team has used a hint or
+  // pulled off a steal, a small badge stays on their podium for the rest of
+  // the game (hint use is also derivable from room.hints going below
+  // STARTING_HINTS, but a steal isn't tracked anywhere else once its cell
+  // closes, so it needs its own flag).
+  room.stealUsedBy = { teamA: false, teamB: false };
+  room.hintAnnounce = null;
 }
 
 function findCell(room, cellId) {
@@ -303,6 +310,8 @@ function claimSteal(room, socketId, team) {
   cs.stealAnswer = null;
   cs.stealJudged = null;
   cs.stealAnnouncedAt = Date.now();
+  if (!room.stealUsedBy) room.stealUsedBy = { teamA: false, teamB: false };
+  room.stealUsedBy[team] = true;
   return { room };
 }
 
@@ -381,15 +390,29 @@ function abandonCell(room, socketId) {
   return { room };
 }
 
+// Self-service, same spirit as claimSteal: the host can still trigger this
+// for either team from their console, but a competitor can also take their
+// OWN team's hint directly by clicking its icon, without waiting on the
+// host to do it for them.
 function giveHint(room, socketId, team) {
-  if (room.hostId !== socketId) return { error: 'Only the host can give hints.' };
+  const player = room.players.get(socketId);
+  const isHost = room.hostId === socketId;
+  const isOwnTeam = player && player.role === team;
+  if (!isHost && !isOwnTeam) return { error: "Only the host or that team can take that team's hint." };
   if (room.hints[team] <= 0) return { error: 'No hints left for that team.' };
   room.hints[team] -= 1;
+  room.hintAnnounce = { team, kind: 'hint', at: Date.now() };
   return { room, team };
 }
 
+// Same self-service loosening as giveHint -- either the host or a player on
+// that team can place the call, as long as a spectator is actually named to
+// call.
 function usePhoneAFriend(room, socketId, team, spectatorId) {
-  if (room.hostId !== socketId) return { error: 'Only the host can use Phone a Friend.' };
+  const player = room.players.get(socketId);
+  const isHost = room.hostId === socketId;
+  const isOwnTeam = player && player.role === team;
+  if (!isHost && !isOwnTeam) return { error: "Only the host or that team can use that team's Phone a Friend." };
   const pf = room.phoneAFriend[team];
   if (!pf) return { error: 'Unknown team.' };
   if (pf.used) return { error: 'Already used for that team.' };
@@ -398,6 +421,7 @@ function usePhoneAFriend(room, socketId, team, spectatorId) {
   pf.used = true;
   pf.spectatorId = spectator.id;
   pf.spectatorName = spectator.name;
+  room.hintAnnounce = { team, kind: 'phone', spectatorName: spectator.name, at: Date.now() };
   return { room };
 }
 
@@ -488,6 +512,8 @@ function serializeBoard(room, forHost) {
     turnTeam: room.turnTeam,
     bonusRemaining: BONUS.length - room.bonusUsed.length,
     hostNice: room.hostNice || null,
+    stealUsedBy: room.stealUsedBy || { teamA: false, teamB: false },
+    hintAnnounce: room.hintAnnounce || null,
     active: activeCell && cs ? {
       cellId: cs.cellId,
       column: activeCell.column,
