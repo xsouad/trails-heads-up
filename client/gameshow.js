@@ -61,12 +61,24 @@ let state = {
   screenNotices: [], // { id, text } -- rendered on the TV screen (or the floating bar pre-game)
   pendingRooms: [], // Pending Games list on the landing screen
   clapMuted: false,
-  clapVolume: 0.6,
+  clapVolume: 0.5,
   zoomImageSrc: null, // set to open the screenshot lightbox
   leaderboard: [] // global speed-round leaderboard, shared by every visitor
 };
 
 // ---------- clap volume / mute (persisted across visits) ----------
+// True for as long as the mouse/touch button is held down on the volume
+// slider -- see the gsRoomState handler below for why this matters.
+let clapSliderDragging = false;
+function endClapSliderDrag() {
+  if (!clapSliderDragging) return;
+  clapSliderDragging = false;
+  render(); // catch up on anything that was skipped mid-drag
+}
+// Registered once here (not inside attachHandlers/render, which run on
+// every re-render) so this doesn't pile up duplicate window listeners over
+// a long play session.
+window.addEventListener('pointerup', endClapSliderDrag);
 const GS_CLAP_PREF_KEY = 'trailsGameshow_clapPrefs';
 (function loadClapPrefs() {
   try {
@@ -225,6 +237,14 @@ socket.on('gsRoomState', (room) => {
   // can't press Enter to pick a name" bug. Skipping the render entirely
   // here removes the cause instead of patching around the symptom.
   if (state.comebackMode) return;
+  // Same root cause as the comeback-mode skip above: a full render() while
+  // the clap volume slider is mid-drag replaces that <input type="range">
+  // DOM node out from under the mouse, which silently kills the browser's
+  // native drag tracking -- the thumb stops responding until you let go and
+  // click again. That's the "volume levels are not working" bug. Skipping
+  // the render while a drag is in progress (see clapSliderDragging below)
+  // fixes it the same way.
+  if (clapSliderDragging) return;
   render();
 });
 
@@ -255,11 +275,16 @@ function playError() { gsBeep({ freq: 220, endFreq: 110, duration: 0.28, type: '
 // A real recorded clap sound instead of the old synthesized noise-burst
 // (which the user said sounded terrible). A fresh Audio() each play so
 // rapid claps can overlap instead of cutting each other off.
+// The raw recording is loud even at low HTML5 Audio "volume" values, so an
+// extra attenuation factor is applied on top of the user's slider setting --
+// the slider still goes from silent to "the loudest this ever gets", it's
+// just that "loudest" is capped well below the raw file's peak level.
+const CLAP_MAX_GAIN = 0.45;
 function playClap() {
   if (state.clapMuted || state.clapVolume <= 0) return;
   try {
     const audio = new Audio('assets/gameshow/clap.mp3');
-    audio.volume = Math.max(0, Math.min(1, state.clapVolume));
+    audio.volume = Math.max(0, Math.min(1, state.clapVolume)) * CLAP_MAX_GAIN;
     audio.play().catch(() => { /* autoplay blocked or file missing -- silently skip */ });
   } catch (e) { /* audio not available -- silently skip */ }
 }
@@ -867,7 +892,7 @@ function renderHostHint(active) {
   // once revealed, renderRevealedAnswer already shows the same answer to
   // literally everyone, so showing it again here (still labeled "HOST
   // ONLY", confusingly) would just be redundant.
-  if (active.stage === 'revealed' && (active.column === 'quotes' || active.column === 'trivia' || active.column === 'bonus')) {
+  if (active.answerRevealed && (active.column === 'quotes' || active.column === 'trivia' || active.column === 'bonus')) {
     return '';
   }
   if (active.column === 'quotes') {
@@ -877,7 +902,7 @@ function renderHostHint(active) {
     return `<div class="gs-host-hint"><p class="gs-host-hint-label">HOST ONLY</p><p>Answer: <strong>${active.content.answer}</strong>${active.content.by ? ` <span class="hint">(submitted by ${active.content.by})</span>` : ''}</p></div>`;
   }
   if (active.column === 'screenshots') {
-    if (active.stage === 'revealed') return '';
+    if (active.answerRevealed) return '';
     return `<div class="gs-host-hint"><p class="gs-host-hint-label">HOST ONLY: Answer</p><img class="gs-cell-screenshot small" src="${active.content.answer}" alt="Answer" /></div>`;
   }
   return '';
@@ -1026,7 +1051,7 @@ function renderActiveCellPanel(iAmHost) {
 
   // Once revealed, screenshots show the full/original answer image to
   // everyone (not just the host) instead of just the cropped hint.
-  const shotSrc = (active.column === 'screenshots' && active.stage === 'revealed' && active.content.answer) ? active.content.answer : active.content.hint;
+  const shotSrc = (active.column === 'screenshots' && active.answerRevealed && active.content.answer) ? active.content.answer : active.content.hint;
   const promptHtml = active.column === 'screenshots'
     ? `<div class="gs-cell-screenshot-frame" data-zoom-img="${shotSrc}"><img class="gs-cell-screenshot" src="${shotSrc}" alt="Screenshot" /></div>`
     : `<p class="gs-cell-prompt">${active.column === 'quotes' ? `"${active.content.text}"` : active.content.question}</p>`;
@@ -1067,7 +1092,7 @@ function renderActiveCellPanel(iAmHost) {
       ${renderStealArea(iAmHost, active, viewerKind)}
       ${iAmHost ? `
         <div class="center" style="margin-top:10px;">
-          ${active.stage === 'answering' ? `<button type="button" class="primary" id="gsRevealAnswerBtn">Reveal Answer</button>` : ''}
+          ${!active.answerRevealed ? `<button type="button" class="primary" id="gsRevealAnswerBtn">Reveal Answer</button>` : ''}
           ${active.stage === 'revealed' && canClose ? `<button type="button" class="primary" id="gsCloseCellBtn">Close Question</button>` : ''}
           <button type="button" class="secondary gs-small-btn" id="gsAbandonCellBtn">Cancel Question</button>
         </div>
@@ -1594,15 +1619,27 @@ function attachHandlers() {
 
   // Actual volume slider instead of a click-to-cycle mute button --
   // dragging sets clapVolume directly; dragging to 0 counts as muted.
+  // clapSliderDragging (set true for the duration of the drag) tells the
+  // gsRoomState handler above to skip its full render() while this is
+  // happening -- otherwise a room-state broadcast arriving mid-drag replaces
+  // this exact <input> node and silently kills the browser's native drag
+  // tracking, which is why the slider used to feel "broken".
   const clapVolSlider = document.getElementById('gsClapVolSlider');
-  if (clapVolSlider) clapVolSlider.addEventListener('input', () => {
-    const v = parseInt(clapVolSlider.value, 10) / 100;
-    state.clapVolume = v;
-    state.clapMuted = v <= 0;
-    saveClapPrefs();
-    const icon = document.querySelector('.gs-clap-vol-icon');
-    if (icon) icon.textContent = clapVolIcon();
-  });
+  if (clapVolSlider) {
+    clapVolSlider.addEventListener('input', () => {
+      const v = parseInt(clapVolSlider.value, 10) / 100;
+      state.clapVolume = v;
+      state.clapMuted = v <= 0;
+      saveClapPrefs();
+      const icon = document.querySelector('.gs-clap-vol-icon');
+      if (icon) icon.textContent = clapVolIcon();
+    });
+    const startDrag = () => { clapSliderDragging = true; };
+    clapVolSlider.addEventListener('pointerdown', startDrag);
+    clapVolSlider.addEventListener('keydown', startDrag);
+    clapVolSlider.addEventListener('keyup', endClapSliderDrag);
+    clapVolSlider.addEventListener('blur', endClapSliderDrag);
+  }
 
   const startNamingBtn = document.getElementById('gsStartNamingBtn');
   if (startNamingBtn) startNamingBtn.addEventListener('click', () => {

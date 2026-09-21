@@ -134,10 +134,12 @@ body:has(#app-gameshow) {
    it never stopped them from being taller, which is exactly why every
    round of "fix the screen size" kept surfacing a new spot that grew (or
    shrank) past whatever the floor was. `height` makes this the one true
-   size. overflow:hidden (not auto) -- auto was showing a persistent
-   scrollbar track even when nothing needed to scroll, which nobody wanted
-   to see; the fixed height plus vertical centering below is generous
-   enough that real content shouldn't need to scroll anyway. */
+   size. Content still scrolls (overflow-y: auto) because the host's full
+   board grid is genuinely taller than the fixed frame and needs to be
+   scrollable -- but the scrollbar itself is hidden (scrollbar-width/
+   -ms-overflow-style/::-webkit-scrollbar below) so short screens (naming,
+   vote, ready roster), which fit and don't need to scroll, don't show a
+   scrollbar track. Scrolling still works via wheel/trackpad/keys either way. */
 #app-gameshow .gs-tv-screen {
   background: #0c0c0c;
   border: 10px solid #050505;
@@ -147,7 +149,13 @@ body:has(#app-gameshow) {
   margin-bottom: 36px;
   height: 520px;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+#app-gameshow .gs-tv-screen::-webkit-scrollbar {
+  display: none;
 }
 
 #app-gameshow .gs-tv-screen.in-game {

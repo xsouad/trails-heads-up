@@ -172,6 +172,12 @@ function openCellInternal(room, cell, scheduleTimeout) {
     stealTeam: null,
     stealAnswer: null,
     stealJudged: null,
+    // Separate from `stage`: `stage` just tracks whether we're past the
+    // answering window (drives steal-offer/close-question UI). This tracks
+    // whether the ACTUAL correct answer has been made public -- only ever
+    // set true by an explicit host revealAnswer() call, never automatically,
+    // so a timeout can't leak the answer to a team that hasn't stolen yet.
+    answerRevealed: false,
     deadline: Date.now() + ANSWER_SECONDS * 1000
   };
   if (scheduleTimeout) {
@@ -180,9 +186,11 @@ function openCellInternal(room, cell, scheduleTimeout) {
       if (!cs || cs.cellId !== cell.id || cs.turnLocked || cs.stage !== 'answering') return;
       cs.timedOut = true;
       cs.turnJudged = 'timeout';
-      // Nothing was answered, so there's nothing to hide -- auto-advance to
-      // 'revealed' too, so the steal option shows up immediately instead of
-      // requiring the host to remember to click Reveal first.
+      // Move past the answering window so the steal option shows up
+      // immediately (no need for the host to click Reveal first) -- but do
+      // NOT mark the answer publicly revealed here. That stays false until
+      // the host explicitly reveals it, so the correct answer never leaks
+      // to a team that still has a steal attempt coming.
       cs.stage = 'revealed';
       scheduleTimeout(room);
     }, ANSWER_SECONDS * 1000);
@@ -260,8 +268,9 @@ function revealAnswer(room, socketId) {
   if (room.hostId !== socketId) return { error: 'Only the host can reveal the answer.' };
   const cs = room.cellState;
   if (!cs) return { error: 'No question is open.' };
-  if (cs.stage !== 'answering') return { error: 'Already revealed.' };
+  if (cs.answerRevealed) return { error: 'Already revealed.' };
   cs.stage = 'revealed';
+  cs.answerRevealed = true;
   return { room };
 }
 
@@ -532,8 +541,9 @@ function serializeBoard(room, forHost) {
       value: activeCell.value,
       turnTeam: cs.turnTeam,
       stage: cs.stage,
+      answerRevealed: !!cs.answerRevealed,
       deadline: cs.deadline,
-      content: forHost ? hostCellContent(activeCell) : publicCellContent(activeCell, cs.stage === 'revealed'),
+      content: forHost ? hostCellContent(activeCell) : publicCellContent(activeCell, !!cs.answerRevealed),
       turnAnswer: forHost || cs.turnLocked ? cs.turnAnswer : null,
       turnTyping: cs.turnTyping || null,
       turnLocked: cs.turnLocked,
