@@ -477,6 +477,15 @@ io.on('connection', (socket) => {
     broadcastGsRoom(room);
   });
 
+  // Host-only peek at an unused cell's content -- read-only, no broadcast.
+  socket.on('gsPreviewCell', ({ cellId }, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsBoard.previewCell(room, socket.id, cellId);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true, content: result.content, column: result.column });
+  });
+
   socket.on('gsOpenCell', ({ cellId }, cb) => {
     const room = gsRooms.findRoomBySocket(socket.id);
     if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
@@ -499,6 +508,25 @@ io.on('connection', (socket) => {
     const room = gsRooms.findRoomBySocket(socket.id);
     if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
     const result = gsBoard.submitAnswer(room, socket.id, team, text);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  // Live-typing relay -- cosmetic only, never used for judging.
+  socket.on('gsTypingAnswer', ({ text }, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsBoard.updateTyping(room, socket.id, text);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  socket.on('gsAdjustScore', ({ team, amount }, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsBoard.adjustScore(room, socket.id, team, amount);
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     cb && cb({ ok: true });
     broadcastGsRoom(room);
@@ -617,6 +645,15 @@ io.on('connection', (socket) => {
     const room = gsRooms.findRoomBySocket(socket.id);
     if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
     const result = gsBoard.updateComebackLive(room, socket.id, live || {});
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  socket.on('gsComebackTyping', ({ text }, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsBoard.updateComebackTyping(room, socket.id, text);
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     cb && cb({ ok: true });
     broadcastGsRoom(room);

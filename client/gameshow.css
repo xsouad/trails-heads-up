@@ -345,7 +345,13 @@ body:has(#app-gameshow) {
   margin-top: 10px;
 }
 
+/* ROOT CAUSE FIX for basically every "button too long" complaint: the base
+   button.secondary/button.primary classes in style.css set width:100%, and
+   this rule never reset it, so every "small" button in Gameshow was
+   secretly still full-width the whole time. */
 #app-gameshow .gs-small-btn {
+  width: auto;
+  display: inline-block;
   padding: 6px 16px;
   font-size: 0.8rem;
 }
@@ -458,6 +464,13 @@ body:has(#app-gameshow) {
 
 #app-gameshow .gs-name-submit-row {
   margin-bottom: 10px;
+}
+/* Reset the global .join-row input[type=text] { text-transform: uppercase }
+   rule from style.css -- team names are normal mixed-case text, not a room
+   code. */
+#app-gameshow .gs-name-submit-row input[type=text] {
+  text-transform: none;
+  text-align: left;
 }
 
 #app-gameshow .gs-candidate-list {
@@ -795,7 +808,7 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-hint-mini-btn:disabled { opacity: 0.4; cursor: default; }
 
 #app-gameshow .gs-board-grid {
-  width: 100%; border-collapse: separate; border-spacing: 6px; margin: 10px 0;
+  width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 6px; margin: 10px 0;
 }
 #app-gameshow .gs-board-grid th {
   color: #ffcc00; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em;
@@ -819,15 +832,17 @@ body:has(#app-gameshow) {
 }
 
 #app-gameshow .gs-active-cell {
-  background: rgba(0,0,0,0.35); border-radius: 12px; padding: 18px; color: #fff;
+  color: #fff;
 }
 #app-gameshow .gs-cell-value {
   text-align: center; color: #ffcc00; font-weight: 800; font-size: 1rem; margin: 0 0 10px;
   text-transform: uppercase; letter-spacing: 0.04em;
 }
+/* No box background here anymore -- sits directly on the screen. Timer +
+   team name now render as a compact bottom bar (see gs-bottom-bar below)
+   instead of this being a full-width banner with its own shading. */
 #app-gameshow .gs-turn-banner {
-  text-align: center; font-weight: 800; font-size: 1.05rem; color: #fff;
-  background: rgba(255,255,255,0.1); border-radius: 8px; padding: 6px 10px; margin: 0 0 10px;
+  text-align: center; font-weight: 700; font-size: 0.9rem; color: #fff; margin: 0 0 8px;
 }
 #app-gameshow .gs-turn-banner #gsTurnTimer { color: #ffcc00; }
 #app-gameshow .gs-host-hint {
@@ -857,7 +872,7 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-answer-block {
   padding: 8px 0; text-align: center;
 }
-#app-gameshow .gs-answer-block .gs-section-title { text-align: center; }
+#app-gameshow .gs-answer-block .gs-section-title { text-align: center; color: #fff; }
 #app-gameshow .gs-locked-answer {
   font-style: italic; color: #ffe38a; margin: 4px 0;
 }
@@ -943,7 +958,7 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-continue-btn { width: 100%; }
 
 /* Small pill buttons (Leave Room, clap volume, refresh) */
-#app-gameshow .gs-tiny-btn { padding: 5px 12px; font-size: 0.75rem; border-radius: 999px; }
+#app-gameshow .gs-tiny-btn { width: auto; display: inline-block; padding: 5px 12px; font-size: 0.75rem; border-radius: 999px; }
 #app-gameshow .gs-leave-btn.gs-tiny-btn { background: #c81d3d; color: #fff; }
 
 /* On-screen notices (hint taken, etc.) -- an overlay pinned to the top of
@@ -974,6 +989,8 @@ body:has(#app-gameshow) {
 
 /* Pending Games list (landing screen) */
 #app-gameshow .gs-pending-card { margin-top: 16px; }
+#app-gameshow .gs-pending-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#app-gameshow .gs-pending-header .gs-section-title { margin: 0; }
 #app-gameshow .gs-pending-list { margin-top: 10px; }
 
 /* Phone-a-friend avatar standing next to the host once called */
@@ -985,11 +1002,11 @@ body:has(#app-gameshow) {
   background: #fff9e0; border-radius: 50%; padding: 1px 2px; line-height: 1;
 }
 
-/* Icon-based hints + phone (grays out / crosses when used), flanking the
-   team's colored score block. */
-#app-gameshow .gs-score-block { flex-direction: row; align-items: center; gap: 10px; }
-#app-gameshow .gs-score-block.reversed { flex-direction: row-reverse; }
-#app-gameshow .gs-score-center { display: flex; flex-direction: column; align-items: center; }
+/* Icon-based hints (grays out when used) and a separate Phone a Friend
+   button, both OUTSIDE the team's colored score box -- not touching or
+   overlapping its border. */
+#app-gameshow .gs-score-row { display: flex; align-items: center; gap: 10px; }
+#app-gameshow .gs-score-row.reversed { flex-direction: row-reverse; }
 #app-gameshow .gs-icon-stack { display: flex; flex-direction: column; gap: 3px; }
 #app-gameshow .gs-icon-box {
   font-size: 0.9rem; width: 22px; height: 22px; display: flex; align-items: center;
@@ -997,47 +1014,109 @@ body:has(#app-gameshow) {
 }
 #app-gameshow .gs-icon-box.spent { opacity: 0.25; filter: grayscale(1); }
 #app-gameshow .gs-icon-box.lit { background: rgba(255,255,255,0.28); }
+/* Phone a Friend is visually distinct from the hint icons -- its own
+   button, not part of the hint stack. */
+#app-gameshow .gs-phone-icon { width: 26px; height: 30px; border-radius: 8px; font-size: 1rem; }
 
-/* Screenshot: always a big, uniform box regardless of source size, and
-   clickable to zoom. */
+/* Screenshot: always a big, uniform box regardless of source size -- the
+   image fills it completely (object-fit: cover, scales small images UP and
+   crops large ones) so there's no visible "box behind the picture", and
+   it's clickable to zoom (cursor only, no text label -- less text). */
 #app-gameshow .gs-cell-screenshot-frame {
-  position: relative; width: 100%; max-width: 480px; height: 300px; margin: 0 auto 10px;
-  background: rgba(0,0,0,0.4); border-radius: 8px; border: 2px solid rgba(255,255,255,0.2);
-  display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: zoom-in;
+  position: relative; width: 100%; max-width: 420px; height: 220px; margin: 0 auto 10px;
+  border-radius: 8px; overflow: hidden; cursor: zoom-in;
 }
 #app-gameshow .gs-cell-screenshot-frame .gs-cell-screenshot {
-  max-width: 100%; max-height: 100%; width: auto; height: auto; margin: 0; border: none;
+  display: block; width: 100%; height: 100%; object-fit: cover; margin: 0; border: none; border-radius: 0;
 }
-#app-gameshow .gs-zoom-hint {
-  position: absolute; bottom: 6px; right: 8px; font-size: 0.68rem; color: #fff;
-  background: rgba(0,0,0,0.55); padding: 2px 8px; border-radius: 999px;
-}
+#app-gameshow .gs-zoom-hint { display: none; }
 #app-gameshow .gs-zoom-card img { max-width: 90vw; max-height: 80vh; display: block; margin: 0 auto 10px; border-radius: 8px; }
 
-/* Uniform grid cells across all three columns */
-#app-gameshow .gs-board-grid td.gs-cell { min-width: 90px; }
+/* Uniform grid cells across all three columns -- table-layout:fixed above
+   already forces equal column widths; this just keeps cell content centered. */
+#app-gameshow .gs-board-grid td.gs-cell { overflow: hidden; }
 
 /* Self-service steal button */
 #app-gameshow .gs-steal-wait { margin-top: 14px; }
 #app-gameshow .gs-steal-btn { font-size: 1.1rem; padding: 10px 28px; }
 #app-gameshow .gs-steal-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Full-screen 5s "TEAM X has stolen the question" takeover */
-#app-gameshow .gs-steal-takeover {
-  display: flex; align-items: center; justify-content: center; min-height: 380px; padding: 20px;
+/* Generic full-screen takeover: shared by the steal claim, correct/wrong
+   judging, "host felt nice", game-over, and comeback-round announce/active
+   states. It fills the SAME box the normal screen content sits in (matching
+   .gs-tv-screen.in-game's min-height) so the TV screen never changes size
+   no matter which of these is showing. Sits directly on the one screen
+   background -- no separate gray box, just the dashed accent border. */
+#app-gameshow .gs-takeover {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 440px; padding: 20px; box-sizing: border-box;
 }
-#app-gameshow .gs-steal-takeover-box {
+#app-gameshow .gs-takeover-box {
   border: 3px dashed #ffcc00; border-radius: 10px; padding: 32px 28px;
-  animation: gsStealPulse 0.9s ease-in-out infinite alternate;
+  text-align: center; animation: gsStealPulse 0.9s ease-in-out infinite alternate;
 }
-#app-gameshow .gs-steal-takeover-text {
+#app-gameshow .gs-takeover-box.good { border-color: #6fe08a; }
+#app-gameshow .gs-takeover-box.bad { border-color: #ff8a8a; }
+#app-gameshow .gs-takeover-text {
   color: #ffcc00; font-weight: 800; text-align: center; font-size: 1.6rem;
   text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.5; margin: 0;
 }
+#app-gameshow .gs-takeover-box.good .gs-takeover-text { color: #6fe08a; }
+#app-gameshow .gs-takeover-box.bad .gs-takeover-text { color: #ff8a8a; }
+#app-gameshow .gs-takeover-icon { font-size: 3rem; margin: 10px 0 0; }
+#app-gameshow .gs-takeover-timer { font-size: 2.4rem; font-weight: 800; color: #ffcc00; margin: 0 0 6px; }
+#app-gameshow .gs-takeover-typing {
+  font-style: italic; color: #fff; opacity: 0.85; margin: 10px 0 0; font-size: 1.05rem;
+}
+#app-gameshow .gs-takeover-box button { margin-top: 16px; }
+#app-gameshow .gs-winner-avatars {
+  display: flex; gap: 18px; justify-content: center; margin: 16px 0 0; flex-wrap: wrap;
+}
 @keyframes gsStealPulse { from { box-shadow: 0 0 0 rgba(255,204,0,0); } to { box-shadow: 0 0 24px rgba(255,204,0,0.5); } }
 
-/* Make sure the panel behind the active question/board always reads as a
-   lit "screen" for every viewer (host, competitors, spectators alike) --
-   not flat black. */
-#app-gameshow .gs-tv-screen-inner { background: rgba(255,255,255,0.03); border-radius: 10px; padding: 6px; }
-#app-gameshow .gs-active-cell { background: rgba(255,255,255,0.09); }
+/* Compact bottom bar: timer left, team name right -- replaces the old
+   full-width turn banner (which used to repeat the team name elsewhere too). */
+#app-gameshow .gs-status-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 10px 0 8px; padding: 0 2px;
+}
+#app-gameshow .gs-timer-box {
+  font-weight: 800; color: #ffcc00; font-size: 1rem;
+}
+#app-gameshow .gs-team-box {
+  font-weight: 700; color: #fff; font-size: 0.95rem;
+}
+
+/* Cosmetic live-typing mirror of an in-progress answer -- never used for
+   judging, just lets everyone see what's being typed in real time. */
+#app-gameshow .gs-live-typing { opacity: 0.75; }
+
+/* Host mini-console: quick manual score correction ("the host felt nice"). */
+#app-gameshow .gs-host-console {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin: 4px 0 10px; flex-wrap: wrap;
+}
+#app-gameshow .gs-score-amount-input {
+  width: 70px; text-align: center; padding: 5px 6px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.08); color: #fff;
+}
+
+/* Host-only read-only cell preview overlay. */
+#app-gameshow .gs-preview-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.75); z-index: 20; border-radius: 10px;
+}
+#app-gameshow .gs-preview-box {
+  background: rgba(255,255,255,0.05); border: 2px solid #ffcc00; border-radius: 10px;
+  padding: 20px; max-width: 90%; text-align: center;
+}
+#app-gameshow .gs-preview-img { display: block; max-width: 100%; max-height: 260px; margin: 0 auto 12px; border-radius: 8px; }
+#app-gameshow .gs-preview-text { color: #fff; font-size: 1.05rem; margin: 0 0 8px; }
+#app-gameshow .gs-preview-answer { color: #ffe38a; font-weight: 700; margin: 0 0 12px; }
+
+/* Only 2 gray colors should ever exist on the TV screen: the outer BORDER
+   (.gs-tv-screen's own border-color, unchanged) and this one screen
+   background. Everything else (active-cell panel, turn banner, etc.) sits
+   directly on this same background instead of having its own separately
+   shaded box -- that's what was making it look like "boxes inside boxes". */
+#app-gameshow .gs-tv-screen-inner { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px; }

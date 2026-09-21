@@ -83,10 +83,12 @@ function clearActiveTimer(room) {
 // the trivia answer, the screenshot's answer image, the bonus answer. The
 // host judges verbally; these fields exist only to help the host, not to
 // be displayed to competitors.
-function publicCellContent(cell) {
+function publicCellContent(cell, revealed) {
   if (cell.column === 'quotes') return { text: cell.content.text };
   if (cell.column === 'trivia') return { question: cell.content.question };
-  if (cell.column === 'screenshots') return { hint: cell.content.hint };
+  // Screenshots: everyone gets the full/original "answer" image too, once
+  // the question has been revealed -- before that, only the cropped hint.
+  if (cell.column === 'screenshots') return revealed ? { hint: cell.content.hint, answer: cell.content.answer } : { hint: cell.content.hint };
   if (cell.column === 'bonus') return { question: cell.content.question };
   return {};
 }
@@ -121,6 +123,17 @@ function rerollCell(room, socketId, cellId) {
   if (!candidates.length) return { error: 'No more unused questions in that category.' };
   cell.content = candidates[Math.floor(Math.random() * candidates.length)];
   return { room };
+}
+
+// Host-only, read-only peek at an unused cell's actual content -- so the
+// host can check "have I used this one before?" before deciding to reroll
+// it. Doesn't touch board state at all (no broadcast needed by caller).
+function previewCell(room, socketId, cellId) {
+  if (room.hostId !== socketId) return { error: 'Only the host can preview a question.' };
+  const cell = findCell(room, cellId);
+  if (!cell || cell.column === 'bonus') return { error: "That question doesn't exist." };
+  if (cell.used) return { error: 'Already used.' };
+  return { content: cell.content, column: cell.column };
 }
 
 function openCellInternal(room, cell, scheduleTimeout) {
@@ -199,8 +212,29 @@ function submitAnswer(room, socketId, team, text) {
   if (!clean) return { error: 'Type an answer first.' };
   cs.turnAnswer = clean;
   cs.turnLocked = true;
+  cs.turnTyping = null;
   clearActiveTimer(room);
   return { room };
+}
+
+// Live-typing relay: lets everyone watch the answering (or stealing) team's
+// draft text update in real time, before they submit. Purely cosmetic --
+// never trusted for judging, just mirrored back out on the next broadcast.
+function updateTyping(room, socketId, text) {
+  const cs = room.cellState;
+  if (!cs) return { error: 'No question is open.' };
+  const player = room.players.get(socketId);
+  if (!player) return { error: 'Not in this room.' };
+  const clean = (text || '').slice(0, 200);
+  if (cs.stage === 'answering' && !cs.turnLocked && player.role === cs.turnTeam) {
+    cs.turnTyping = clean;
+    return { room, silent: true };
+  }
+  if (cs.stealTeam && cs.stealAnswer == null && player.role === cs.stealTeam) {
+    cs.stealTyping = clean;
+    return { room, silent: true };
+  }
+  return { error: 'Not your turn to type.' };
 }
 
 function revealAnswer(room, socketId) {
@@ -220,6 +254,7 @@ function judgeAnswer(room, socketId, correct) {
   if (cs.turnJudged) return { error: 'Already judged.' };
   const cell = findCell(room, cs.cellId);
   cs.turnJudged = correct ? 'correct' : 'wrong';
+  cs.turnJudgedAt = Date.now(); // drives the brief "Correct"/"Wrong" full-screen takeover
   if (correct) {
     room.scores[cs.turnTeam] += cell.value;
   } else if (cell.column === 'bonus') {
@@ -280,6 +315,23 @@ function submitSteal(room, socketId, text) {
   const clean = (text || '').trim().slice(0, 200);
   if (!clean) return { error: 'Type an answer first.' };
   cs.stealAnswer = clean;
+  cs.stealTyping = null;
+  return { room };
+}
+
+// Host-only correction tool: add (or subtract) points to fix a scoring
+// mistake. A positive adjustment triggers the "Host felt nice" full-screen
+// banner (hostNiceAt), timed by the client the same way the steal takeover
+// is -- no host-side timer to manage.
+function adjustScore(room, socketId, team, amount) {
+  if (room.hostId !== socketId) return { error: 'Only the host can adjust scores.' };
+  if (team !== 'teamA' && team !== 'teamB') return { error: 'Unknown team.' };
+  const delta = parseInt(amount, 10);
+  if (!delta || Number.isNaN(delta)) return { error: 'Enter a non-zero amount.' };
+  room.scores[team] += delta;
+  if (delta > 0) {
+    room.hostNice = { team, amount: delta, at: Date.now() };
+  }
   return { room };
 }
 
@@ -290,6 +342,7 @@ function judgeSteal(room, socketId, correct) {
   if (cs.stealJudged) return { error: 'Already judged.' };
   const cell = findCell(room, cs.cellId);
   cs.stealJudged = correct ? 'correct' : 'wrong';
+  cs.stealJudgedAt = Date.now();
   if (correct) {
     room.scores[cs.stealTeam] += cell.value;
   } else {
@@ -386,9 +439,21 @@ function updateComebackLive(room, socketId, live) {
   cb.live = {
     points: Math.max(0, parseInt(live.points, 10) || 0),
     correctCount: Math.max(0, parseInt(live.correctCount, 10) || 0),
+    timeLeft: live.timeLeft != null ? Math.max(0, parseInt(live.timeLeft, 10) || 0) : (cb.live ? cb.live.timeLeft : null),
+    typing: cb.live ? cb.live.typing : null,
     img: live.img || null
   };
   return { room };
+}
+
+// Live-typing relay for the comeback round -- same idea as updateTyping,
+// but for the standalone speed-round guess box.
+function updateComebackTyping(room, socketId, text) {
+  const cb = room.comeback;
+  if (!cb || cb.stage !== 'active' || cb.playerId !== socketId) return { error: 'No active comeback round for you.' };
+  if (!cb.live) cb.live = { points: 0, correctCount: 0, img: null };
+  cb.live.typing = (text || '').slice(0, 60);
+  return { room, silent: true };
 }
 
 function finishComeback(room, socketId, points) {
@@ -422,6 +487,7 @@ function serializeBoard(room, forHost) {
     comeback: room.comeback,
     turnTeam: room.turnTeam,
     bonusRemaining: BONUS.length - room.bonusUsed.length,
+    hostNice: room.hostNice || null,
     active: activeCell && cs ? {
       cellId: cs.cellId,
       column: activeCell.column,
@@ -429,23 +495,28 @@ function serializeBoard(room, forHost) {
       turnTeam: cs.turnTeam,
       stage: cs.stage,
       deadline: cs.deadline,
-      content: forHost ? hostCellContent(activeCell) : publicCellContent(activeCell),
+      content: forHost ? hostCellContent(activeCell) : publicCellContent(activeCell, cs.stage === 'revealed'),
       turnAnswer: forHost || cs.turnLocked ? cs.turnAnswer : null,
+      turnTyping: cs.turnTyping || null,
       turnLocked: cs.turnLocked,
       timedOut: cs.timedOut,
       turnJudged: cs.turnJudged,
+      turnJudgedAt: cs.turnJudgedAt || null,
       stealTeam: cs.stealTeam,
       stealAnswer: cs.stealAnswer,
+      stealTyping: cs.stealTyping || null,
       stealJudged: cs.stealJudged,
+      stealJudgedAt: cs.stealJudgedAt || null,
       stealAnnouncedAt: cs.stealAnnouncedAt || null
     } : null
   };
 }
 
 module.exports = {
-  startGame, replayGame, rerollCell, openCell, triggerBonus,
-  submitAnswer, revealAnswer, judgeAnswer,
+  startGame, replayGame, rerollCell, previewCell, openCell, triggerBonus,
+  submitAnswer, updateTyping, revealAnswer, judgeAnswer,
   openSteal, claimSteal, submitSteal, judgeSteal, closeCell, abandonCell, giveHint, usePhoneAFriend,
-  startComeback, beginComeback, updateComebackLive, finishComeback, clearComebackBanner,
+  adjustScore,
+  startComeback, beginComeback, updateComebackLive, updateComebackTyping, finishComeback, clearComebackBanner,
   serializeBoard, COMEBACK_GAP, STARTING_HINTS, ANSWER_SECONDS
 };

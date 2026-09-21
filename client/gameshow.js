@@ -122,6 +122,45 @@ function renderScreenNotices() {
 }
 
 socket.on('gsNotice', ({ text }) => showGsNotice(text));
+
+// Throttle live-typing emissions so we don't flood the socket on every
+// keystroke -- fires at most once per 150ms, cosmetic mirroring only.
+function throttleTyping(fn, ms = 150) {
+  let last = 0, pending = null;
+  return () => {
+    const now = Date.now();
+    if (now - last >= ms) { last = now; fn(); }
+    else {
+      clearTimeout(pending);
+      pending = setTimeout(() => { last = Date.now(); fn(); }, ms - (now - last));
+    }
+  };
+}
+
+// Host-only read-only peek at an unopened cell, shown as a small overlay
+// so the host can decide whether it needs rerolling before opening it.
+function showGsCellPreview(content, column) {
+  const host = document.querySelector('.gs-tv-screen') || document.getElementById('gsRoot');
+  const existing = document.getElementById('gsCellPreviewOverlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'gsCellPreviewOverlay';
+  overlay.className = 'gs-preview-overlay';
+  let inner = '';
+  if (column === 'screenshots') {
+    inner = `<img src="${content.answer || content.hint}" class="gs-preview-img" alt="Screenshot" />`;
+  } else if (column === 'quotes') {
+    inner = `<div class="gs-preview-text">"${content.text}"</div>`;
+  } else if (column === 'trivia') {
+    inner = `<div class="gs-preview-text">${content.question}</div><div class="gs-preview-answer">${content.answer}</div>`;
+  } else {
+    inner = `<div class="gs-preview-text">${content.text || content.question || ''}</div>`;
+  }
+  overlay.innerHTML = `<div class="gs-preview-box">${inner}<button type="button" class="secondary gs-tiny-btn" id="gsClosePreviewBtn">Close</button></div>`;
+  (host || document.body).appendChild(overlay);
+  const closeBtn = document.getElementById('gsClosePreviewBtn');
+  if (closeBtn) closeBtn.addEventListener('click', () => overlay.remove());
+}
 socket.on('gsClap', ({ name }) => { playClap(); });
 socket.on('connect', () => { if (!state.room) refreshGsPendingRooms(); });
 socket.on('gsRoomState', (room) => {
@@ -240,9 +279,11 @@ function renderLanding() {
       </div>
     </div>
 
-    <div class="card center gs-pending-card">
-      <p class="gs-section-title">Pending Games</p>
-      <button type="button" class="secondary gs-tiny-btn" id="gsRefreshPendingBtn">Refresh</button>
+    <div class="card gs-pending-card">
+      <div class="gs-pending-header">
+        <p class="gs-section-title">Pending Games</p>
+        <button type="button" class="secondary gs-tiny-btn" id="gsRefreshPendingBtn">Refresh</button>
+      </div>
       ${renderPendingRooms()}
     </div>
 
@@ -258,12 +299,12 @@ function renderLanding() {
 }
 
 function renderPendingRooms() {
-  if (!state.pendingRooms.length) return '<p class="hint">No games waiting for players right now.</p>';
+  if (!state.pendingRooms.length) return '<p class="hint">No games waiting.</p>';
   return `
     <div class="public-room-list gs-pending-list">
       ${state.pendingRooms.map(r => `
         <div class="public-room-row">
-          <span>${r.hostName}'s room (${r.code}) &middot; ${r.teamACount}v${r.teamBCount}, ${r.spectatorCount} watching &middot; ${r.phase}</span>
+          <span>${r.hostName}'s room</span>
           <button type="button" class="secondary gs-tiny-btn" data-join-pending="${r.code}">Join</button>
         </div>
       `).join('')}
@@ -591,30 +632,37 @@ function otherTeam(team) { return team === 'teamA' ? 'teamB' : 'teamA'; }
 // Hints and Phone a Friend show as discrete icon boxes -- lit while
 // available, grayed out/crossed once used -- instead of a single "count"
 // number, matching the reference board layout.
-function renderIconStack(team) {
+function renderHintStack(team) {
   const room = state.room;
   const hintsLeft = room.board.hints[team];
   const hintIcons = Array.from({ length: STARTING_HINTS_CLIENT }, (_, i) => {
     const lit = i < hintsLeft;
     return `<span class="gs-icon-box ${lit ? 'lit' : 'spent'}" title="${lit ? 'Hint available' : 'Hint used'}">💡</span>`;
   }).join('');
+  return `<div class="gs-icon-stack">${hintIcons}</div>`;
+}
+
+// Phone a Friend is its own separate button, not grouped with the hints.
+function renderPhoneButton(team) {
+  const room = state.room;
   const pf = room.board.phoneAFriend[team];
-  const phoneIcon = `<span class="gs-icon-box ${pf.used ? 'spent' : 'lit'}" title="${pf.used ? `Phone a Friend used (${pf.spectatorName})` : 'Phone a Friend available'}">📞</span>`;
-  return `<div class="gs-icon-stack">${hintIcons}${phoneIcon}</div>`;
+  return `<span class="gs-icon-box gs-phone-icon ${pf.used ? 'spent' : 'lit'}" title="${pf.used ? `Phone a Friend used (${pf.spectatorName})` : 'Phone a Friend available'}">📞</span>`;
 }
 
 function renderScoreboard() {
   const room = state.room;
   const iAmHost = room.hostId === socket.id;
   const block = (team, alignEnd) => `
-    <div class="gs-score-block ${team} ${alignEnd ? 'reversed' : ''}">
-      ${!alignEnd ? renderIconStack(team) : ''}
-      <div class="gs-score-center">
+    <div class="gs-score-row ${alignEnd ? 'reversed' : ''}">
+      ${!alignEnd ? renderHintStack(team) : ''}
+      ${!alignEnd ? renderPhoneButton(team) : ''}
+      <div class="gs-score-block ${team}">
         <span class="gs-score-label">${teamLabel(team)}</span>
         <span class="gs-score-value">${room.board.scores[team]}</span>
         ${iAmHost ? `<button type="button" class="gs-hint-mini-btn" data-hint-team="${team}" ${room.board.hints[team] <= 0 ? 'disabled' : ''} title="Give ${teamLabel(team)} a hint">+Hint</button>` : ''}
       </div>
-      ${alignEnd ? renderIconStack(team) : ''}
+      ${alignEnd ? renderPhoneButton(team) : ''}
+      ${alignEnd ? renderHintStack(team) : ''}
     </div>
   `;
   return `<div class="gs-scoreboard">${block('teamA', false)}${block('teamB', true)}</div>`;
@@ -667,6 +715,7 @@ function renderBoardGrid(iAmHost) {
               if (cell.used) return `<td class="gs-cell used">&nbsp;</td>`;
               return `<td class="gs-cell ${canAct ? 'clickable' : ''}">
                 <span class="gs-cell-value-btn" ${canAct ? `data-open-cell="${cell.id}"` : ''}>$${cell.value}</span>
+                ${canAct ? `<button type="button" class="gs-reroll-btn" data-preview-cell="${cell.id}" title="Peek at this question">👁</button>` : ''}
                 ${canAct ? `<button type="button" class="gs-reroll-btn" data-reroll-cell="${cell.id}" title="Swap this question for another">🔀</button>` : ''}
               </td>`;
             }).join('')}
@@ -686,14 +735,20 @@ function renderBoardGrid(iAmHost) {
   `;
 }
 
-// The 60s countdown is visible to EVERYONE watching -- host, both teams,
-// spectators -- so the whole room can see how long is left before the
-// steal option opens up.
-function renderTurnBanner(active, viewerKind) {
-  if (active.stage !== 'answering') return '';
-  const secs = Math.max(0, Math.ceil((active.deadline - Date.now()) / 1000));
-  const label = viewerKind === 'spectator' ? 'Time left' : `${teamLabel(active.turnTeam)}'s turn`;
-  return `<p class="gs-turn-banner">${label}: <span id="gsTurnTimer">${secs}s</span></p>`;
+// One compact bottom bar: timer on the left, team name on the right. This
+// is the ONLY place the turn team's name appears on this panel now (it
+// used to repeat 3x between a banner, a section title, and a waiting
+// line) -- the countdown is visible to EVERYONE watching, including
+// spectators, so the whole room can see how long is left before steal
+// opens up.
+function renderStatusBar(active) {
+  const secs = active.stage === 'answering' ? Math.max(0, Math.ceil((active.deadline - Date.now()) / 1000)) + 's' : '--';
+  return `
+    <div class="gs-status-bar">
+      <span class="gs-timer-box" id="gsTurnTimer">${secs}</span>
+      <span class="gs-team-box">${teamLabel(active.turnTeam)}</span>
+    </div>
+  `;
 }
 
 // A short one-line status for the audience (spectators) -- no boxes, no
@@ -718,6 +773,7 @@ function renderHostHint(active) {
     return `<div class="gs-host-hint"><p class="gs-host-hint-label">HOST ONLY</p><p>Answer: <strong>${active.content.answer}</strong>${active.content.by ? ` <span class="hint">(submitted by ${active.content.by})</span>` : ''}</p></div>`;
   }
   if (active.column === 'screenshots') {
+    if (active.stage === 'revealed') return '';
     return `<div class="gs-host-hint"><p class="gs-host-hint-label">HOST ONLY: Answer</p><img class="gs-cell-screenshot small" src="${active.content.answer}" alt="Answer" /></div>`;
   }
   return '';
@@ -730,23 +786,29 @@ function renderAnswerArea(iAmHost, active) {
   let box;
   if (active.stage === 'answering' && !active.timedOut) {
     if (active.turnLocked) {
-      box = `<p class="gs-locked-answer">${teamLabel(turnTeam)} locked in an answer. Waiting on the host.</p>`;
+      box = `<p class="gs-locked-answer">Locked in. Waiting on host.</p>`;
     } else if (isMyTurnTeam) {
       box = `<div class="join-row"><input type="text" id="gsAnswerInput" maxlength="200" placeholder="Your team's answer" /><button type="button" class="secondary" id="gsSubmitAnswerBtn">Submit</button></div>`;
+    } else if (active.turnTyping) {
+      // Live preview of what the other team is currently typing.
+      box = `<p class="gs-locked-answer gs-live-typing">"${active.turnTyping}"</p>`;
     } else {
-      box = `<p class="hint">Waiting on ${teamLabel(turnTeam)}...</p>`;
+      box = `<p class="hint">Waiting...</p>`;
     }
   } else if (active.timedOut) {
-    box = `<p class="gs-judge-result wrong">Time ran out. No answer given.</p>`;
+    box = `<p class="gs-judge-result wrong">Time ran out.</p>`;
   } else {
-    box = `<p class="gs-locked-answer">"${active.turnAnswer}"</p>`;
+    // Guard against a null/empty answer rendering as the literal text
+    // "null" (happens when the host judges without a submitted answer,
+    // e.g. a screenshots question judged purely on the picture).
+    box = active.turnAnswer ? `<p class="gs-locked-answer">"${active.turnAnswer}"</p>` : '';
     if (active.turnJudged) {
       box += `<p class="gs-judge-result ${active.turnJudged}">${active.turnJudged === 'correct' ? '✅ Correct' : '❌ Wrong'}</p>`;
     } else if (iAmHost) {
       box += `<div class="gs-judge-btns"><button type="button" class="secondary gs-small-btn" id="gsJudgeCorrectBtn">Correct</button><button type="button" class="secondary gs-small-btn" id="gsJudgeWrongBtn">Wrong</button></div>`;
     }
   }
-  return `<div class="gs-answer-block"><p class="gs-section-title">${teamLabel(turnTeam)}</p>${box}</div>`;
+  return `<div class="gs-answer-block">${box}</div>`;
 }
 
 // Self-service: no host offer needed. The non-turn team gets a STEAL
@@ -792,12 +854,41 @@ function renderStealArea(iAmHost, active, viewerKind) {
 // claimed, before the normal steal answer UI appears.
 function renderStealTakeover(active) {
   return `
-    <div class="gs-steal-takeover">
-      <div class="gs-steal-takeover-box">
-        <p class="gs-steal-takeover-text">${teamLabel(active.stealTeam)}<br/>has stolen the question</p>
+    <div class="gs-takeover">
+      <div class="gs-takeover-box">
+        <p class="gs-takeover-text">${teamLabel(active.stealTeam)}<br/>HAVE STOLEN THE QUESTION</p>
       </div>
     </div>
   `;
+}
+
+const JUDGE_ANNOUNCE_MS = 2200;
+function renderJudgeTakeover(correct) {
+  return `
+    <div class="gs-takeover">
+      <div class="gs-takeover-box ${correct ? 'good' : 'bad'}">
+        <p class="gs-takeover-text">${correct ? 'CORRECT' : "Bruh that's wrong."}</p>
+        <p class="gs-takeover-icon">${correct ? '✅' : '❌'}</p>
+      </div>
+    </div>
+  `;
+}
+
+// Any full-screen takeover state active right now for this cell (steal
+// claim, or a just-judged correct/wrong) -- checked once so the scoreboard
+// can be hidden alongside it, keeping the screen a uniform size no matter
+// which state is showing.
+function activeTakeover(active) {
+  if (active.stealTeam && active.stealAnnouncedAt && (Date.now() - active.stealAnnouncedAt < STEAL_ANNOUNCE_MS)) {
+    return { type: 'steal' };
+  }
+  if (active.stealJudged && active.stealJudgedAt && (Date.now() - active.stealJudgedAt < JUDGE_ANNOUNCE_MS)) {
+    return { type: 'judge', correct: active.stealJudged === 'correct' };
+  }
+  if (active.turnJudged && (active.turnJudged === 'correct' || active.turnJudged === 'wrong') && active.turnJudgedAt && (Date.now() - active.turnJudgedAt < JUDGE_ANNOUNCE_MS)) {
+    return { type: 'judge', correct: active.turnJudged === 'correct' };
+  }
+  return null;
 }
 
 function renderActiveCellPanel(iAmHost) {
@@ -806,22 +897,25 @@ function renderActiveCellPanel(iAmHost) {
   const me = myPlayer();
   const viewerKind = iAmHost ? 'host' : (me && (me.role === 'teamA' || me.role === 'teamB') ? 'competitor' : 'spectator');
 
-  const stealAnnounceActive = active.stealTeam && active.stealAnnouncedAt && (Date.now() - active.stealAnnouncedAt < STEAL_ANNOUNCE_MS);
-  if (stealAnnounceActive) return renderStealTakeover(active);
+  const takeover = activeTakeover(active);
+  if (takeover) return takeover.type === 'steal' ? renderStealTakeover(active) : renderJudgeTakeover(takeover.correct);
 
+  // Once revealed, screenshots show the full/original answer image to
+  // everyone (not just the host) instead of just the cropped hint.
+  const shotSrc = (active.column === 'screenshots' && active.stage === 'revealed' && active.content.answer) ? active.content.answer : active.content.hint;
   const promptHtml = active.column === 'screenshots'
-    ? `<div class="gs-cell-screenshot-frame" data-zoom-img="${active.content.hint}"><img class="gs-cell-screenshot" src="${active.content.hint}" alt="Screenshot hint" /><span class="gs-zoom-hint">🔍 Click to enlarge</span></div>`
+    ? `<div class="gs-cell-screenshot-frame" data-zoom-img="${shotSrc}"><img class="gs-cell-screenshot" src="${shotSrc}" alt="Screenshot" /></div>`
     : `<p class="gs-cell-prompt">${active.column === 'quotes' ? `"${active.content.text}"` : active.content.question}</p>`;
 
   // Spectators (and, by extension, anyone just watching) get a simplified
-  // panel: category, timer, prompt, one line of status. No answer boxes,
-  // no host controls -- but the countdown IS visible to them too.
+  // panel: category, prompt, one line of status. No answer boxes, no host
+  // controls -- but the timer+team bar IS visible to them too.
   if (viewerKind === 'spectator') {
     return `
       <div class="gs-active-cell">
         <p class="gs-cell-value">$${active.value}: ${COLUMN_LABELS[active.column] || 'Bonus'}</p>
-        ${renderTurnBanner(active, viewerKind)}
         ${promptHtml}
+        ${renderStatusBar(active)}
         <p class="gs-status-line">${spectatorStatusLine(active)}</p>
         ${renderStealArea(iAmHost, active, viewerKind)}
       </div>
@@ -833,9 +927,9 @@ function renderActiveCellPanel(iAmHost) {
   return `
     <div class="gs-active-cell">
       <p class="gs-cell-value">$${active.value}: ${COLUMN_LABELS[active.column] || 'Bonus'}</p>
-      ${renderTurnBanner(active, viewerKind)}
       ${promptHtml}
       ${iAmHost ? renderHostHint(active) : ''}
+      ${renderStatusBar(active)}
       ${renderAnswerArea(iAmHost, active)}
       ${renderStealArea(iAmHost, active, viewerKind)}
       ${iAmHost ? `
@@ -849,35 +943,50 @@ function renderActiveCellPanel(iAmHost) {
   `;
 }
 
+// Announce/active stages now use the same full-screen takeover look as the
+// steal takeover, instead of a small inline banner -- and unlike the 5s
+// steal takeover, "announcing" has NO auto-timeout: it stays up until the
+// host clicks Begin Round, since they need that time to explain the rules.
+function renderComebackTakeover(iAmHost, cb) {
+  if (cb.stage === 'announcing') {
+    return `
+      <div class="gs-takeover">
+        <div class="gs-takeover-box">
+          <p class="gs-takeover-text">That Won't Be Necessary<br/>${cb.playerName} (${teamLabel(cb.team)})</p>
+          ${iAmHost ? `<button type="button" class="primary gs-small-btn" id="gsBeginComebackBtn">Begin Round</button>` : ''}
+        </div>
+      </div>
+    `;
+  }
+  // active
+  const live = cb.live || { points: 0, timeLeft: SPEED_ROUND_SECONDS, typing: '' };
+  return `
+    <div class="gs-takeover">
+      <div class="gs-takeover-box">
+        <p class="gs-takeover-timer">${live.timeLeft != null ? live.timeLeft : ''}s</p>
+        <p class="gs-takeover-text">${cb.playerName}: ${live.points} pt${live.points === 1 ? '' : 's'}</p>
+        ${live.typing ? `<p class="gs-takeover-typing">"${live.typing}"</p>` : ''}
+      </div>
+    </div>
+  `;
+}
+
 function renderComebackArea(iAmHost) {
   const room = state.room;
   const cb = room.board.comeback;
   if (cb) {
-    if (cb.stage === 'announcing') {
+    // announcing/active are handled by renderComebackTakeover from
+    // renderScreenBoard (full-screen, scoreboard hidden) -- only the "done"
+    // dismiss banner lives here.
+    if (cb.stage === 'done') {
       return `
         <div class="gs-comeback-banner">
-          <p class="gs-comeback-title">🎤 That Won't Be Necessary!</p>
-          <p>${cb.playerName} (${teamLabel(cb.team)}) is about to attempt the comeback round...</p>
-          ${iAmHost ? `<button type="button" class="primary gs-small-btn" id="gsBeginComebackBtn">Begin Round</button>` : `<p class="hint">Waiting for the host to start it.</p>`}
+          <p>${cb.playerName} scored <strong>${cb.points}</strong> point${cb.points === 1 ? '' : 's'} for ${teamLabel(cb.team)}!</p>
+          ${iAmHost ? `<button type="button" class="secondary gs-small-btn" id="gsClearComebackBtn">Dismiss</button>` : ''}
         </div>
       `;
     }
-    if (cb.stage === 'active') {
-      const live = cb.live || { points: 0, img: null };
-      return `
-        <div class="gs-comeback-banner">
-          <p class="gs-comeback-title">🎤 ${cb.playerName} is attempting the comeback round for ${teamLabel(cb.team)}!</p>
-          ${live.img ? `<img class="gs-comeback-live-img" src="${live.img}" alt="" />` : ''}
-          <p class="gs-comeback-live-score">${live.points} pt${live.points === 1 ? '' : 's'} so far</p>
-        </div>
-      `;
-    }
-    return `
-      <div class="gs-comeback-banner">
-        <p>${cb.playerName} scored <strong>${cb.points}</strong> point${cb.points === 1 ? '' : 's'} for ${teamLabel(cb.team)} in the comeback round!</p>
-        ${iAmHost ? `<button type="button" class="secondary gs-small-btn" id="gsClearComebackBtn">Dismiss</button>` : ''}
-      </div>
-    `;
+    return '';
   }
 
   if (!iAmHost || room.board.active) return '';
@@ -908,23 +1017,70 @@ function renderZoomLightbox() {
   `;
 }
 
+const HOST_NICE_MS = 4000;
+
+function renderGameOverScreen(iAmHost) {
+  const room = state.room;
+  const winner = room.board.scores.teamA === room.board.scores.teamB ? null : (room.board.scores.teamA > room.board.scores.teamB ? 'teamA' : 'teamB');
+  const winners = winner ? room.players.filter(p => p.role === winner) : [];
+  return `
+    <div class="gs-takeover">
+      <div class="gs-takeover-box">
+        <p class="gs-takeover-text">${winner ? `${teamLabel(winner)} WON!` : "IT'S A TIE!"}</p>
+        ${winners.length ? `<div class="gs-winner-avatars">${winners.map(p => `<div class="gs-mini-avatar-wrap"><div class="gs-mini-avatar" data-avatar-for="${p.id}"></div><span>${p.name}</span></div>`).join('')}</div>` : ''}
+        ${iAmHost ? `<button type="button" class="primary gs-small-btn" id="gsReplayGameBtn">Play Again</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderHostNiceTakeover() {
+  return `
+    <div class="gs-takeover">
+      <div class="gs-takeover-box good">
+        <p class="gs-takeover-text">THE HOST FELT NICE</p>
+      </div>
+    </div>
+  `;
+}
+
+// Host-only correction console: add/subtract points for either team.
+function renderHostConsole() {
+  return `
+    <div class="gs-host-console">
+      <select id="gsScoreTeamSelect">
+        <option value="teamA">${teamLabel('teamA')}</option>
+        <option value="teamB">${teamLabel('teamB')}</option>
+      </select>
+      <input type="number" id="gsScoreAmountInput" class="gs-score-amount-input" placeholder="+/- pts" />
+      <button type="button" class="secondary gs-tiny-btn" id="gsAdjustScoreBtn">Apply</button>
+    </div>
+  `;
+}
+
 function renderScreenBoard() {
   const room = state.room;
   const iAmHost = room.hostId === socket.id;
-  if (room.phase === 'finished') {
-    const winner = room.board.scores.teamA === room.board.scores.teamB ? null : (room.board.scores.teamA > room.board.scores.teamB ? 'teamA' : 'teamB');
-    return `
-      ${renderScoreboard()}
-      <h3 class="gs-screen-title">Game Over!</h3>
-      <p class="gs-screen-status">${winner ? `${teamLabel(winner)} wins!` : "It's a tie!"}</p>
-      ${iAmHost ? `<div class="center"><button type="button" class="primary" id="gsReplayGameBtn">Play Again (New Board)</button></div>` : ''}
-    `;
+
+  if (room.phase === 'finished') return renderGameOverScreen(iAmHost);
+
+  const hostNiceActive = room.board.hostNice && (Date.now() - room.board.hostNice.at < HOST_NICE_MS);
+  if (hostNiceActive) return renderHostNiceTakeover();
+
+  const cb = room.board.comeback;
+  if (cb && (cb.stage === 'announcing' || cb.stage === 'active')) return renderComebackTakeover(iAmHost, cb);
+
+  const cellTakeover = room.board.active ? activeTakeover(room.board.active) : null;
+  if (cellTakeover) {
+    return cellTakeover.type === 'steal' ? renderStealTakeover(room.board.active) : renderJudgeTakeover(cellTakeover.correct);
   }
+
   return `
     ${renderScoreboard()}
+    ${iAmHost ? renderHostConsole() : ''}
     ${renderComebackArea(iAmHost)}
     ${room.board.active ? renderActiveCellPanel(iAmHost) : renderBoardGrid(iAmHost)}
-    ${!room.board.active && !room.board.comeback ? renderPhoneRow(iAmHost) : ''}
+    ${!room.board.active && !cb ? renderPhoneRow(iAmHost) : ''}
   `;
 }
 
@@ -1375,6 +1531,12 @@ function attachHandlers() {
     });
   });
 
+  // Live-typing mirror: cosmetic only, never trusted for judging.
+  const answerInput = document.getElementById('gsAnswerInput');
+  if (answerInput) answerInput.addEventListener('input', throttleTyping(() => {
+    socket.emit('gsTypingAnswer', { text: answerInput.value }, () => {});
+  }));
+
   const revealBtn = document.getElementById('gsRevealAnswerBtn');
   if (revealBtn) revealBtn.addEventListener('click', () => {
     socket.emit('gsRevealAnswer', null, (res) => {
@@ -1412,6 +1574,35 @@ function attachHandlers() {
     if (!input || !input.value.trim()) return;
     socket.emit('gsSubmitSteal', { text: input.value }, (res) => {
       if (!res.ok) showGsNotice(res.error || "Couldn't submit steal.");
+    });
+  });
+
+  const stealInput = document.getElementById('gsStealInput');
+  if (stealInput) stealInput.addEventListener('input', throttleTyping(() => {
+    socket.emit('gsTypingAnswer', { text: stealInput.value, steal: true }, () => {});
+  }));
+
+  // host mini-console: manual score correction ("The Host felt nice")
+  const adjustScoreBtn = document.getElementById('gsAdjustScoreBtn');
+  if (adjustScoreBtn) adjustScoreBtn.addEventListener('click', () => {
+    const teamSelect = document.getElementById('gsScoreTeamSelect');
+    const amountInput = document.getElementById('gsScoreAmountInput');
+    const team = teamSelect ? teamSelect.value : '';
+    const amount = amountInput ? parseInt(amountInput.value, 10) : 0;
+    if (!team || !amount) { showGsNotice('Pick a team and an amount first.'); return; }
+    socket.emit('gsAdjustScore', { team, amount }, (res) => {
+      if (!res.ok) showGsNotice(res.error || "Couldn't adjust score.");
+      else if (amountInput) amountInput.value = '';
+    });
+  });
+
+  // host: preview an unopened cell's content before deciding to reroll it
+  document.querySelectorAll('[data-preview-cell]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      socket.emit('gsPreviewCell', { cellId: btn.dataset.previewCell }, (res) => {
+        if (!res.ok) { showGsNotice(res.error || "Couldn't preview."); return; }
+        showGsCellPreview(res.content, res.column);
+      });
     });
   });
 
@@ -1526,8 +1717,27 @@ function wireTurnTimer() {
   clearInterval(turnTimerHandle);
   turnTimerHandle = null;
   const room = state.room;
-  const active = room && room.board && room.board.active;
+  if (!room || !room.board) return;
+
+  // "Host felt nice" takeover expiry.
+  if (room.board.hostNice) {
+    const msLeft = HOST_NICE_MS - (Date.now() - room.board.hostNice.at);
+    if (msLeft > 0) { turnTimerHandle = setTimeout(render, msLeft + 50); return; }
+  }
+
+  const active = room.board.active;
   if (!active) return;
+
+  // Any active takeover (steal claim, or a just-judged correct/wrong) --
+  // force a re-render right when it expires so the screen swaps back to
+  // the normal panel.
+  const takeover = activeTakeover(active);
+  if (takeover) {
+    const at = active.stealAnnouncedAt || active.stealJudgedAt || active.turnJudgedAt;
+    const windowMs = takeover.type === 'steal' ? STEAL_ANNOUNCE_MS : JUDGE_ANNOUNCE_MS;
+    const msLeft = windowMs - (Date.now() - at);
+    if (msLeft > 0) { turnTimerHandle = setTimeout(render, msLeft + 50); return; }
+  }
 
   if (active.stage === 'answering') {
     const tick = () => {
@@ -1542,13 +1752,6 @@ function wireTurnTimer() {
     tick();
     turnTimerHandle = setInterval(tick, 500);
     return;
-  }
-
-  // Steal takeover: force a re-render right when the 5s window ends so the
-  // screen swaps from the full-screen banner to the normal steal UI.
-  if (active.stealTeam && active.stealAnnouncedAt) {
-    const msLeft = STEAL_ANNOUNCE_MS - (Date.now() - active.stealAnnouncedAt);
-    if (msLeft > 0) { turnTimerHandle = setTimeout(render, msLeft + 50); return; }
   }
 
   // Steal-unlock countdown: nothing to claim, or already claimed -- no
@@ -1590,6 +1793,13 @@ function startSpeedRound() {
       timerEl.textContent = state.speed.timeLeft + 's';
       timerEl.classList.toggle('urgent', state.speed.timeLeft <= 10);
     }
+    // During the comeback round, keep everyone else's shared big-screen
+    // countdown ticking too, not just updating on each guess.
+    if (state.comebackMode) {
+      const correctCount = state.speed.feed.filter(f => f.ok).length;
+      const points = Math.floor(correctCount / NAMES_PER_POINT) * POINTS_PER_TIER;
+      socket.emit('gsComebackLive', { points, correctCount, timeLeft: state.speed.timeLeft, img: gsImgUrl(state.speed.current) }, () => {});
+    }
   }, 1000);
 }
 
@@ -1629,7 +1839,10 @@ function gsSubmitGuess(guessedName) {
   s.current = gsNextTarget(s);
 
   const input = document.getElementById('gsSpeedInput');
-  if (input) { input.value = ''; }
+  // Selecting a suggestion is a click on a DIV, not the input, so focus
+  // silently moves away from the box -- explicitly grab it back every time
+  // so the player never has to reclick before typing the next name.
+  if (input) { input.value = ''; input.focus(); }
   const suggestions = document.getElementById('gsSuggestions');
   if (suggestions) suggestions.innerHTML = '';
 
@@ -1679,6 +1892,9 @@ function wireSpeedInput() {
   }
 
   input.addEventListener('input', renderSuggestions);
+  input.addEventListener('input', throttleTyping(() => {
+    if (state.comebackMode) socket.emit('gsComebackTyping', { text: input.value }, () => {});
+  }));
 
   input.addEventListener('keydown', e => {
     const rows = Array.from(suggestionsBox.querySelectorAll('.gs-suggestion-row'));
