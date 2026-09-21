@@ -1,0 +1,242 @@
+[
+  {
+    "id": "1",
+    "hint": "assets/gameshow/screenshots/hint/ss01.png",
+    "answer": "assets/gameshow/screenshots/answer/ss01.png",
+    "originalFilename": "Screenshot 2024-09-26 180555.png"
+  },
+  {
+    "id": "2",
+    "hint": "assets/gameshow/screenshots/hint/ss02.png",
+    "answer": "assets/gameshow/screenshots/answer/ss02.png",
+    "originalFilename": "Screenshot 2024-09-26 182643.png"
+  },
+  {
+    "id": "3",
+    "hint": "assets/gameshow/screenshots/hint/ss03.png",
+    "answer": "assets/gameshow/screenshots/answer/ss03.png",
+    "originalFilename": "Screenshot 2024-10-04 111541.png"
+  },
+  {
+    "id": "4",
+    "hint": "assets/gameshow/screenshots/hint/ss04.png",
+    "answer": "assets/gameshow/screenshots/answer/ss04.png",
+    "originalFilename": "Screenshot 2024-10-04 162256.png"
+  },
+  {
+    "id": "5",
+    "hint": "assets/gameshow/screenshots/hint/ss05.png",
+    "answer": "assets/gameshow/screenshots/answer/ss05.png",
+    "originalFilename": "Screenshot 2024-10-06 143551.png"
+  },
+  {
+    "id": "6",
+    "hint": "assets/gameshow/screenshots/hint/ss06.png",
+    "answer": "assets/gameshow/screenshots/answer/ss06.png",
+    "originalFilename": "Screenshot 2024-10-27 135927.png"
+  },
+  {
+    "id": "7",
+    "hint": "assets/gameshow/screenshots/hint/ss07.png",
+    "answer": "assets/gameshow/screenshots/answer/ss07.png",
+    "originalFilename": "Screenshot 2024-10-27 152852.png"
+  },
+  {
+    "id": "8",
+    "hint": "assets/gameshow/screenshots/hint/ss08.png",
+    "answer": "assets/gameshow/screenshots/answer/ss08.png",
+    "originalFilename": "Screenshot 2024-10-27 163656.png"
+  },
+  {
+    "id": "9",
+    "hint": "assets/gameshow/screenshots/hint/ss09.png",
+    "answer": "assets/gameshow/screenshots/answer/ss09.png",
+    "originalFilename": "Screenshot 2024-11-15 190413.png"
+  },
+  {
+    "id": "10",
+    "hint": "assets/gameshow/screenshots/hint/ss10.png",
+    "answer": "assets/gameshow/screenshots/answer/ss10.png",
+    "originalFilename": "Screenshot 2024-11-17 143544.png"
+  },
+  {
+    "id": "11",
+    "hint": "assets/gameshow/screenshots/hint/ss11.png",
+    "answer": "assets/gameshow/screenshots/answer/ss11.png",
+    "originalFilename": "Screenshot 2024-11-17 152412.png"
+  },
+  {
+    "id": "12",
+    "hint": "assets/gameshow/screenshots/hint/ss12.png",
+    "answer": "assets/gameshow/screenshots/answer/ss12.png",
+    "originalFilename": "Screenshot 2024-12-08 151648.png"
+  },
+  {
+    "id": "13",
+    "hint": "assets/gameshow/screenshots/hint/ss13.png",
+    "answer": "assets/gameshow/screenshots/answer/ss13.png",
+    "originalFilename": "Screenshot 2024-12-10 211320.png"
+  },
+  {
+    "id": "14",
+    "hint": "assets/gameshow/screenshots/hint/ss14.png",
+    "answer": "assets/gameshow/screenshots/answer/ss14.png",
+    "originalFilename": "Screenshot 2024-12-10 212938.png"
+  },
+  {
+    "id": "15",
+    "hint": "assets/gameshow/screenshots/hint/ss15.png",
+    "answer": "assets/gameshow/screenshots/answer/ss15.png",
+    "originalFilename": "Screenshot 2024-12-11 113811.png"
+  },
+  {
+    "id": "16",
+    "hint": "assets/gameshow/screenshots/hint/ss16.png",
+    "answer": "assets/gameshow/screenshots/answer/ss16.png",
+    "originalFilename": "Screenshot 2024-12-13 170001.png"
+  },
+  {
+    "id": "17",
+    "hint": "assets/gameshow/screenshots/hint/ss17.png",
+    "answer": "assets/gameshow/screenshots/answer/ss17.png",
+    "originalFilename": "Screenshot 2024-12-17 112349.png"
+  },
+  {
+    "id": "18",
+    "hint": "assets/gameshow/screenshots/hint/ss18.png",
+    "answer": "assets/gameshow/screenshots/answer/ss18.png",
+    "originalFilename": "Screenshot 2024-12-25 131902.png"
+  },
+  {
+    "id": "19",
+    "hint": "assets/gameshow/screenshots/hint/ss19.png",
+    "answer": "assets/gameshow/screenshots/answer/ss19.png",
+    "originalFilename": "Screenshot 2025-01-05 165731.png"
+  },
+  {
+    "id": "20",
+    "hint": "assets/gameshow/screenshots/hint/ss20.png",
+    "answer": "assets/gameshow/screenshots/answer/ss20.png",
+    "originalFilename": "Screenshot 2025-01-12 103511.png"
+  },
+  {
+    "id": "21",
+    "hint": "assets/gameshow/screenshots/hint/ss21.png",
+    "answer": "assets/gameshow/screenshots/answer/ss21.png",
+    "originalFilename": "Screenshot 2025-01-12 104710.png"
+  },
+  {
+    "id": "22",
+    "hint": "assets/gameshow/screenshots/hint/ss22.png",
+    "answer": "assets/gameshow/screenshots/answer/ss22.png",
+    "originalFilename": "Screenshot 2025-02-23 234545.png"
+  },
+  {
+    "id": "23",
+    "hint": "assets/gameshow/screenshots/hint/ss23.png",
+    "answer": "assets/gameshow/screenshots/answer/ss23.png",
+    "originalFilename": "Screenshot 2025-02-27 210602.png"
+  },
+  {
+    "id": "24",
+    "hint": "assets/gameshow/screenshots/hint/ss24.png",
+    "answer": "assets/gameshow/screenshots/answer/ss24.png",
+    "originalFilename": "Screenshot 2025-03-03 205546.png"
+  },
+  {
+    "id": "25",
+    "hint": "assets/gameshow/screenshots/hint/ss25.png",
+    "answer": "assets/gameshow/screenshots/answer/ss25.png",
+    "originalFilename": "Screenshot 2025-03-11 211353.png"
+  },
+  {
+    "id": "26",
+    "hint": "assets/gameshow/screenshots/hint/ss26.png",
+    "answer": "assets/gameshow/screenshots/answer/ss26.png",
+    "originalFilename": "Screenshot 2025-03-14 163032.png"
+  },
+  {
+    "id": "27",
+    "hint": "assets/gameshow/screenshots/hint/ss27.png",
+    "answer": "assets/gameshow/screenshots/answer/ss27.png",
+    "originalFilename": "Screenshot 2025-03-26 191121.png"
+  },
+  {
+    "id": "28",
+    "hint": "assets/gameshow/screenshots/hint/ss28.png",
+    "answer": "assets/gameshow/screenshots/answer/ss28.png",
+    "originalFilename": "Screenshot 2025-04-05 151213.png"
+  },
+  {
+    "id": "29",
+    "hint": "assets/gameshow/screenshots/hint/ss29.png",
+    "answer": "assets/gameshow/screenshots/answer/ss29.png",
+    "originalFilename": "Screenshot 2025-06-07 185059.png"
+  },
+  {
+    "id": "30",
+    "hint": "assets/gameshow/screenshots/hint/ss30.png",
+    "answer": "assets/gameshow/screenshots/answer/ss30.png",
+    "originalFilename": "Screenshot 2025-07-14 185918.png"
+  },
+  {
+    "id": "31",
+    "hint": "assets/gameshow/screenshots/hint/ss31.png",
+    "answer": "assets/gameshow/screenshots/answer/ss31.png",
+    "originalFilename": "Screenshot 2025-07-30 122508.png"
+  },
+  {
+    "id": "32",
+    "hint": "assets/gameshow/screenshots/hint/ss32.png",
+    "answer": "assets/gameshow/screenshots/answer/ss32.png",
+    "originalFilename": "Screenshot 2025-08-16 142835.png"
+  },
+  {
+    "id": "33",
+    "hint": "assets/gameshow/screenshots/hint/ss33.png",
+    "answer": "assets/gameshow/screenshots/answer/ss33.png",
+    "originalFilename": "Screenshot 2025-08-30 232851.png"
+  },
+  {
+    "id": "34",
+    "hint": "assets/gameshow/screenshots/hint/ss34.png",
+    "answer": "assets/gameshow/screenshots/answer/ss34.png",
+    "originalFilename": "Screenshot 2026-03-12 203126.png"
+  },
+  {
+    "id": "35",
+    "hint": "assets/gameshow/screenshots/hint/ss35.png",
+    "answer": "assets/gameshow/screenshots/answer/ss35.png",
+    "originalFilename": "Screenshot 2026-03-19 161736.png"
+  },
+  {
+    "id": "36",
+    "hint": "assets/gameshow/screenshots/hint/ss36.png",
+    "answer": "assets/gameshow/screenshots/answer/ss36.png",
+    "originalFilename": "Screenshot 2026-03-28 185643.png"
+  },
+  {
+    "id": "37",
+    "hint": "assets/gameshow/screenshots/hint/ss37.png",
+    "answer": "assets/gameshow/screenshots/answer/ss37.png",
+    "originalFilename": "Screenshot 2026-07-20 143532.png"
+  },
+  {
+    "id": "38",
+    "hint": "assets/gameshow/screenshots/hint/ss38.png",
+    "answer": "assets/gameshow/screenshots/answer/ss38.png",
+    "originalFilename": "Screenshot 2026-09-05 165647.png"
+  },
+  {
+    "id": "39",
+    "hint": "assets/gameshow/screenshots/hint/ss39.png",
+    "answer": "assets/gameshow/screenshots/answer/ss39.png",
+    "originalFilename": "Screenshot 2026-09-10 201119.png"
+  },
+  {
+    "id": "40",
+    "hint": "assets/gameshow/screenshots/hint/ss40.png",
+    "answer": "assets/gameshow/screenshots/answer/ss40.png",
+    "originalFilename": "Screenshot 2026-09-19 190817.png"
+  }
+]
