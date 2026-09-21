@@ -333,9 +333,12 @@ function finishNamingPhase(room, socketId) {
 
 // For the landing screen's "Pending Games" list -- rooms still filling up
 // (lobby/naming/ready), mirroring Heads Up's public room browser.
+// Every room shows here, whatever phase it's in -- a spectator should be
+// able to find and join a game in progress from this list too, not just
+// before it starts. The client labels "playing"/"finished" differently
+// from "waiting for players" so it's clear what you're walking into.
 function listPendingRooms() {
   return Array.from(rooms.values())
-    .filter(r => r.phase === 'lobby' || r.phase === 'naming' || r.phase === 'ready')
     .map(r => {
       const host = r.hostId ? r.players.get(r.hostId) : null;
       let teamACount = 0, teamBCount = 0, spectatorCount = 0;

@@ -373,16 +373,29 @@ function renderLanding() {
   `;
 }
 
+// Games in progress stay on this list too -- a spectator can find and join
+// one anytime, not just before it starts, per the phase-agnostic
+// listPendingRooms() on the server. The label/button text just changes so
+// it's clear you're joining as a spectator to something already running.
+function pendingRoomStatus(phase) {
+  if (phase === 'playing') return { label: 'Playing', joinLabel: 'Watch' };
+  if (phase === 'finished') return { label: 'Game over', joinLabel: 'Watch' };
+  if (phase === 'naming' || phase === 'ready') return { label: 'Starting soon', joinLabel: 'Join' };
+  return { label: 'Waiting for players', joinLabel: 'Join' };
+}
 function renderPendingRooms() {
   if (!state.pendingRooms.length) return '<p class="hint">No games waiting.</p>';
   return `
     <div class="public-room-list gs-pending-list">
-      ${state.pendingRooms.map(r => `
-        <div class="public-room-row">
-          <span>${r.hostName}'s room</span>
-          <button type="button" class="secondary gs-tiny-btn" data-join-pending="${r.code}">Join</button>
-        </div>
-      `).join('')}
+      ${state.pendingRooms.map(r => {
+        const status = pendingRoomStatus(r.phase);
+        return `
+          <div class="public-room-row">
+            <span>${r.hostName}'s room <em class="gs-pending-status">${status.label}</em></span>
+            <button type="button" class="secondary gs-tiny-btn" data-join-pending="${r.code}">${status.joinLabel}</button>
+          </div>
+        `;
+      }).join('')}
     </div>
   `;
 }
@@ -484,9 +497,10 @@ function renderPodium(teamKey) {
       <${tag} class="gs-podium ${isEmpty ? 'empty' : 'occupied'} ${mine ? 'mine' : ''} ${showReady ? 'is-ready' : ''}" ${attrs}>
         <div class="gs-podium-avatar-wrap">
           ${occ ? `<div class="gs-podium-avatar" data-avatar-for="${occ.id}"></div>` : '<span class="gs-podium-plus">+</span>'}
+        </div>
+        <div class="gs-podium-block ${teamKey}">
           ${showMarkers ? `<span class="gs-podium-markers">${hintUsed ? '<span class="gs-podium-marker" title="This team has used a hint">💡</span>' : ''}${stealUsed ? '<span class="gs-podium-marker" title="This team has stolen a question">⚠️</span>' : ''}</span>` : ''}
         </div>
-        <div class="gs-podium-block ${teamKey}"></div>
         <div class="gs-podium-name">${occ ? occ.name : ' '}</div>
       </${tag}>
     `;
@@ -904,6 +918,13 @@ function spectatorStatusLine(active) {
 }
 
 function renderHostHint(active) {
+  // Quotes/trivia HOST ONLY hints are only useful before the reveal --
+  // once revealed, renderRevealedAnswer already shows the same answer to
+  // literally everyone, so showing it again here (still labeled "HOST
+  // ONLY", confusingly) would just be redundant.
+  if (active.stage === 'revealed' && (active.column === 'quotes' || active.column === 'trivia' || active.column === 'bonus')) {
+    return '';
+  }
   if (active.column === 'quotes') {
     return `<div class="gs-host-hint"><p class="gs-host-hint-label">HOST ONLY</p><p>Said by <strong>${active.content.character}</strong> (<em>${active.content.game || ''}</em>)</p></div>`;
   }
@@ -1035,6 +1056,20 @@ function activeTakeover(active) {
   return null;
 }
 
+// Only has content once active.stage === 'revealed' AND the server has
+// actually included the answer fields (gameshowBoard.js's
+// publicCellContent only sends these once revealed, so this naturally
+// renders nothing beforehand -- no separate stage check needed here).
+function renderRevealedAnswer(active) {
+  if (active.column === 'quotes' && active.content.character) {
+    return `<p class="gs-revealed-answer">— ${active.content.character}${active.content.game ? ` (${active.content.game})` : ''}</p>`;
+  }
+  if ((active.column === 'trivia' || active.column === 'bonus') && active.content.answer) {
+    return `<p class="gs-revealed-answer">Correct answer: ${active.content.answer}</p>`;
+  }
+  return '';
+}
+
 function renderActiveCellPanel(iAmHost) {
   const room = state.room;
   const active = room.board.active;
@@ -1051,6 +1086,13 @@ function renderActiveCellPanel(iAmHost) {
     ? `<div class="gs-cell-screenshot-frame" data-zoom-img="${shotSrc}"><img class="gs-cell-screenshot" src="${shotSrc}" alt="Screenshot" /></div>`
     : `<p class="gs-cell-prompt">${active.column === 'quotes' ? `"${active.content.text}"` : active.content.question}</p>`;
 
+  // Once the host clicks Reveal Answer, everyone -- not just the host --
+  // sees the ACTUAL correct answer (who said the quote, what the trivia
+  // answer is), not just whatever the team happened to type. The team's
+  // own submitted guess still shows too (renderAnswerArea, below) so the
+  // room can see both side by side.
+  const revealedAnswerHtml = renderRevealedAnswer(active);
+
   // Spectators (and, by extension, anyone just watching) get a simplified
   // panel: category, prompt, one line of status. No answer boxes, no host
   // controls -- but the timer+team bar IS visible to them too.
@@ -1059,6 +1101,7 @@ function renderActiveCellPanel(iAmHost) {
       <div class="gs-active-cell">
         <p class="gs-cell-value">$${active.value}: ${COLUMN_LABELS[active.column] || 'Bonus'}</p>
         ${promptHtml}
+        ${revealedAnswerHtml}
         ${renderStatusBar(active)}
         <p class="gs-status-line">${spectatorStatusLine(active)}</p>
         ${renderStealArea(iAmHost, active, viewerKind)}
@@ -1072,6 +1115,7 @@ function renderActiveCellPanel(iAmHost) {
     <div class="gs-active-cell">
       <p class="gs-cell-value">$${active.value}: ${COLUMN_LABELS[active.column] || 'Bonus'}</p>
       ${promptHtml}
+      ${revealedAnswerHtml}
       ${iAmHost ? renderHostHint(active) : ''}
       ${renderStatusBar(active)}
       ${renderAnswerArea(iAmHost, active)}
@@ -1939,12 +1983,36 @@ function wireTurnTimer() {
   // Any active takeover (steal claim, or a just-judged correct/wrong) --
   // force a re-render right when it expires so the screen swaps back to
   // the normal panel.
+  //
+  // BUG FIXED: `at` used to always prefer stealAnnouncedAt if it existed at
+  // all, even for the steal-JUDGED takeover (takeover.type === 'judge'),
+  // which is timed off stealJudgedAt instead. Once any steal happened this
+  // cell, stealAnnouncedAt is permanently set, so the judge takeover's
+  // countdown was computed from the wrong (much earlier) timestamp -- real
+  // time between claiming a steal and it being judged is almost always
+  // longer than JUDGE_ANNOUNCE_MS, so msLeft came out <= 0 and NO timer got
+  // scheduled at all. Nothing else naturally re-renders while a takeover is
+  // up (no input is expected from anyone), so the "Correct"/"Wrong" screen
+  // just froze there forever with the host's Close Question button stuck
+  // behind it. Fix: pick `at` to match exactly what activeTakeover() itself
+  // used to decide this IS the current takeover.
   const takeover = activeTakeover(active);
   if (takeover) {
-    const at = active.stealAnnouncedAt || active.stealJudgedAt || active.turnJudgedAt;
+    let at;
+    if (takeover.type === 'steal') {
+      at = active.stealAnnouncedAt;
+    } else if (active.stealJudged && active.stealJudgedAt) {
+      at = active.stealJudgedAt;
+    } else {
+      at = active.turnJudgedAt;
+    }
     const windowMs = takeover.type === 'steal' ? STEAL_ANNOUNCE_MS : JUDGE_ANNOUNCE_MS;
     const msLeft = windowMs - (Date.now() - at);
-    if (msLeft > 0) { turnTimerHandle = setTimeout(render, msLeft + 50); return; }
+    // Safety net: if for any reason this is already past its window by the
+    // time we get here, force a render very soon anyway instead of silently
+    // scheduling nothing and freezing the screen.
+    turnTimerHandle = setTimeout(render, Math.max(msLeft, 0) + 50);
+    return;
   }
 
   if (active.stage === 'answering') {

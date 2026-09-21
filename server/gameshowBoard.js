@@ -90,13 +90,25 @@ function clearActiveTimer(room) {
 // the trivia answer, the screenshot's answer image, the bonus answer. The
 // host judges verbally; these fields exist only to help the host, not to
 // be displayed to competitors.
+// Once the host clicks Reveal Answer, everyone (not just the host) should
+// see the ACTUAL correct answer -- who said the quote, what the trivia
+// answer is -- instead of only ever seeing what the team happened to type.
+// Before reveal, non-host clients still get none of this (so it can't leak
+// mid-question); revealed=true is the only thing that changes here.
 function publicCellContent(cell, revealed) {
-  if (cell.column === 'quotes') return { text: cell.content.text };
-  if (cell.column === 'trivia') return { question: cell.content.question };
+  if (cell.column === 'quotes') {
+    return revealed
+      ? { text: cell.content.text, character: cell.content.character, game: cell.content.game || null }
+      : { text: cell.content.text };
+  }
+  if (cell.column === 'trivia' || cell.column === 'bonus') {
+    return revealed
+      ? { question: cell.content.question, answer: cell.content.answer }
+      : { question: cell.content.question };
+  }
   // Screenshots: everyone gets the full/original "answer" image too, once
   // the question has been revealed -- before that, only the cropped hint.
   if (cell.column === 'screenshots') return revealed ? { hint: cell.content.hint, answer: cell.content.answer } : { hint: cell.content.hint };
-  if (cell.column === 'bonus') return { question: cell.content.question };
   return {};
 }
 function hostCellContent(cell) {
