@@ -346,5 +346,47 @@
     "hint": "assets/gameshow/screenshots/hint/ss58.png",
     "answer": "assets/gameshow/screenshots/answer/ss58.png",
     "originalFilename": "Screenshot 2026-01-30 150223.png"
+  },
+  {
+    "id": "59",
+    "hint": "assets/gameshow/screenshots/hint/ss59.png",
+    "answer": "assets/gameshow/screenshots/answer/ss59.png",
+    "originalFilename": "Screenshot_2026-04-30_103218.png"
+  },
+  {
+    "id": "60",
+    "hint": "assets/gameshow/screenshots/hint/ss60.png",
+    "answer": "assets/gameshow/screenshots/answer/ss60.png",
+    "originalFilename": "Screenshot_2026-05-04_132350.png"
+  },
+  {
+    "id": "61",
+    "hint": "assets/gameshow/screenshots/hint/ss61.png",
+    "answer": "assets/gameshow/screenshots/answer/ss61.png",
+    "originalFilename": "Screenshot_2026-05-07_122302.png"
+  },
+  {
+    "id": "62",
+    "hint": "assets/gameshow/screenshots/hint/ss62.png",
+    "answer": "assets/gameshow/screenshots/answer/ss62.png",
+    "originalFilename": "Screenshot_2026-05-15_180724.png"
+  },
+  {
+    "id": "63",
+    "hint": "assets/gameshow/screenshots/hint/ss63.png",
+    "answer": "assets/gameshow/screenshots/answer/ss63.png",
+    "originalFilename": "Screenshot_2026-05-19_181544.png"
+  },
+  {
+    "id": "64",
+    "hint": "assets/gameshow/screenshots/hint/ss64.png",
+    "answer": "assets/gameshow/screenshots/answer/ss64.png",
+    "originalFilename": "Screenshot_2026-05-19_192612.png"
+  },
+  {
+    "id": "65",
+    "hint": "assets/gameshow/screenshots/hint/ss65.png",
+    "answer": "assets/gameshow/screenshots/answer/ss65.png",
+    "originalFilename": "Screenshot_2026-05-21_023208.png"
   }
 ]

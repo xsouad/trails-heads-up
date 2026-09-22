@@ -12,5 +12,19 @@
     "answer": "trick question, not introduced yet",
     "by": null,
     "value": 500
+  },
+  {
+    "id": "3",
+    "question": "What is the combination to open the road lamp in Milch Main Road in the quest given to you in the prologue of FC?",
+    "answer": "There are 4 possible options -- any one of them is correct: (1) 554818, (2) 545818, (3) 544818, (4) 544828",
+    "by": null,
+    "value": 500
+  },
+  {
+    "id": "4",
+    "question": "What is the maximum mira you can have at once?",
+    "answer": "99,999,999 mira",
+    "by": null,
+    "value": 500
   }
 ]
