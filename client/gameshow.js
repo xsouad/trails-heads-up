@@ -63,6 +63,7 @@ let state = {
   clapMuted: false,
   clapVolume: 0.5,
   zoomImageSrc: null, // set to open the screenshot lightbox
+  zoomedIn: false, // click the lightbox image to zoom in much further and pan around
   leaderboard: [] // global speed-round leaderboard, shared by every visitor
 };
 
@@ -583,19 +584,24 @@ function clapVolIcon() {
 
 // Small button, real volume slider next to it -- not a big full-width
 // button with a click-to-cycle mute toggle.
+// Only spectators can actually trigger a clap, but the SOUND plays for
+// EVERYONE in the room (host and both teams included) whenever anyone
+// does -- so everyone gets their own volume control for it, even though
+// only spectators get the Clap button itself.
 function renderClapArea() {
   const room = state.room;
   const me = myPlayer();
-  if (!me || me.role !== 'spectator') return '';
+  if (!me) return '';
   // Clapping only makes sense once there's an actual game to react to --
   // not while everyone's still picking seats or naming their teams. Hidden
   // entirely (not just grayed out) until then.
   const allowed = room.phase !== 'lobby' && room.phase !== 'naming';
   if (!allowed) return '';
+  const isSpectator = me.role === 'spectator';
   const sliderValue = state.clapMuted ? 0 : Math.round(state.clapVolume * 100);
   return `
     <div class="center gs-clap-area">
-      <button type="button" class="secondary gs-small-btn" id="gsClapBtn">👏 Clap</button>
+      ${isSpectator ? `<button type="button" class="secondary gs-small-btn" id="gsClapBtn">👏 Clap</button>` : ''}
       <span class="gs-clap-vol-icon">${clapVolIcon()}</span>
       <input type="range" class="gs-clap-vol-slider" id="gsClapVolSlider" min="0" max="100" value="${sliderValue}" title="Clap volume" />
     </div>
@@ -766,21 +772,44 @@ function teamLabel(team) {
 
 function otherTeam(team) { return team === 'teamA' ? 'teamB' : 'teamA'; }
 
+// Whichever team is actually "on the clock" right now -- mirrors the
+// server-side currentActingTeam() in gameshowBoard.js, computed here from
+// the public `active` object instead of the server's internal cellState.
+// Used to keep the hint icon from looking clickable when it's not actually
+// this team's turn (server also enforces this -- this is just so the UI
+// doesn't invite a click that'll get rejected).
+function currentActingTeam(room) {
+  const active = room.board && room.board.active;
+  if (!active) return null;
+  if (active.stealTeam && active.stealAnswer == null && !active.stealTimedOut) return active.stealTeam;
+  return active.turnTeam;
+}
+
 // Hints and Phone a Friend show as discrete icon boxes -- lit while
 // available, grayed out/crossed once used -- instead of a single "count"
 // number, matching the reference board layout.
 // A competitor can now take their OWN team's hint directly (clicking a
 // still-lit bulb), not just wait on the host to give it -- matches the
-// same self-service pattern the STEAL button already used.
+// same self-service pattern the STEAL button already used. Restricted to
+// their own turn/steal window (see currentActingTeam) -- the other team
+// shouldn't be able to burn a hint while it's not their turn.
 function renderHintStack(team) {
   const room = state.room;
   const me = myPlayer();
-  const canSelfServe = me && me.role === team;
+  const isMyTeam = me && me.role === team;
+  // null (no question currently open) means nobody's turn is in progress --
+  // hints are fine to use between questions, same as before. Only actually
+  // restricted while a question IS open and it's the OTHER team's turn.
+  const acting = currentActingTeam(room);
+  const isMyTurn = acting === null || acting === team;
+  const canSelfServe = isMyTeam && isMyTurn;
   const hintsLeft = room.board.hints[team];
   const hintIcons = Array.from({ length: STARTING_HINTS_CLIENT }, (_, i) => {
     const lit = i < hintsLeft;
     const clickable = lit && canSelfServe && i === hintsLeft - 1; // only the next one to spend is clickable
-    return `<span class="gs-icon-box ${team} ${lit ? 'lit' : 'spent'} ${clickable ? 'clickable' : ''}" ${clickable ? `data-take-hint="${team}"` : ''} title="${lit ? (clickable ? 'Click to take this hint' : 'Hint available') : 'Hint used'}">💡</span>`;
+    const waitingForTurn = lit && isMyTeam && !isMyTurn && i === hintsLeft - 1;
+    const title = !lit ? 'Hint used' : clickable ? 'Click to take this hint' : waitingForTurn ? "Wait for your turn to use this hint" : 'Hint available';
+    return `<span class="gs-icon-box ${team} ${lit ? 'lit' : 'spent'} ${clickable ? 'clickable' : ''}" ${clickable ? `data-take-hint="${team}"` : ''} title="${title}">💡</span>`;
   }).join('');
   return `<div class="gs-icon-stack">${hintIcons}</div>`;
 }
@@ -867,7 +896,28 @@ function renderBoardGrid(iAmHost) {
 // line) -- the countdown is visible to EVERYONE watching, including
 // spectators, so the whole room can see how long is left before steal
 // opens up.
+// BUG FIXED: once a steal was claimed, this kept showing the ORIGINAL
+// turn team's name with a frozen "--" for the timer (since `stage` isn't
+// 'answering' anymore) -- confusing, since the team actually on the clock
+// at that point is the stealing team, not the original one. Now, for the
+// whole steal lifecycle (claimed through judged), the ONE rectangle shows
+// both team names together ("original -> stealing") instead of silently
+// swapping one out for the other -- and the standalone dashed steal box
+// that used to duplicate this info (its own "Steal: Team" title + a
+// second timer) has been removed entirely; this bar is now the single
+// place that shows it.
 function renderStatusBar(active) {
+  if (active.stealTeam) {
+    const combined = `${teamLabel(active.turnTeam)} → ${teamLabel(active.stealTeam)}`;
+    const counting = active.stealAnswer == null && !active.stealTimedOut && active.stealDeadline;
+    const secs = counting ? Math.max(0, Math.ceil((active.stealDeadline - Date.now()) / 1000)) + 's' : '--';
+    return `
+      <div class="gs-status-bar">
+        <span class="gs-timer-box" id="gsTurnTimer">${secs}</span>
+        <span class="gs-team-box">${combined}</span>
+      </div>
+    `;
+  }
   const secs = active.stage === 'answering' ? Math.max(0, Math.ceil((active.deadline - Date.now()) / 1000)) + 's' : '--';
   return `
     <div class="gs-status-bar">
@@ -984,17 +1034,26 @@ function renderStealArea(iAmHost, active, viewerKind) {
     // just close the question.
     inner = `<p class="gs-judge-result wrong">Time ran out.</p>`;
   } else if (active.stealAnswer == null) {
-    const stealRemaining = active.stealDeadline ? Math.max(0, Math.ceil((active.stealDeadline - Date.now()) / 1000)) : null;
-    const timerHtml = stealRemaining != null ? `<span class="gs-timer-box" id="gsStealTimer">${stealRemaining}s</span>` : '';
-    inner = (mine
+    // The live countdown lives in the status bar above (renderStatusBar),
+    // which swaps to the stealing team + their own clock -- no need to
+    // duplicate it down here too.
+    inner = mine
       ? `<div class="join-row"><input type="text" id="gsStealInput" maxlength="200" placeholder="Steal answer" /><button type="button" class="secondary" id="gsSubmitStealBtn">Submit</button></div>`
-      : `<p class="hint">Waiting on ${teamLabel(active.stealTeam)}'s steal answer...</p>`) + timerHtml;
+      : `<p class="hint">Waiting on ${teamLabel(active.stealTeam)}'s steal answer...</p>`;
   } else {
+    // No "Stole it!"/"Wrong, loses X pts" text once judged -- per request,
+    // the full-screen Correct/Wrong takeover is now the ONLY place that
+    // outcome shows, even after the takeover fades. Just the locked-in
+    // answer stays (and judge buttons, while still unjudged).
     inner = `<p class="gs-locked-answer">"${active.stealAnswer}"</p>` + (active.stealJudged
-      ? `<p class="gs-judge-result ${active.stealJudged}">${active.stealJudged === 'correct' ? 'Stole it!' : `Wrong. Loses ${Math.floor(active.value / 2)} pts.`}</p>`
+      ? ''
       : iAmHost ? `<div class="gs-judge-btns"><button type="button" class="secondary gs-small-btn" id="gsJudgeStealCorrect">Correct</button><button type="button" class="secondary gs-small-btn" id="gsJudgeStealWrong">Wrong</button></div>` : '');
   }
-  return `<div class="gs-steal-block"><p class="gs-section-title">Steal: ${teamLabel(active.stealTeam)}</p>${inner}</div>`;
+  // No wrapping box/border and no "Steal: Team" title anymore -- the status
+  // bar above (renderStatusBar) already shows both team names together
+  // ("original -> stealing") plus the live countdown, so repeating the
+  // stealing team's name and a second timer down here was redundant.
+  return `<div class="gs-answer-block">${inner}</div>`;
 }
 
 // Full-screen 5s takeover shown to EVERYONE the instant a steal is
@@ -1183,11 +1242,21 @@ function renderComebackArea(iAmHost) {
   `;
 }
 
+// Click the image itself to zoom in MUCH further than the normal
+// fit-to-screen lightbox size -- useful for screenshots trivia where the
+// detail that matters can be small. Zoomed, the image renders far larger
+// than the card and the card becomes a scrollable/pannable viewport
+// (overflow: auto) so you can scroll/drag around to see any part of it up
+// close; clicking again zooms back out to the normal fit view.
 function renderZoomLightbox() {
+  const zoomed = state.zoomedIn;
   return `
     <div class="zoom-overlay ${state.zoomImageSrc ? 'active' : ''}" id="gsZoomLightbox">
-      <div class="zoom-card gs-zoom-card">
-        ${state.zoomImageSrc ? `<img src="${state.zoomImageSrc}" alt="Screenshot, enlarged" />` : ''}
+      <div class="zoom-card gs-zoom-card ${zoomed ? 'zoomed' : ''}">
+        <div class="gs-zoom-scroll">
+          ${state.zoomImageSrc ? `<img id="gsZoomImg" src="${state.zoomImageSrc}" alt="Screenshot, enlarged" />` : ''}
+        </div>
+        <p class="hint gs-zoom-hint">${zoomed ? 'Scroll/drag to look around -- click the image to zoom back out' : 'Click the image to zoom in further'}</p>
         <button type="button" class="close-btn" id="gsCloseZoomBtn">Close</button>
       </div>
     </div>
@@ -1635,12 +1704,31 @@ function attachHandlers() {
   });
 
   document.querySelectorAll('[data-zoom-img]').forEach(el => {
-    el.addEventListener('click', () => { state.zoomImageSrc = el.dataset.zoomImg; render(); });
+    el.addEventListener('click', () => { state.zoomImageSrc = el.dataset.zoomImg; state.zoomedIn = false; render(); });
   });
   const closeZoomBtn = document.getElementById('gsCloseZoomBtn');
-  if (closeZoomBtn) closeZoomBtn.addEventListener('click', () => { state.zoomImageSrc = null; render(); });
+  if (closeZoomBtn) closeZoomBtn.addEventListener('click', () => { state.zoomImageSrc = null; state.zoomedIn = false; render(); });
   const zoomOverlay = document.getElementById('gsZoomLightbox');
-  if (zoomOverlay) zoomOverlay.addEventListener('click', (e) => { if (e.target === zoomOverlay) { state.zoomImageSrc = null; render(); } });
+  if (zoomOverlay) zoomOverlay.addEventListener('click', (e) => { if (e.target === zoomOverlay) { state.zoomImageSrc = null; state.zoomedIn = false; render(); } });
+  // Click the image itself to toggle the much-deeper zoom level (see
+  // renderZoomLightbox's comment). Stops propagation so this click doesn't
+  // also bubble up to the overlay's click-outside-closes handler above.
+  const zoomImg = document.getElementById('gsZoomImg');
+  if (zoomImg) zoomImg.addEventListener('click', (e) => {
+    e.stopPropagation();
+    state.zoomedIn = !state.zoomedIn;
+    render();
+    // Land in the middle of the zoomed image instead of pinned to its
+    // top-left corner -- .gs-zoom-scroll became the scroll container once
+    // zoomed (see CSS), so this just centers it.
+    if (state.zoomedIn) {
+      const scroller = document.querySelector('.gs-zoom-scroll');
+      if (scroller) {
+        scroller.scrollLeft = (scroller.scrollWidth - scroller.clientWidth) / 2;
+        scroller.scrollTop = (scroller.scrollHeight - scroller.clientHeight) / 2;
+      }
+    }
+  });
 
   // .volatile.emit -- NOT a regular .emit. Regular emits made while the
   // socket happens to be mid-reconnect (a WiFi blip, laptop sleep, tab
@@ -2050,15 +2138,17 @@ function wireTurnTimer() {
   // Post-claim steal countdown: the stealing team has their own fresh
   // clock (stealDeadline) to submit an answer once they've claimed the
   // steal. Same live-ticking pattern as the 'answering' clock above --
-  // updates #gsStealTimer every 500ms, then forces a full render right at
-  // 0 so the "Time ran out." state (stealTimedOut, set server-side) shows.
+  // updates the SAME #gsTurnTimer/team-box status bar (renderStatusBar
+  // swaps it to show the stealing team + this countdown once a steal is in
+  // progress), then forces a full render right at 0 so the "Time ran out."
+  // state (stealTimedOut, set server-side) shows.
   if (active.stealTeam && active.stealAnswer == null && !active.stealTimedOut && active.stealDeadline) {
     const tick = () => {
       const r = state.room;
       const a = r && r.board && r.board.active;
       if (!a || !a.stealTeam || a.stealAnswer != null || a.stealTimedOut) { clearInterval(turnTimerHandle); return; }
       const remaining = Math.max(0, Math.ceil((a.stealDeadline - Date.now()) / 1000));
-      const el = document.getElementById('gsStealTimer');
+      const el = document.getElementById('gsTurnTimer');
       if (el) el.textContent = remaining + 's';
       if (remaining <= 0) { clearInterval(turnTimerHandle); render(); }
     };

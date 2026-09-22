@@ -81,6 +81,19 @@ function findCell(room, cellId) {
 
 function otherTeam(team) { return team === 'teamA' ? 'teamB' : 'teamA'; }
 
+// Whichever team is actually "on the clock" right now: the turn team while
+// a question is open and being answered, or the stealing team once a steal
+// has been claimed and is still unanswered. Used to gate self-service hint
+// usage so the team that ISN'T currently up can't burn a hint on someone
+// else's turn -- doesn't make sense to get a verbal hint about a question
+// you're not the one being asked right now.
+function currentActingTeam(room) {
+  const cs = room.cellState;
+  if (!cs) return null;
+  if (cs.stealTeam && cs.stealAnswer == null && !cs.stealTimedOut) return cs.stealTeam;
+  return cs.turnTeam;
+}
+
 function clearActiveTimer(room) {
   if (room._timeoutHandle) { clearTimeout(room._timeoutHandle); room._timeoutHandle = null; }
 }
@@ -450,6 +463,16 @@ function giveHint(room, socketId, team) {
   const isHost = room.hostId === socketId;
   const isOwnTeam = player && player.role === team;
   if (!isHost && !isOwnTeam) return { error: "Only the host or that team can take that team's hint." };
+  // Self-service only during YOUR OWN turn/steal window -- the other team
+  // shouldn't be able to burn their hint while it's not their turn. Only
+  // enforced while a question is actually open and being answered/stolen
+  // (currentActingTeam returns null between questions, when nobody's turn
+  // is in progress) -- hints between questions were always fine and still
+  // are, this only blocks using one during someone ELSE's active turn.
+  const acting = currentActingTeam(room);
+  if (!isHost && acting !== null && team !== acting) {
+    return { error: "It's not your turn yet -- wait until you're up to use a hint." };
+  }
   if (room.hints[team] <= 0) return { error: 'No hints left for that team.' };
   room.hints[team] -= 1;
   room.hintAnnounce = { team, kind: 'hint', at: Date.now() };

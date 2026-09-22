@@ -153,6 +153,10 @@ body:has(#app-gameshow) {
   overflow-x: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  /* Needed for the .gs-tv-screen-inner margin:auto centering trick below --
+     see that rule's comment for why. */
+  display: flex;
+  flex-direction: column;
 }
 #app-gameshow .gs-tv-screen::-webkit-scrollbar {
   display: none;
@@ -166,15 +170,26 @@ body:has(#app-gameshow) {
    (naming submit/vote, ready roster) used to sit pinned to the top with a
    big empty gap below; this centers them instead. Content that's actually
    tall enough to fill the frame (board grid, active question) just ends
-   up looking the same as before since it already occupies the space. */
+   up looking the same as before since it already occupies the space.
+   BUG FIXED: this used to be `justify-content: center` on the SCROLLING
+   parent (.gs-tv-screen). That's a known flexbox trap -- when centered
+   content is taller than the box, it overflows equally on both sides, but
+   only the overflow past the BOTTOM is reachable by scrolling; the part
+   that pokes out above the top edge is permanently stuck off-screen with
+   no way to scroll up to it. That's exactly what host reported: the score
+   row/board header cut off at the top, scrolling down fine but never able
+   to reach the top. `margin: auto 0` on the flex ITEM (this element, inside
+   the now-flex .gs-tv-screen) gives the same "center when there's slack"
+   behavior, but when content is taller than the box the auto margins just
+   collapse to 0 and it lays out top-aligned instead -- normal, fully
+   scrollable, nothing unreachable. */
 #app-gameshow .gs-tv-screen-inner {
   color: #fff;
   text-align: center;
-  height: 100%;
+  width: 100%;
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  margin: auto 0;
+  flex-shrink: 0;
 }
 
 #app-gameshow .gs-tv-screen-inner .hint {
@@ -895,11 +910,6 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-judge-result.wrong { color: #ff8a8a; }
 #app-gameshow .gs-judge-btns { display: flex; gap: 8px; margin-top: 8px; }
 
-#app-gameshow .gs-steal-block {
-  margin-top: 14px; padding: 8px 10px; border-radius: 8px; text-align: center;
-  border: 1px dashed rgba(255,204,0,0.5);
-}
-
 #app-gameshow .gs-hint-row {
   display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 16px;
 }
@@ -1055,7 +1065,6 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-cell-screenshot-frame .gs-cell-screenshot {
   display: block; width: 100%; height: 100%; object-fit: cover; margin: 0; border: none; border-radius: 0;
 }
-#app-gameshow .gs-zoom-hint { display: none; }
 /* The base .zoom-card caps out at 340px wide, which is fine for a text
    confirmation dialog but kept the "full picture" zoom tiny no matter how
    big the source image actually was. Let this one grow much larger and let
@@ -1065,7 +1074,31 @@ body:has(#app-gameshow) {
 }
 #app-gameshow .gs-zoom-card img {
   width: 100%; height: auto; max-width: 92vw; max-height: 85vh;
-  display: block; margin: 0 auto 10px; border-radius: 8px; object-fit: contain;
+  display: block; margin: 0 auto; border-radius: 8px; object-fit: contain;
+  cursor: zoom-in;
+}
+#app-gameshow .gs-zoom-hint {
+  color: #c7c7c7; font-size: 0.8rem; text-align: center; margin: 10px 0 0;
+}
+/* Click-to-zoom-further state: .gs-zoom-scroll (NOT the whole card)
+   becomes the scrollable viewport, and the image inside it renders far
+   larger, letting you scroll/drag to inspect any part of it up close --
+   this is the actual "zoom in a lot" behavior, not just a bigger fit-to-
+   screen image. Keeping the scrolling contained to just this inner wrapper
+   (rather than the whole .gs-zoom-card) means the hint text and Close
+   button below stay put instead of scrolling out of reach along with the
+   image. */
+#app-gameshow .gs-zoom-scroll {
+  max-width: 92vw;
+}
+#app-gameshow .gs-zoom-card.zoomed .gs-zoom-scroll {
+  width: min(92vw, 900px); height: 75vh; max-width: none;
+  overflow: auto;
+}
+#app-gameshow .gs-zoom-card.zoomed .gs-zoom-scroll img {
+  width: 250%; max-width: none; height: auto; max-height: none;
+  cursor: zoom-out;
+  margin: 0;
 }
 
 /* Uniform grid cells across all three columns -- table-layout:fixed above
