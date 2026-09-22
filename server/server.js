@@ -691,7 +691,7 @@ io.on('connection', (socket) => {
   socket.on('gsClaimSteal', ({ team }, cb) => {
     const room = gsRooms.findRoomBySocket(socket.id);
     if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
-    const result = gsBoard.claimSteal(room, socket.id, team);
+    const result = gsBoard.claimSteal(room, socket.id, team, () => broadcastGsRoom(room));
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     cb && cb({ ok: true });
     broadcastGsRoom(room);

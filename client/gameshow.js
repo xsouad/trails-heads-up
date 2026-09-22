@@ -237,14 +237,6 @@ socket.on('gsRoomState', (room) => {
   // can't press Enter to pick a name" bug. Skipping the render entirely
   // here removes the cause instead of patching around the symptom.
   if (state.comebackMode) return;
-  // Same root cause as the comeback-mode skip above: a full render() while
-  // the clap volume slider is mid-drag replaces that <input type="range">
-  // DOM node out from under the mouse, which silently kills the browser's
-  // native drag tracking -- the thumb stops responding until you let go and
-  // click again. That's the "volume levels are not working" bug. Skipping
-  // the render while a drag is in progress (see clapSliderDragging below)
-  // fixes it the same way.
-  if (clapSliderDragging) return;
   render();
 });
 
@@ -317,6 +309,18 @@ function restoreFocusedInput(saved) {
 }
 
 function render() {
+  // Guarding this here (not just the one gsRoomState call site) matters
+  // because render() gets triggered from lots of places while a question is
+  // actually open -- the turn timer and steal-window countdown both call it
+  // via setTimeout every tick. Any of those firing mid-drag on the clap
+  // volume slider replaces that <input type="range"> DOM node out from
+  // under the mouse, which silently kills the browser's native drag
+  // tracking (the thumb stops responding until you let go and click again).
+  // That's the "volume levels are not working" bug -- it kept happening
+  // even after the gsRoomState-only fix because those timer-driven renders
+  // weren't covered. Deferring every render() call while a drag is in
+  // progress covers all of them; endClapSliderDrag() re-renders once it ends.
+  if (clapSliderDragging) return;
   const focused = captureFocusedInput();
   let html = '';
   if (state.screen === 'landing') html = renderLanding();
@@ -974,10 +978,17 @@ function renderStealArea(iAmHost, active, viewerKind) {
   if (!active.stealTeam) return '';
   const mine = me && me.role === active.stealTeam;
   let inner;
-  if (active.stealAnswer == null) {
-    inner = mine
+  if (active.stealTimedOut) {
+    // The stealing team's own clock (separate from the original team's)
+    // ran out before they submitted anything -- nothing to judge, host can
+    // just close the question.
+    inner = `<p class="gs-judge-result wrong">Time ran out.</p>`;
+  } else if (active.stealAnswer == null) {
+    const stealRemaining = active.stealDeadline ? Math.max(0, Math.ceil((active.stealDeadline - Date.now()) / 1000)) : null;
+    const timerHtml = stealRemaining != null ? `<span class="gs-timer-box" id="gsStealTimer">${stealRemaining}s</span>` : '';
+    inner = (mine
       ? `<div class="join-row"><input type="text" id="gsStealInput" maxlength="200" placeholder="Steal answer" /><button type="button" class="secondary" id="gsSubmitStealBtn">Submit</button></div>`
-      : `<p class="hint">Waiting on ${teamLabel(active.stealTeam)}'s steal answer...</p>`;
+      : `<p class="hint">Waiting on ${teamLabel(active.stealTeam)}'s steal answer...</p>`) + timerHtml;
   } else {
     inner = `<p class="gs-locked-answer">"${active.stealAnswer}"</p>` + (active.stealJudged
       ? `<p class="gs-judge-result ${active.stealJudged}">${active.stealJudged === 'correct' ? 'Stole it!' : `Wrong. Loses ${Math.floor(active.value / 2)} pts.`}</p>`
@@ -1631,8 +1642,18 @@ function attachHandlers() {
   const zoomOverlay = document.getElementById('gsZoomLightbox');
   if (zoomOverlay) zoomOverlay.addEventListener('click', (e) => { if (e.target === zoomOverlay) { state.zoomImageSrc = null; render(); } });
 
+  // .volatile.emit -- NOT a regular .emit. Regular emits made while the
+  // socket happens to be mid-reconnect (a WiFi blip, laptop sleep, tab
+  // backgrounded, whatever) get buffered by socket.io-client and silently
+  // resent once the connection comes back, potentially much later. For a
+  // clap that's exactly the "it claps again at random times by itself"
+  // bug -- someone's earlier click replaying itself out of nowhere.
+  // Volatile emits are simply dropped instead of queued when not
+  // connected, which is correct here since a clap is purely a fun,
+  // ephemeral, no-state-kept broadcast (per the server-side comment) --
+  // there's nothing worth resending late.
   const clapBtn = document.getElementById('gsClapBtn');
-  if (clapBtn) clapBtn.addEventListener('click', () => socket.emit('gsClap'));
+  if (clapBtn) clapBtn.addEventListener('click', () => socket.volatile.emit('gsClap'));
 
   // Actual volume slider instead of a click-to-cycle mute button --
   // dragging sets clapVolume directly; dragging to 0 counts as muted.
@@ -2024,6 +2045,26 @@ function wireTurnTimer() {
   if (active.stage === 'revealed' && !active.stealTeam && (active.turnJudged === 'wrong' || active.turnJudged === 'timeout')) {
     const remaining = active.deadline - Date.now();
     if (remaining > 0) { turnTimerHandle = setTimeout(render, remaining + 50); return; }
+  }
+
+  // Post-claim steal countdown: the stealing team has their own fresh
+  // clock (stealDeadline) to submit an answer once they've claimed the
+  // steal. Same live-ticking pattern as the 'answering' clock above --
+  // updates #gsStealTimer every 500ms, then forces a full render right at
+  // 0 so the "Time ran out." state (stealTimedOut, set server-side) shows.
+  if (active.stealTeam && active.stealAnswer == null && !active.stealTimedOut && active.stealDeadline) {
+    const tick = () => {
+      const r = state.room;
+      const a = r && r.board && r.board.active;
+      if (!a || !a.stealTeam || a.stealAnswer != null || a.stealTimedOut) { clearInterval(turnTimerHandle); return; }
+      const remaining = Math.max(0, Math.ceil((a.stealDeadline - Date.now()) / 1000));
+      const el = document.getElementById('gsStealTimer');
+      if (el) el.textContent = remaining + 's';
+      if (remaining <= 0) { clearInterval(turnTimerHandle); render(); }
+    };
+    tick();
+    turnTimerHandle = setInterval(tick, 500);
+    return;
   }
 }
 

@@ -85,6 +85,10 @@ function clearActiveTimer(room) {
   if (room._timeoutHandle) { clearTimeout(room._timeoutHandle); room._timeoutHandle = null; }
 }
 
+function clearStealTimer(room) {
+  if (room._stealTimeoutHandle) { clearTimeout(room._stealTimeoutHandle); room._stealTimeoutHandle = null; }
+}
+
 // ---------- host-only content ----------
 // Non-host clients NEVER receive the actual answer -- the quote's speaker,
 // the trivia answer, the screenshot's answer image, the bonus answer. The
@@ -172,6 +176,8 @@ function openCellInternal(room, cell, scheduleTimeout) {
     stealTeam: null,
     stealAnswer: null,
     stealJudged: null,
+    stealDeadline: null,
+    stealTimedOut: false,
     // Separate from `stage`: `stage` just tracks whether we're past the
     // answering window (drives steal-offer/close-question UI). This tracks
     // whether the ACTUAL correct answer has been made public -- only ever
@@ -316,7 +322,11 @@ function openSteal(room, socketId, stealingTeam) {
 // it right. A 5-second full-screen "TEAM X is stealing" takeover is driven
 // by stealAnnouncedAt, which every client times locally off the same
 // timestamp.
-function claimSteal(room, socketId, team) {
+// Once claimed, the stealing team gets their OWN fresh ANSWER_SECONDS clock
+// to actually submit an answer (separate from the original team's clock) --
+// scheduleTimeout, if provided, gets called once that clock runs out with
+// nothing submitted, same wiring pattern as openCellInternal's timeout.
+function claimSteal(room, socketId, team, scheduleTimeout) {
   const cs = room.cellState;
   if (!cs) return { error: 'No question is open.' };
   if (Date.now() < cs.deadline) return { error: "Can't steal yet. Wait for the clock to run out." };
@@ -331,8 +341,20 @@ function claimSteal(room, socketId, team) {
   cs.stealAnswer = null;
   cs.stealJudged = null;
   cs.stealAnnouncedAt = Date.now();
+  cs.stealDeadline = Date.now() + ANSWER_SECONDS * 1000;
+  cs.stealTimedOut = false;
   if (!room.stealUsedBy) room.stealUsedBy = { teamA: false, teamB: false };
   room.stealUsedBy[team] = true;
+  clearStealTimer(room);
+  if (scheduleTimeout) {
+    const cellId = cs.cellId;
+    room._stealTimeoutHandle = setTimeout(() => {
+      const cs2 = room.cellState;
+      if (!cs2 || cs2.cellId !== cellId || cs2.stealTeam !== team || cs2.stealAnswer != null || cs2.stealJudged) return;
+      cs2.stealTimedOut = true;
+      scheduleTimeout(room);
+    }, ANSWER_SECONDS * 1000);
+  }
   return { room };
 }
 
@@ -340,12 +362,14 @@ function submitSteal(room, socketId, text) {
   const cs = room.cellState;
   if (!cs || !cs.stealTeam) return { error: 'No steal is open.' };
   if (cs.stealAnswer != null) return { error: 'Steal answer already submitted.' };
+  if (cs.stealTimedOut) return { error: "Time's up. Can't answer anymore." };
   const player = room.players.get(socketId);
   if (!player || player.role !== cs.stealTeam) return { error: 'Not on the stealing team.' };
   const clean = (text || '').trim().slice(0, 200);
   if (!clean) return { error: 'Type an answer first.' };
   cs.stealAnswer = clean;
   cs.stealTyping = null;
+  clearStealTimer(room);
   return { room };
 }
 
@@ -373,6 +397,7 @@ function judgeSteal(room, socketId, correct) {
   const cell = findCell(room, cs.cellId);
   cs.stealJudged = correct ? 'correct' : 'wrong';
   cs.stealJudgedAt = Date.now();
+  clearStealTimer(room);
   if (correct) {
     room.scores[cs.stealTeam] += cell.value;
   } else {
@@ -386,10 +411,14 @@ function closeCell(room, socketId) {
   if (room.hostId !== socketId) return { error: 'Only the host can close the question.' };
   const cs = room.cellState;
   if (!cs) return { error: 'No question is open.' };
+  // A timed-out steal (nothing submitted) needs no judgment to close on --
+  // same spirit as the original turn timeout never needing a Correct/Wrong
+  // click for the question to still be closeable.
   const canClose = cs.turnJudged === 'correct'
-    || (cs.turnJudged && (!cs.stealTeam || cs.stealJudged));
+    || (cs.turnJudged && (!cs.stealTeam || cs.stealJudged || cs.stealTimedOut));
   if (!canClose) return { error: 'Judge the answer (and any steal) first.' };
   clearActiveTimer(room);
+  clearStealTimer(room);
   room.activeCell = null;
   room.cellState = null;
   room.turnTeam = otherTeam(room.turnTeam);
@@ -405,6 +434,7 @@ function abandonCell(room, socketId) {
   if (room.hostId !== socketId) return { error: 'Only the host can do that.' };
   if (!room.cellState) return { error: 'No question is open.' };
   clearActiveTimer(room);
+  clearStealTimer(room);
   room.activeCell = null;
   room.cellState = null;
   if (room.board.every(c => c.used)) room.phase = 'finished';
@@ -555,7 +585,9 @@ function serializeBoard(room, forHost) {
       stealTyping: cs.stealTyping || null,
       stealJudged: cs.stealJudged,
       stealJudgedAt: cs.stealJudgedAt || null,
-      stealAnnouncedAt: cs.stealAnnouncedAt || null
+      stealAnnouncedAt: cs.stealAnnouncedAt || null,
+      stealDeadline: cs.stealDeadline || null,
+      stealTimedOut: !!cs.stealTimedOut
     } : null
   };
 }
