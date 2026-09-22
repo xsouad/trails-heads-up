@@ -24,7 +24,7 @@ const BONUS = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/gameshow-
 const VALUES = [100, 200, 300, 400, 500];
 const STARTING_HINTS = 3;
 const COMEBACK_GAP = 1000;
-const ANSWER_SECONDS = 60;
+const ANSWER_SECONDS = 120;
 
 const POOLS = { quotes: QUOTES, trivia: TRIVIA, screenshots: SCREENSHOTS };
 
@@ -319,7 +319,7 @@ function openSteal(room, socketId, stealingTeam) {
 function claimSteal(room, socketId, team) {
   const cs = room.cellState;
   if (!cs) return { error: 'No question is open.' };
-  if (Date.now() < cs.deadline) return { error: "Can't steal yet. Wait for the full minute." };
+  if (Date.now() < cs.deadline) return { error: "Can't steal yet. Wait for the clock to run out." };
   if (cs.turnJudged !== 'wrong' && cs.turnJudged !== 'timeout') {
     return { error: 'Nothing to steal here.' };
   }

@@ -1356,6 +1356,21 @@ const SPEED_ROUND_SECONDS = 60;
 const NAMES_PER_POINT = 5;
 const POINTS_PER_TIER = 100; // each tier of 5 correct names is worth 100 game points
 
+// Wrong guesses now cost tier progress instead of being free -- a wrong
+// guess cancels out one correct guess before it counts toward the next
+// 5-correct tier, so getting sloppy can walk back a tier that was already
+// banked. Applies everywhere points are computed from a speed-round feed:
+// practice mode, the leaderboard, and the live "That Won't Be Necessary"
+// in-game comeback trigger.
+function speedNetCount(feed) {
+  const correctCount = feed.filter(f => f.ok).length;
+  const wrongCount = feed.length - correctCount;
+  return Math.max(0, correctCount - wrongCount);
+}
+function speedPoints(feed) {
+  return Math.floor(speedNetCount(feed) / NAMES_PER_POINT) * POINTS_PER_TIER;
+}
+
 function renderLeaderboard() {
   const board = state.leaderboard || [];
   if (!board.length) return '<p class="hint">No scores yet. Be the first!</p>';
@@ -1373,7 +1388,9 @@ function renderSpeedIntro() {
       <p class="hint">
         A character's picture shows up on screen. Type their name (or pick
         it from the dropdown) as fast as you can, then the next one appears.
-        Every ${NAMES_PER_POINT} correct names earns ${POINTS_PER_TIER} points. ${SPEED_ROUND_SECONDS} seconds on the clock.
+        Every ${NAMES_PER_POINT} correct names earns ${POINTS_PER_TIER} points --
+        but a wrong guess cancels one out, so getting sloppy can cost you a
+        tier. ${SPEED_ROUND_SECONDS} seconds on the clock.
       </p>
       <button type="button" class="primary" id="gsStartSpeedBtn">Start (${SPEED_ROUND_SECONDS}s)</button>
       <div style="margin-top:10px;"><button type="button" class="secondary" id="gsBackFromIntroBtn">Back</button></div>
@@ -1387,9 +1404,9 @@ function renderSpeedIntro() {
 
 function renderSpeedPlaying() {
   const s = state.speed;
-  const correctCount = s.feed.filter(f => f.ok).length;
-  const points = Math.floor(correctCount / NAMES_PER_POINT) * POINTS_PER_TIER;
-  const progressInTier = correctCount % NAMES_PER_POINT;
+  const netCount = speedNetCount(s.feed);
+  const points = Math.floor(netCount / NAMES_PER_POINT) * POINTS_PER_TIER;
+  const progressInTier = netCount % NAMES_PER_POINT;
   return `
     <div class="${state.comebackMode ? 'gs-comeback-screen' : 'card gs-speed-card'}">
       ${state.comebackMode ? '<p class="gs-comeback-onscreen-title">That Won\'t Be Necessary</p>' : ''}
@@ -1433,7 +1450,7 @@ function renderSpeedResults() {
   const s = state.speed;
   const correctCount = s.feed.filter(f => f.ok).length;
   const wrongCount = s.feed.length - correctCount;
-  const points = Math.floor(correctCount / NAMES_PER_POINT) * POINTS_PER_TIER;
+  const points = speedPoints(s.feed);
   return `
     <div class="card center">
       <h2 class="gs-gate-title">Time's up!</h2>
@@ -1902,7 +1919,7 @@ function attachHandlers() {
     const s = state.speed;
     const correctCount = s.feed.filter(f => f.ok).length;
     const wrongCount = s.feed.length - correctCount;
-    const points = Math.floor(correctCount / NAMES_PER_POINT) * POINTS_PER_TIER;
+    const points = speedPoints(s.feed);
     socket.emit('gsSubmitLeaderboardScore', { name, points, correctCount, wrongCount }, (res) => {
       if (!res || !res.ok) { showGsNotice('Could not save your score.'); return; }
       s.savedToLeaderboard = true;
@@ -2045,7 +2062,7 @@ function startSpeedRound() {
     // countdown ticking too, not just updating on each guess.
     if (state.comebackMode) {
       const correctCount = state.speed.feed.filter(f => f.ok).length;
-      const points = Math.floor(correctCount / NAMES_PER_POINT) * POINTS_PER_TIER;
+      const points = speedPoints(state.speed.feed);
       socket.emit('gsComebackLive', { points, correctCount, timeLeft: state.speed.timeLeft, img: gsImgUrl(state.speed.current) }, () => {});
     }
   }, 1000);
@@ -2055,8 +2072,7 @@ function endSpeedRound() {
   clearInterval(speedTimerHandle);
   speedTimerHandle = null;
   if (state.comebackMode) {
-    const correctCount = state.speed.feed.filter(f => f.ok).length;
-    const points = Math.floor(correctCount / NAMES_PER_POINT) * POINTS_PER_TIER;
+    const points = speedPoints(state.speed.feed);
     socket.emit('gsFinishComeback', { points }, () => {});
     state.comebackMode = false;
     state.screen = 'stage';
@@ -2101,9 +2117,10 @@ function gsSubmitGuess(guessedName) {
   const topbar = document.querySelector('.gs-speed-topbar');
   const feedEl = document.getElementById('gsFeed');
   const correctCount = s.feed.filter(f => f.ok).length;
-  const points = Math.floor(correctCount / NAMES_PER_POINT) * POINTS_PER_TIER;
+  const netCount = speedNetCount(s.feed);
+  const points = Math.floor(netCount / NAMES_PER_POINT) * POINTS_PER_TIER;
   if (topbar) {
-    const progressInTier = correctCount % NAMES_PER_POINT;
+    const progressInTier = netCount % NAMES_PER_POINT;
     topbar.querySelector('.gs-speed-points').textContent = `${points} pt${points === 1 ? '' : 's'}`;
     topbar.querySelector('.gs-speed-progress').textContent = `${progressInTier}/${NAMES_PER_POINT} to next`;
   }
