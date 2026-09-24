@@ -64,7 +64,10 @@ let state = {
   clapVolume: 0.5,
   zoomImageSrc: null, // set to open the screenshot lightbox
   zoomedIn: false, // click the lightbox image to zoom in much further and pan around
-  leaderboard: [] // global speed-round leaderboard, shared by every visitor
+  leaderboard: [], // global speed-round leaderboard, shared by every visitor
+  cellPreview: null, // { content, column } while the host's "peek at this question" popup is open
+  phonePicker: null, // team string while the Phone a Friend spectator picker is open
+  reassignTarget: null // player id while the host's "move this player" picker is open
 };
 
 // ---------- clap volume / mute (persisted across visits) ----------
@@ -150,10 +153,15 @@ function throttleTyping(fn, ms = 150) {
 
 // Host-only read-only peek at an unopened cell, shown as a small overlay
 // so the host can decide whether it needs rerolling before opening it.
-function showGsCellPreview(content, column) {
-  const host = document.querySelector('.gs-tv-screen') || document.getElementById('gsRoot');
+// Open/closed state lives in `state.cellPreview` (not just a bare DOM node)
+// so render() can redraw it after every screen rebuild -- see the note by
+// its call site in render() for why that matters.
+function renderCellPreviewOverlay() {
   const existing = document.getElementById('gsCellPreviewOverlay');
   if (existing) existing.remove();
+  if (!state.cellPreview) return;
+  const { content, column } = state.cellPreview;
+  const host = document.querySelector('.gs-tv-screen') || document.getElementById('gsRoot');
   const overlay = document.createElement('div');
   overlay.id = 'gsCellPreviewOverlay';
   overlay.className = 'gs-preview-overlay';
@@ -170,20 +178,30 @@ function showGsCellPreview(content, column) {
   overlay.innerHTML = `<div class="gs-preview-box">${inner}<button type="button" class="secondary gs-tiny-btn" id="gsClosePreviewBtn">Close</button></div>`;
   (host || document.body).appendChild(overlay);
   const closeBtn = document.getElementById('gsClosePreviewBtn');
-  if (closeBtn) closeBtn.addEventListener('click', () => overlay.remove());
+  if (closeBtn) closeBtn.addEventListener('click', () => { state.cellPreview = null; overlay.remove(); });
+}
+function showGsCellPreview(content, column) {
+  state.cellPreview = { content, column };
+  renderCellPreviewOverlay();
 }
 
 // Self-service Phone a Friend: a competitor clicking their own team's
 // unused phone icon gets a quick "who do you want to call" picker instead
 // of having to ask the host to do it for them. Same overlay mechanics as
 // the cell preview above.
-function showGsPhonePicker(team) {
+// Same state-driven pattern as the cell preview above -- state.phonePicker
+// holds which team opened the picker, so it survives a broadcast-triggered
+// screen rebuild instead of vanishing the instant anyone else in the room
+// does anything.
+function renderPhonePickerOverlay() {
+  const existing = document.getElementById('gsPhonePickerOverlay');
+  if (existing) existing.remove();
+  if (!state.phonePicker) return;
+  const team = state.phonePicker;
   const room = state.room;
   if (!room) return;
   const spectators = room.players.filter(p => p.role === 'spectator');
-  const existing = document.getElementById('gsPhonePickerOverlay');
-  if (existing) existing.remove();
-  if (!spectators.length) { showGsNotice('No one in the audience to call yet.'); return; }
+  if (!spectators.length) { state.phonePicker = null; return; }
   const host = document.querySelector('.gs-tv-screen') || document.getElementById('gsRoot');
   const overlay = document.createElement('div');
   overlay.id = 'gsPhonePickerOverlay';
@@ -203,14 +221,90 @@ function showGsPhonePicker(team) {
       socket.emit('gsUsePhoneAFriend', { team, spectatorId: btn.dataset.phonePick }, (res) => {
         if (!res || !res.ok) showGsNotice((res && res.error) || "Couldn't place the call.");
       });
+      state.phonePicker = null;
       overlay.remove();
     });
   });
   const closeBtn = document.getElementById('gsClosePhonePickerBtn');
-  if (closeBtn) closeBtn.addEventListener('click', () => overlay.remove());
+  if (closeBtn) closeBtn.addEventListener('click', () => { state.phonePicker = null; overlay.remove(); });
+}
+function showGsPhonePicker(team) {
+  const room = state.room;
+  if (!room) return;
+  const spectators = room.players.filter(p => p.role === 'spectator');
+  if (!spectators.length) { showGsNotice('No one in the audience to call yet.'); return; }
+  state.phonePicker = team;
+  renderPhonePickerOverlay();
+}
+
+// Host-only: pick a new role for another player (mid-game included). Same
+// state-driven overlay pattern as the two pickers above.
+function renderReassignOverlay() {
+  const existing = document.getElementById('gsReassignOverlay');
+  if (existing) existing.remove();
+  if (!state.reassignTarget) return;
+  const room = state.room;
+  if (!room) return;
+  const target = room.players.find(p => p.id === state.reassignTarget);
+  if (!target) { state.reassignTarget = null; return; }
+  const iAmHost = room.hostId === socket.id;
+  if (!iAmHost) { state.reassignTarget = null; return; }
+  const host = document.querySelector('.gs-tv-screen') || document.getElementById('gsRoot');
+  const overlay = document.createElement('div');
+  overlay.id = 'gsReassignOverlay';
+  overlay.className = 'gs-preview-overlay';
+  const roleBtn = (role, label) => target.role === role
+    ? `<button type="button" class="secondary gs-small-btn" disabled>${label} (current)</button>`
+    : `<button type="button" class="secondary gs-small-btn" data-reassign-role="${role}">${label}</button>`;
+  overlay.innerHTML = `
+    <div class="gs-preview-box">
+      <p class="gs-preview-text" style="margin-bottom:10px;">Move ${target.name} to...</p>
+      <div class="gs-phone-picker-list">
+        ${roleBtn('teamA', teamLabel('teamA'))}
+        ${roleBtn('teamB', teamLabel('teamB'))}
+        ${roleBtn('spectator', 'Spectator')}
+        ${roleBtn('host', 'Host')}
+      </div>
+      <button type="button" class="secondary gs-tiny-btn" id="gsCloseReassignBtn" style="margin-top:10px;">Cancel</button>
+    </div>
+  `;
+  (host || document.body).appendChild(overlay);
+  overlay.querySelectorAll('[data-reassign-role]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      socket.emit('gsHostSetRole', { targetId: target.id, role: btn.dataset.reassignRole }, (res) => {
+        if (!res || !res.ok) showGsNotice((res && res.error) || "Couldn't move that player.");
+      });
+      state.reassignTarget = null;
+      overlay.remove();
+    });
+  });
+  const closeBtn = document.getElementById('gsCloseReassignBtn');
+  if (closeBtn) closeBtn.addEventListener('click', () => { state.reassignTarget = null; overlay.remove(); });
 }
 socket.on('gsClap', ({ name }) => { playClap(); });
-socket.on('connect', () => { if (!state.room) refreshGsPendingRooms(); });
+// Briefly backgrounding the tab on mobile (switching apps, the screen
+// locking) drops the socket -- socket.io auto-reconnects, but that's a
+// brand-new connection with a brand-new socket.id, so without this the
+// server would just see a stranger and, after the grace period, drop the
+// old slot as an actual leave. If we were already in a room when this
+// fires, reclaim that slot by clientId instead of falling through to the
+// landing screen's "any pending rooms?" refresh.
+socket.on('connect', () => {
+  if (state.room && state.room.code) {
+    socket.emit('gsRejoin', { code: state.room.code, clientId }, (res) => {
+      if (!res || !res.ok) {
+        // The grace period had already expired server-side, or the room's
+        // gone -- nothing left to reclaim, fall back to the landing flow.
+        state.room = null;
+        state.screen = 'landing';
+        refreshGsPendingRooms();
+        render();
+      }
+    });
+    return;
+  }
+  if (!state.room) refreshGsPendingRooms();
+});
 socket.on('gsRoomState', (room) => {
   state.room = room;
   // Avatar customization happens AFTER you're in a room, not before --
@@ -309,6 +403,42 @@ function restoreFocusedInput(saved) {
   try { el.setSelectionRange(saved.selectionStart, saved.selectionEnd); } catch (e) { /* ignore */ }
 }
 
+// Every <select> the host has picked something in (team dropdowns, score
+// adjust, bonus-question team, comeback player) also gets wiped back to its
+// default option on every re-render, same root cause as the focused-input
+// problem above -- a broadcast from ANYONE (a spectator swapping seats, a
+// hint being taken) rebuilds the whole screen and silently resets whatever
+// the host had selected. Captured/restored by id alongside the focused
+// input, whether or not it currently has focus.
+function captureSelectValues() {
+  const values = {};
+  gsRoot.querySelectorAll('select[id]').forEach(el => { values[el.id] = el.value; });
+  return values;
+}
+function restoreSelectValues(saved) {
+  if (!saved) return;
+  Object.keys(saved).forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.tagName === 'SELECT') el.value = saved[id];
+  });
+}
+
+// The whole TV screen scrolls (see .gs-tv-screen CSS) and, since render()
+// throws away and rebuilds that element from scratch on every broadcast,
+// its scroll position was silently resetting to the top every time ANYONE
+// in the room did anything -- typing, a spectator changing seats, a timer
+// tick. That's the "my screen scrolls up on its own" bug. Captured/restored
+// across every render() call, same pattern as the focused input above.
+function captureTvScroll() {
+  const el = document.querySelector('.gs-tv-screen');
+  return el ? el.scrollTop : null;
+}
+function restoreTvScroll(saved) {
+  if (saved == null) return;
+  const el = document.querySelector('.gs-tv-screen');
+  if (el) el.scrollTop = saved;
+}
+
 function render() {
   // Guarding this here (not just the one gsRoomState call site) matters
   // because render() gets triggered from lots of places while a question is
@@ -323,6 +453,8 @@ function render() {
   // progress covers all of them; endClapSliderDrag() re-renders once it ends.
   if (clapSliderDragging) return;
   const focused = captureFocusedInput();
+  const selectValues = captureSelectValues();
+  const tvScroll = captureTvScroll();
   let html = '';
   if (state.screen === 'landing') html = renderLanding();
   else if (state.screen === 'avatarSetup') html = renderAvatarSetup();
@@ -342,6 +474,18 @@ function render() {
   renderScreenNotices();
   attachHandlers();
   restoreFocusedInput(focused);
+  restoreSelectValues(selectValues);
+  restoreTvScroll(tvScroll);
+  // Preview/picker overlays (the "peek at this question" popup, the Phone a
+  // Friend spectator picker) are appended as extra DOM nodes on top of the
+  // rebuilt screen -- since the screen above them was just thrown away and
+  // recreated, they'd vanish on the very next broadcast from ANYONE (e.g. a
+  // spectator changing seats) even though nothing about them changed. Their
+  // open/closed state now lives in `state`, so they get redrawn here every
+  // time, same as everything else.
+  renderCellPreviewOverlay();
+  renderPhonePickerOverlay();
+  renderReassignOverlay();
 }
 
 function myPlayer() {
@@ -483,6 +627,7 @@ function renderAvatarSetup() {
 function renderPodium(teamKey) {
   const room = state.room;
   const me = myPlayer();
+  const iAmHost = room.hostId === socket.id;
   const members = {};
   room.players.forEach(p => { if (p.role === teamKey && p.slot != null) members[p.slot] = p; });
   const slots = [0, 1, 2].map(slotIdx => {
@@ -497,8 +642,12 @@ function renderPodium(teamKey) {
     // after the game actually started instead of reverting to the team's
     // own blue/red.
     const showReady = room.phase === 'lobby' && occ && occ.ready;
+    // Host-only "move this player" control -- lets the host reassign anyone
+    // (even mid-game, even off their own team) without them leaving/rejoining.
+    const reassignBtn = (iAmHost && occ) ? `<button type="button" class="gs-reassign-btn" data-reassign="${occ.id}" title="Move ${occ.name}">⇄</button>` : '';
     return `
       <${tag} class="gs-podium ${isEmpty ? 'empty' : 'occupied'} ${mine ? 'mine' : ''} ${showReady ? 'is-ready' : ''}" ${attrs}>
+        ${reassignBtn}
         <div class="gs-podium-avatar-wrap">
           ${occ ? `<div class="gs-podium-avatar" data-avatar-for="${occ.id}"></div>` : '<span class="gs-podium-plus">+</span>'}
         </div>
@@ -521,10 +670,16 @@ function renderPodium(teamKey) {
 function renderHostSlot() {
   const room = state.room;
   const me = myPlayer();
+  const iAmHost = room.hostId === socket.id;
   const host = room.players.find(p => p.role === 'host');
   const mine = host && me && host.id === me.id;
+  // Host-only, and only shown for the OTHER occupant (the current host
+  // can't reassign themselves via this button -- they'd just leave the
+  // room without a host, which is what leaving/becoming spectator is for).
+  const reassignBtn = (iAmHost && host && !mine) ? `<button type="button" class="gs-reassign-btn" data-reassign="${host.id}" title="Move ${host.name}">⇄</button>` : '';
   return `
     <div class="gs-host-slot ${host ? 'occupied' : 'empty'} ${mine ? 'mine' : ''}">
+      ${reassignBtn}
       <div class="gs-podium-avatar-wrap">
         ${host ? `<div class="gs-podium-avatar" data-avatar-for="${host.id}"></div>` : ''}
       </div>
@@ -558,11 +713,14 @@ function renderHostModal() {
 function renderSeat(seat) {
   const room = state.room;
   const me = myPlayer();
+  const iAmHost = room.hostId === socket.id;
   const occ = room.players.find(p => p.role === 'spectator' && p.seat === seat);
   if (occ) {
     const mine = me && occ.id === me.id;
+    const reassignBtn = iAmHost ? `<button type="button" class="gs-reassign-btn gs-reassign-btn-seat" data-reassign="${occ.id}" title="Move ${occ.name}">⇄</button>` : '';
     return `
       <div class="gs-seat occupied ${mine ? 'mine' : ''}">
+        ${reassignBtn}
         <div class="gs-seat-avatar" data-avatar-for="${occ.id}"></div>
         <span class="gs-seat-name">${occ.name}</span>
       </div>
@@ -1102,7 +1260,7 @@ function activeTakeover(active) {
 // renders nothing beforehand -- no separate stage check needed here).
 function renderRevealedAnswer(active) {
   if (active.column === 'quotes' && active.content.character) {
-    return `<p class="gs-revealed-answer">— ${active.content.character}${active.content.game ? ` (${active.content.game})` : ''}</p>`;
+    return `<p class="gs-revealed-answer">- ${active.content.character}${active.content.game ? ` (${active.content.game})` : ''}</p>`;
   }
   if ((active.column === 'trivia' || active.column === 'bonus') && active.content.answer) {
     return `<p class="gs-revealed-answer">Correct answer: ${active.content.answer}</p>`;
@@ -1162,7 +1320,7 @@ function renderActiveCellPanel(iAmHost) {
       ${renderStealArea(iAmHost, active, viewerKind)}
       ${iAmHost ? `
         <div class="center" style="margin-top:10px;">
-          ${!active.answerRevealed ? `<button type="button" class="primary" id="gsRevealAnswerBtn">Reveal Answer</button>` : ''}
+          ${!active.answerRevealed && canClose ? `<button type="button" class="primary" id="gsRevealAnswerBtn">Reveal Answer</button>` : ''}
           ${active.stage === 'revealed' && canClose ? `<button type="button" class="primary" id="gsCloseCellBtn">Close Question</button>` : ''}
           <button type="button" class="secondary gs-small-btn" id="gsAbandonCellBtn">Cancel Question</button>
         </div>
@@ -1280,11 +1438,12 @@ function renderGameOverScreen(iAmHost) {
   `;
 }
 
-function renderHostNiceTakeover() {
+function renderHostNiceTakeover(hostNice) {
+  const mean = hostNice && hostNice.amount < 0;
   return `
     <div class="gs-takeover">
-      <div class="gs-takeover-box good">
-        <p class="gs-takeover-text">THE HOST FELT NICE</p>
+      <div class="gs-takeover-box ${mean ? 'bad' : 'good'}">
+        <p class="gs-takeover-text">${mean ? 'THE HOST FELT MEAN' : 'THE HOST FELT NICE'}</p>
       </div>
     </div>
   `;
@@ -1328,7 +1487,7 @@ function renderScreenBoard() {
   if (room.phase === 'finished') return renderGameOverScreen(iAmHost);
 
   const hostNiceActive = room.board.hostNice && (Date.now() - room.board.hostNice.at < HOST_NICE_MS);
-  if (hostNiceActive) return renderHostNiceTakeover();
+  if (hostNiceActive) return renderHostNiceTakeover(room.board.hostNice);
 
   const hintAnnounceActive = room.board.hintAnnounce && (Date.now() - room.board.hintAnnounce.at < HINT_ANNOUNCE_MS);
   if (hintAnnounceActive) return renderHintAnnounceTakeover(room.board.hintAnnounce);
@@ -1693,6 +1852,15 @@ function attachHandlers() {
       socket.emit('gsSetRole', { role: 'spectator', seat }, (res) => {
         if (!res.ok) showGsNotice(res.error || "Couldn't sit there.");
       });
+    });
+  });
+
+  // stage: host's "move this player" buttons on podiums/host slot/seats
+  document.querySelectorAll('[data-reassign]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.reassignTarget = btn.dataset.reassign;
+      renderReassignOverlay();
     });
   });
 

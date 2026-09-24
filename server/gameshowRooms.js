@@ -65,7 +65,8 @@ function joinRoom(code, socketId, name, avatar, clientId) {
     role: 'unassigned',
     seat: null,
     slot: null, // which of the 3 podium slots on their team (0/1/2)
-    ready: false
+    ready: false,
+    disconnected: false // true during the reconnect grace window -- see markDisconnected/reconnectByClientId
   });
   return { room };
 }
@@ -109,8 +110,10 @@ function setRole(room, socketId, role, opts = {}) {
 
   if (role === 'teamA' || role === 'teamB') {
     // Teams lock in once the actual game starts -- no switching podiums or
-    // jumping to the other team mid-game. Spectating is still always open.
-    if ((room.phase === 'playing' || room.phase === 'finished')) {
+    // jumping to the other team mid-game on your own. Spectating is still
+    // always open. `opts.force` (only ever set by hostSetRole below) lets
+    // the HOST override this specific lock to move someone in deliberately.
+    if ((room.phase === 'playing' || room.phase === 'finished') && !opts.force) {
       return { error: 'Teams are locked in for this game. You can still spectate.' };
     }
     if (player.role !== role && teamCount(room, role) >= MAX_TEAM_SIZE) {
@@ -171,6 +174,32 @@ function setRole(room, socketId, role, opts = {}) {
   return { error: 'Unknown role.' };
 }
 
+// Host-driven reassignment of ANOTHER player's role -- e.g. moving a
+// spectator onto a team, or handing the host badge to someone else, mid-game
+// included. Only the current host can call this, and it's the one path that
+// can bypass the "teams are locked in" rule above (opts.force), since that
+// rule exists to stop players from jumping teams on their own mid-game, not
+// to stop the host from managing the room.
+function hostSetRole(room, hostSocketId, targetId, role, opts = {}) {
+  if (room.hostId !== hostSocketId) return { error: 'Only the host can do that.' };
+  if (!room.players.has(targetId)) return { error: 'Player not found.' };
+
+  if (role === 'host') {
+    if (targetId === hostSocketId) return { room };
+    const target = room.players.get(targetId);
+    const oldHost = room.players.get(room.hostId);
+    if (oldHost) { oldHost.role = 'spectator'; oldHost.seat = null; oldHost.slot = null; oldHost.ready = false; }
+    target.role = 'host';
+    target.seat = null;
+    target.slot = null;
+    room.hostId = targetId;
+    room.hostClientId = target.clientId;
+    return { room };
+  }
+
+  return setRole(room, targetId, role, { ...opts, force: true });
+}
+
 function setAvatar(room, socketId, avatarObj) {
   const player = room.players.get(socketId);
   if (!player) return { error: 'Not in this room.' };
@@ -229,6 +258,51 @@ function removeBySocket(socketId) {
     }
   }
   return {};
+}
+
+// Briefly backgrounding a mobile browser tab (switching apps for a moment,
+// the screen locking) drops the socket, but it's not the same as actually
+// leaving -- the player is still "there" and comes right back. Unlike a
+// real leave, this just flags the player rather than removing them; the
+// caller (server.js) pairs this with a grace-period timer that only
+// actually calls removeBySocket if reconnectByClientId hasn't happened by
+// the time it fires.
+function markDisconnected(socketId) {
+  for (const room of rooms.values()) {
+    const player = room.players.get(socketId);
+    if (player) {
+      player.disconnected = true;
+      return { room, player };
+    }
+  }
+  return {};
+}
+
+// The other half of the pair above -- a reconnecting browser (same
+// clientId, new socket.id after the transport reconnects) reclaims its old
+// slot instead of the app treating it as a stranger walking in fresh. The
+// Map is re-keyed from the stale socket id to the new one, and anything
+// that pointed at the old socket id (host badge, `id` field) is updated to
+// match so `room.hostId === socket.id`-style checks keep working.
+function reconnectByClientId(code, clientId, newSocketId) {
+  const room = getRoom(code);
+  if (!room) return { error: 'That room no longer exists.' };
+  let oldSocketId = null;
+  let player = null;
+  for (const [sid, p] of room.players.entries()) {
+    if (p.clientId === clientId) { oldSocketId = sid; player = p; break; }
+  }
+  if (!player) return { error: 'No matching player in that room.' };
+  if (oldSocketId !== newSocketId) {
+    room.players.delete(oldSocketId);
+    player.id = newSocketId;
+    player.disconnected = false;
+    room.players.set(newSocketId, player);
+    if (room.hostId === oldSocketId) { room.hostId = newSocketId; }
+  } else {
+    player.disconnected = false;
+  }
+  return { room, player };
 }
 
 // ---------- team naming minigame ----------
@@ -372,7 +446,8 @@ function serialize(room) {
 }
 
 module.exports = {
-  createRoom, getRoom, joinRoom, findRoomBySocket, setRole, removeBySocket,
+  createRoom, getRoom, joinRoom, findRoomBySocket, setRole, hostSetRole, removeBySocket,
+  markDisconnected, reconnectByClientId,
   setAvatar, setProfile, toggleReady, allCompetitorsReady,
   startNamingPhase, submitNameCandidate, voteNameCandidate, finishNamingPhase, everyoneVoted, everyoneSubmitted,
   serialize, listPendingRooms, MAX_TEAM_SIZE, MAX_SPECTATOR_SEATS

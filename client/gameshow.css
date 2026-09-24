@@ -255,6 +255,7 @@ body:has(#app-gameshow) {
 #app-gameshow .gs-team-column.teamB { justify-content: flex-start; }
 
 #app-gameshow .gs-podium {
+  position: relative;
   width: 76px;
   flex-shrink: 0;
   display: flex;
@@ -267,6 +268,29 @@ body:has(#app-gameshow) {
   cursor: default;
   font-family: inherit;
 }
+
+/* Host-only "move this player" button -- a small badge tucked in the
+   top-right corner of whatever it's sitting on (podium, host slot, seat)
+   so it never competes for space with the avatar/name underneath. */
+#app-gameshow .gs-reassign-btn {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  line-height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.4);
+  background: #fff4c2;
+  color: #4a3d00;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+#app-gameshow .gs-reassign-btn:hover { background: #ffe066; }
+#app-gameshow .gs-reassign-btn-seat { top: -2px; right: -2px; }
 
 #app-gameshow .gs-podium.empty {
   cursor: pointer;
@@ -346,6 +370,7 @@ body:has(#app-gameshow) {
 }
 
 #app-gameshow .gs-host-slot {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -421,6 +446,7 @@ body:has(#app-gameshow) {
 }
 
 #app-gameshow .gs-seat {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -803,6 +829,46 @@ body:has(#app-gameshow) {
   #app-gameshow .gs-seat { min-height: 58px; padding: 4px 2px 6px; }
   #app-gameshow .gs-seat-avatar { width: 30px; height: 30px; }
   #app-gameshow .gs-naming-cols { flex-direction: column; }
+
+  /* The TV screen was a fixed 520px tall black box on every screen,
+     desktop or phone -- fine when it's full of a board grid, but on
+     short-content screens (naming, ready roster) that left a phone
+     showing mostly empty black with a tiny prompt floating in the
+     middle. Cut the fixed height and padding down on narrow screens so
+     short content doesn't look lost, while still leaving room for the
+     genuinely tall board-grid screen to scroll (overflow-y: auto still
+     applies from the base rule). */
+  #app-gameshow .gs-tv-screen { height: 380px; padding: 24px 16px; }
+  #app-gameshow .gs-tv-screen.in-game { height: 460px; }
+
+  /* Hint-bulb / Phone a Friend icon columns were still full desktop size
+     here, so on a narrow phone they poked out past the screen's own
+     padding and got clipped by the black bezel. Shrink the icons and
+     tighten the gaps around the scoreboard so both team's columns (plus
+     the score box between them) actually fit inside the screen. */
+  #app-gameshow .gs-scoreboard { gap: 8px; }
+  #app-gameshow .gs-score-row { gap: 4px; }
+  #app-gameshow .gs-icon-box { width: 22px; height: 22px; font-size: 0.85rem; border-radius: 6px; }
+  #app-gameshow .gs-icon-stack { gap: 2px; }
+  #app-gameshow .gs-phone-icon { width: 24px; height: 68px; font-size: 1rem; }
+  #app-gameshow .gs-score-block { min-width: 70px; padding: 5px 8px; }
+  #app-gameshow .gs-score-value { font-size: 1.1rem; }
+  #app-gameshow .gs-score-label { font-size: 0.65rem; }
+  #app-gameshow .gs-hint-mini-btn { font-size: 0.6rem; padding: 1px 5px; }
+
+  /* Host on its own row, both teams below on their own lines (rather than
+     one long horizontal strip that couldn't fit all 6+ competitors plus
+     the host on a phone width), per the requested layout. */
+  #app-gameshow .gs-floor {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "host host" "teamA teamB";
+    row-gap: 12px;
+    margin-top: 18px;
+  }
+  #app-gameshow .gs-floor > .gs-host-slot { grid-area: host; justify-self: center; }
+  #app-gameshow .gs-floor > .gs-team-column.teamA { grid-area: teamA; }
+  #app-gameshow .gs-floor > .gs-team-column.teamB { grid-area: teamB; }
+  #app-gameshow .gs-team-column { flex-wrap: wrap; gap: 6px; justify-content: center !important; }
 }
 
 /* ---------- the actual quiz board ---------- */

@@ -41,6 +41,16 @@ function cancelPendingRemoval(clientId) {
   if (timer) { clearTimeout(timer); pendingRemovals.delete(clientId); }
 }
 
+// Gameshow's own grace-period timers, same idea as pendingRemovals above but
+// kept separate since it's a different room system (gameshowRooms.js) with
+// its own clientId space.
+const gsPendingRemovals = new Map();
+function cancelGsPendingRemoval(clientId) {
+  if (!clientId) return;
+  const timer = gsPendingRemovals.get(clientId);
+  if (timer) { clearTimeout(timer); gsPendingRemovals.delete(clientId); }
+}
+
 // Character/event/avatar images almost never change once uploaded, but were
 // being served with no caching headers at all -- every single navigation
 // that touches a new image (a game-over reveal, a fresh avatar layer, etc)
@@ -295,15 +305,26 @@ io.on('connection', (socket) => {
   socket.on('disconnect', (reason) => {
     log('DISCONNECT', socket.id, 'reason:', reason);
 
-    // Gameshow rooms don't have Heads Up's soft-disconnect/grace-period
-    // system yet -- a drop just removes them from the lobby outright, same
-    // as an explicit leave.
-    const gsResult = gsRooms.removeBySocket(socket.id);
-    if (gsResult.room) {
-      // No toast here -- the on-screen player roster (sent as part of
-      // gsRoomState) already reflects who's still in the room, so a
-      // separate "X left" notice would just be noise.
-      broadcastGsRoom(gsResult.room);
+    // Same grace-period idea as Heads Up below: a drop doesn't remove the
+    // player outright anymore -- that was the "switching tabs on my phone
+    // for a second kicks me from the game" bug (briefly backgrounding a
+    // mobile tab is exactly a drop-then-reconnect, not someone actually
+    // leaving). They're flagged disconnected and get a grace window to
+    // reconnect (gsRejoin, matched by clientId) before they're actually
+    // removed.
+    const gsMark = gsRooms.markDisconnected(socket.id);
+    if (gsMark.room) {
+      const { room: gr, player: gp } = gsMark;
+      broadcastGsRoom(gr);
+      const gsTimer = setTimeout(() => {
+        gsPendingRemovals.delete(gp.clientId);
+        const stillThere = gr.players.get(gp.id);
+        if (stillThere && stillThere.disconnected && stillThere.clientId === gp.clientId) {
+          const leaveResult = gsRooms.removeBySocket(gp.id);
+          if (leaveResult.room) broadcastGsRoom(leaveResult.room);
+        }
+      }, DISCONNECT_GRACE_MS);
+      gsPendingRemovals.set(gp.clientId, gsTimer);
     }
 
     const room = findRoomBySocket(socket.id);
@@ -375,10 +396,35 @@ io.on('connection', (socket) => {
     broadcastGsRoom(result.room);
   });
 
+  // A returning tab (reconnected after briefly dropping -- backgrounding a
+  // mobile browser tab is exactly this) reclaims its existing player slot
+  // by clientId instead of the transport reconnect leaving them stranded
+  // outside the room until the grace-period timer above removes them.
+  socket.on('gsRejoin', ({ code, clientId }, cb) => {
+    if (!code || !clientId) { cb && cb({ ok: false, error: 'Missing room code or client id.' }); return; }
+    cancelGsPendingRemoval(clientId);
+    const result = gsRooms.reconnectByClientId(code, clientId, socket.id);
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    socket.join('gs_' + result.room.code);
+    cb && cb({ ok: true, code: result.room.code });
+    broadcastGsRoom(result.room);
+  });
+
   socket.on('gsSetRole', ({ role, password, seat, slot }, cb) => {
     const room = gsRooms.findRoomBySocket(socket.id);
     if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
     const result = gsRooms.setRole(room, socket.id, role, { password, seat, slot });
+    if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
+    cb && cb({ ok: true });
+    broadcastGsRoom(room);
+  });
+
+  // Host-only: move ANOTHER player to a different role, mid-game included
+  // (e.g. spectator -> competitor, or handing off the host badge).
+  socket.on('gsHostSetRole', ({ targetId, role, seat, slot }, cb) => {
+    const room = gsRooms.findRoomBySocket(socket.id);
+    if (!room) { cb && cb({ ok: false, error: 'Not in a room.' }); return; }
+    const result = gsRooms.hostSetRole(room, socket.id, targetId, role, { seat, slot });
     if (result.error) { cb && cb({ ok: false, error: result.error }); return; }
     cb && cb({ ok: true });
     broadcastGsRoom(room);
