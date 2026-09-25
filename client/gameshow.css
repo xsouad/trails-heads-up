@@ -841,34 +841,21 @@ body:has(#app-gameshow) {
   #app-gameshow .gs-tv-screen { height: 380px; padding: 24px 16px; }
   #app-gameshow .gs-tv-screen.in-game { height: 460px; }
 
-  /* Hint-bulb / Phone a Friend icon columns were still full desktop size
-     here, so on a narrow phone they poked out past the screen's own
-     padding and got clipped by the black bezel. Shrink the icons and
-     tighten the gaps around the scoreboard so both team's columns (plus
-     the score box between them) actually fit inside the screen. */
-  #app-gameshow .gs-scoreboard { gap: 8px; }
-  #app-gameshow .gs-score-row { gap: 4px; }
-  #app-gameshow .gs-icon-box { width: 22px; height: 22px; font-size: 0.85rem; border-radius: 6px; }
-  #app-gameshow .gs-icon-stack { gap: 2px; }
-  #app-gameshow .gs-phone-icon { width: 24px; height: 68px; font-size: 1rem; }
-  #app-gameshow .gs-score-block { min-width: 70px; padding: 5px 8px; }
-  #app-gameshow .gs-score-value { font-size: 1.1rem; }
-  #app-gameshow .gs-score-label { font-size: 0.65rem; }
-  #app-gameshow .gs-hint-mini-btn { font-size: 0.6rem; padding: 1px 5px; }
-
-  /* Host on its own row, both teams below on their own lines (rather than
-     one long horizontal strip that couldn't fit all 6+ competitors plus
-     the host on a phone width), per the requested layout. */
+  /* Host on its own row, then EACH team gets its own full-width line below
+     (not a 2-up split -- a split still only gave each team ~half the
+     screen, which wasn't enough room for 3 podiums and caused them to wrap
+     unevenly against each other). Full width per team is enough for all 3
+     podiums on one line at the shrunk .gs-podium size above. */
   #app-gameshow .gs-floor {
-    grid-template-columns: 1fr 1fr;
-    grid-template-areas: "host host" "teamA teamB";
+    grid-template-columns: 1fr;
+    grid-template-areas: "host" "teamA" "teamB";
     row-gap: 12px;
     margin-top: 18px;
   }
   #app-gameshow .gs-floor > .gs-host-slot { grid-area: host; justify-self: center; }
   #app-gameshow .gs-floor > .gs-team-column.teamA { grid-area: teamA; }
   #app-gameshow .gs-floor > .gs-team-column.teamB { grid-area: teamB; }
-  #app-gameshow .gs-team-column { flex-wrap: wrap; gap: 6px; justify-content: center !important; }
+  #app-gameshow .gs-team-column { flex-wrap: nowrap; gap: 6px; justify-content: center !important; }
 }
 
 /* ---------- the actual quiz board ---------- */
@@ -1261,3 +1248,26 @@ body:has(#app-gameshow) {
    only visible rectangle anywhere on the TV is .gs-tv-screen's own outer
    border; everything else sits directly on that same plain black
    background with no background/border-radius/padding of its own. */
+
+/* Hint-bulb / Phone a Friend icon columns were still rendering at full
+   desktop size on a phone, poking out past the screen's own padding and
+   getting cut off by the black bezel -- shrink rules for them used to
+   live in an earlier @media block, but the BASE (desktop) .gs-scoreboard/
+   .gs-icon-box/.gs-phone-icon/.gs-score-block rules are defined further
+   down in this file than that block was, and for equal CSS specificity a
+   LATER rule always wins the cascade regardless of whether it's the one
+   sitting inside a media query -- so those overrides were silently never
+   taking effect at any screen size, on any device. This block is placed
+   at the true end of the file, after every rule it needs to beat, so it
+   actually wins on mobile now. */
+@media (max-width: 480px) {
+  #app-gameshow .gs-scoreboard { gap: 8px; }
+  #app-gameshow .gs-score-row { gap: 4px; }
+  #app-gameshow .gs-icon-box { width: 22px; height: 22px; font-size: 0.85rem; border-radius: 6px; }
+  #app-gameshow .gs-icon-stack { gap: 2px; }
+  #app-gameshow .gs-phone-icon { width: 24px; height: 68px; font-size: 1rem; }
+  #app-gameshow .gs-score-block { min-width: 70px; padding: 5px 8px; }
+  #app-gameshow .gs-score-value { font-size: 1.1rem; }
+  #app-gameshow .gs-score-label { font-size: 0.65rem; }
+  #app-gameshow .gs-hint-mini-btn { font-size: 0.6rem; padding: 1px 5px; }
+}
