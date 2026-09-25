@@ -721,7 +721,18 @@ io.on('connection', (socket) => {
   });
 
   // Spectator clap -- purely a fun ephemeral broadcast, no state kept.
+  // Debounced per-socket: a double-fired click (some mobile browsers send
+  // both a touch-derived and a compatibility click event for the same tap)
+  // or someone mashing the button repeatedly used to broadcast one clap per
+  // event with no gap -- which, with no attribution shown client-side
+  // (fixed separately), sounded like random unexplained clapping. This
+  // doesn't block legitimate repeated claps, just genuine same-instant
+  // duplicates.
+  let lastClapAt = 0;
   socket.on('gsClap', () => {
+    const now = Date.now();
+    if (now - lastClapAt < 250) return;
+    lastClapAt = now;
     const room = gsRooms.findRoomBySocket(socket.id);
     if (!room) return;
     const player = room.players.get(socket.id);

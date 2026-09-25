@@ -823,9 +823,21 @@ body:has(#app-gameshow) {
   #app-gameshow .gs-podium { width: 56px; }
   #app-gameshow .gs-podium-avatar-wrap { width: 44px; height: 44px; }
   #app-gameshow .gs-podium-name { max-width: 56px; font-size: 0.62rem; }
-  /* Still one line of 8 -- just narrower columns and a scroll hint via
-     overflow-x instead of wrapping to a second row. */
-  #app-gameshow .gs-spectator-row { grid-auto-columns: minmax(46px, 1fr); gap: 5px; }
+  /* Two rows of 4 instead of one cramped, horizontally-scrolling line of
+     8 -- on a phone width, 8 seats squeezed into one row left each seat
+     barely wider than its own avatar, and the horizontal scroll wasn't
+     obvious/discoverable. Switching from column-flow (a fixed single row)
+     to a standard 4-wide grid lets it wrap into 2 rows naturally, each
+     seat getting real size, nothing to scroll to find. */
+  #app-gameshow .gs-spectator-row {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-columns: unset;
+    gap: 6px;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: visible;
+  }
   #app-gameshow .gs-seat { min-height: 58px; padding: 4px 2px 6px; }
   #app-gameshow .gs-seat-avatar { width: 30px; height: 30px; }
   #app-gameshow .gs-naming-cols { flex-direction: column; }

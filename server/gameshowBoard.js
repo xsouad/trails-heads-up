@@ -296,7 +296,15 @@ function revealAnswer(room, socketId) {
 function judgeAnswer(room, socketId, correct) {
   if (room.hostId !== socketId) return { error: 'Only the host can judge the answer.' };
   const cs = room.cellState;
-  if (!cs || cs.stage !== 'revealed') return { error: 'Reveal the answer first.' };
+  // Used to require cs.stage === 'revealed' -- but the only thing that ever
+  // set stage to 'revealed' was revealAnswer() itself, which created a
+  // deadlock once the client stopped showing Reveal Answer until AFTER
+  // judging (the new 3-step Judge -> Reveal -> Close order): judging
+  // waited on reveal, reveal waited on judging, and the only way out was
+  // Cancel Question. Judging now only needs a locked-in answer that hasn't
+  // been judged yet, fully independent of whether Reveal has happened.
+  if (!cs) return { error: 'No question is open.' };
+  if (!cs.turnLocked) return { error: 'Wait for the team to submit an answer first.' };
   if (cs.timedOut) return { error: 'That team ran out of time. Nothing to judge.' };
   if (cs.turnJudged) return { error: 'Already judged.' };
   const cell = findCell(room, cs.cellId);

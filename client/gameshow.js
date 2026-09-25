@@ -281,7 +281,20 @@ function renderReassignOverlay() {
   const closeBtn = document.getElementById('gsCloseReassignBtn');
   if (closeBtn) closeBtn.addEventListener('click', () => { state.reassignTarget = null; overlay.remove(); });
 }
-socket.on('gsClap', ({ name }) => { playClap(); });
+// The server already tells us WHO clapped (`name`) -- this used to throw
+// that away and just play the sound with zero attribution, which is
+// exactly why it reads as "random": there's a real spectator behind every
+// one of these (the server only ever emits gsClap from inside its own
+// gsClap handler, which only fires off a spectator's own Clap button
+// click -- there's no code path that invents one on its own), but with no
+// on-screen indication of who, it looks like the app just clapped at you
+// out of nowhere. Surfacing the name turns "unexplained noise" into
+// "Jordan clapped" the same way every other action in the room already
+// announces itself.
+socket.on('gsClap', ({ name }) => {
+  playClap();
+  if (name) showGsNotice(`👏 ${name} clapped!`);
+});
 // Briefly backgrounding the tab on mobile (switching apps, the screen
 // locking) drops the socket -- socket.io auto-reconnects, but that's a
 // brand-new connection with a brand-new socket.id, so without this the
@@ -332,6 +345,23 @@ socket.on('gsRoomState', (room) => {
   // can't press Enter to pick a name" bug. Skipping the render entirely
   // here removes the cause instead of patching around the symptom.
   if (state.comebackMode) return;
+  // Regular in-game answer/steal typing has the exact same self-inflicted
+  // problem the comeback round had above: our own throttled gsTypingAnswer
+  // emit bounces this same broadcast straight back at us roughly every
+  // 150ms while we're mid-typing, and a full render() on every one of
+  // those destroys and recreates the input from scratch -- restoring
+  // focus/value/cursor afterward hides most of the damage on desktop, but
+  // a phone's on-screen keyboard reacts badly to an input being torn down
+  // and refocused that often, which is exactly the "typing is slow and
+  // buggy on phone" symptom (dropped keystrokes, autocorrect glitching).
+  // Skip the render while actively typing into our own answer/steal box --
+  // nothing about what WE see needs this particular broadcast, since we
+  // already see what we typed locally; the turn timer keeps ticking on its
+  // own separate interval regardless, and the next broadcast that actually
+  // matters (an opponent's move, a judge, a reveal) still gets through the
+  // moment focus isn't on one of these two inputs.
+  const activeId = document.activeElement && document.activeElement.id;
+  if (activeId === 'gsAnswerInput' || activeId === 'gsStealInput') return;
   render();
 });
 
@@ -367,13 +397,35 @@ function playError() { gsBeep({ freq: 220, endFreq: 110, duration: 0.28, type: '
 // the slider still goes from silent to "the loudest this ever gets", it's
 // just that "loudest" is capped well below the raw file's peak level.
 const CLAP_MAX_GAIN = 0.45;
+// Every Audio instance currently playing a clap -- `audio.volume` set at
+// creation only ever controlled how loud THAT ONE playback started out at;
+// dragging the slider while a clap was already mid-playback did nothing to
+// the sound already in flight, which is the "the volume is set by whatever
+// it was before I clapped, not live" bug. Kept around (and pruned once each
+// clip ends) so the slider can reach into whatever's playing RIGHT NOW, not
+// just whatever plays next.
+const activeClapAudios = new Set();
+function currentClapVolume() {
+  return state.clapMuted ? 0 : Math.max(0, Math.min(1, state.clapVolume)) * CLAP_MAX_GAIN;
+}
 function playClap() {
   if (state.clapMuted || state.clapVolume <= 0) return;
   try {
     const audio = new Audio('assets/gameshow/clap.mp3');
-    audio.volume = Math.max(0, Math.min(1, state.clapVolume)) * CLAP_MAX_GAIN;
-    audio.play().catch(() => { /* autoplay blocked or file missing -- silently skip */ });
+    audio.volume = currentClapVolume();
+    activeClapAudios.add(audio);
+    const cleanup = () => activeClapAudios.delete(audio);
+    audio.addEventListener('ended', cleanup);
+    audio.addEventListener('error', cleanup);
+    audio.play().catch(() => { cleanup(); /* autoplay blocked or file missing -- silently skip */ });
   } catch (e) { /* audio not available -- silently skip */ }
+}
+// Called live as the slider moves (and once more on mute toggle) so a clap
+// that's already playing gets turned down/up/muted immediately, not just
+// the next one.
+function applyClapVolumeToPlaying() {
+  const v = currentClapVolume();
+  activeClapAudios.forEach(audio => { audio.volume = v; });
 }
 
 // ---------- render ----------
@@ -1125,18 +1177,7 @@ function renderAnswerArea(iAmHost, active) {
   const turnTeam = active.turnTeam;
   const isMyTurnTeam = me && me.role === turnTeam;
   let box;
-  if (active.stage === 'answering') {
-    if (active.turnLocked) {
-      box = `<p class="gs-locked-answer">Locked in. Waiting on host.</p>`;
-    } else if (isMyTurnTeam) {
-      box = `<div class="join-row"><input type="text" id="gsAnswerInput" maxlength="200" placeholder="Your team's answer" /><button type="button" class="secondary" id="gsSubmitAnswerBtn">Submit</button></div>`;
-    } else if (active.turnTyping) {
-      // Live preview of what the other team is currently typing.
-      box = `<p class="gs-locked-answer gs-live-typing">"${active.turnTyping}"</p>`;
-    } else {
-      box = `<p class="hint">Waiting...</p>`;
-    }
-  } else if (active.turnJudged === 'timeout' && !active.stealTeam) {
+  if (active.turnJudged === 'timeout' && !active.stealTeam) {
     // "Time ran out" is a status for the moment right after the clock
     // expires -- once a steal is claimed, the steal block below takes over
     // as the thing to look at, so this stops showing rather than sticking
@@ -1145,6 +1186,32 @@ function renderAnswerArea(iAmHost, active) {
     box = `<p class="gs-judge-result wrong">Time ran out.</p>`;
   } else if (active.turnJudged === 'timeout') {
     box = '';
+  } else if (active.turnLocked) {
+    // An answer is in (whether or not the clock has run out, whether or
+    // not Reveal Answer has been clicked yet) -- the host can judge it
+    // RIGHT NOW. This used to be gated behind `active.stage !== 'answering'`,
+    // which only ever became true once Reveal Answer was clicked -- so
+    // judging was stuck waiting on reveal, and reveal (after the fix below)
+    // waits on judging, a deadlock where the only way out was Cancel
+    // Question. Judging now only depends on turnLocked/turnJudged, fully
+    // independent of stage/reveal.
+    box = active.turnAnswer ? `<p class="gs-locked-answer">"${active.turnAnswer}"</p>` : '';
+    if (active.turnJudged) {
+      box += `<p class="gs-judge-result ${active.turnJudged}">${active.turnJudged === 'correct' ? 'Correct' : 'Wrong'}</p>`;
+    } else if (iAmHost) {
+      box += `<div class="gs-judge-btns"><button type="button" class="secondary gs-small-btn" id="gsJudgeCorrectBtn">Correct</button><button type="button" class="secondary gs-small-btn" id="gsJudgeWrongBtn">Wrong</button></div>`;
+    } else {
+      box += `<p class="hint">Locked in. Waiting on host.</p>`;
+    }
+  } else if (active.stage === 'answering') {
+    if (isMyTurnTeam) {
+      box = `<div class="join-row"><input type="text" id="gsAnswerInput" maxlength="200" placeholder="Your team's answer" /><button type="button" class="secondary" id="gsSubmitAnswerBtn">Submit</button></div>`;
+    } else if (active.turnTyping) {
+      // Live preview of what the other team is currently typing.
+      box = `<p class="gs-locked-answer gs-live-typing">"${active.turnTyping}"</p>`;
+    } else {
+      box = `<p class="hint">Waiting...</p>`;
+    }
   } else {
     // Guard against a null/empty answer rendering as the literal text
     // "null" (happens when the host judges without a submitted answer,
@@ -1927,6 +1994,11 @@ function attachHandlers() {
       saveClapPrefs();
       const icon = document.querySelector('.gs-clap-vol-icon');
       if (icon) icon.textContent = clapVolIcon();
+      // Reach into whatever clap is playing RIGHT NOW and retarget its
+      // volume too -- previously this only ever set the volume a NEW
+      // Audio() would start at, so dragging mid-clap did nothing until the
+      // next one played.
+      applyClapVolumeToPlaying();
     });
     const startDrag = () => { clapSliderDragging = true; };
     clapVolSlider.addEventListener('pointerdown', startDrag);
