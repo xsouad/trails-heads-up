@@ -1258,26 +1258,27 @@ function renderAnswerArea(iAmHost, active) {
     box = `<p class="gs-judge-result wrong">Time ran out.</p>`;
   } else if (active.turnJudged === 'timeout') {
     box = '';
-  } else if (active.turnLocked) {
-    // An answer is in (whether or not the clock has run out, whether or
-    // not Reveal Answer has been clicked yet) -- the host can judge it
-    // RIGHT NOW. This used to be gated behind `active.stage !== 'answering'`,
-    // which only ever became true once Reveal Answer was clicked -- so
-    // judging was stuck waiting on reveal, and reveal (after the fix below)
-    // waits on judging, a deadlock where the only way out was Cancel
-    // Question. Judging now only depends on turnLocked/turnJudged, fully
-    // independent of stage/reveal.
+  } else if (active.turnJudged) {
+    // Already judged -- show what was typed, if anything, plus the result.
     box = active.turnAnswer ? `<p class="gs-locked-answer">"${active.turnAnswer}"</p>` : '';
-    if (active.turnJudged) {
-      box += `<p class="gs-judge-result ${active.turnJudged}">${active.turnJudged === 'correct' ? 'Correct' : 'Wrong'}</p>`;
-    } else if (iAmHost) {
-      box += `<div class="gs-judge-btns"><button type="button" class="secondary gs-small-btn" id="gsJudgeCorrectBtn">Correct</button><button type="button" class="secondary gs-small-btn" id="gsJudgeWrongBtn">Wrong</button></div>`;
-    } else {
-      box += `<p class="hint">Locked in. Waiting on host.</p>`;
-    }
+    box += `<p class="gs-judge-result ${active.turnJudged}">${active.turnJudged === 'correct' ? 'Correct' : 'Wrong'}</p>`;
+  } else if (iAmHost) {
+    // The host can judge the MOMENT a question is open, whether or not the
+    // team ever types anything -- some tables answer out loud instead of
+    // typing (especially on phones, where typing is slower), and the host
+    // shouldn't be stuck waiting on a text submission that's never coming.
+    // Judge buttons show here unconditionally rather than only once
+    // turnLocked is true.
+    box = active.turnAnswer
+      ? `<p class="gs-locked-answer">"${active.turnAnswer}"</p>`
+      : `<p class="hint">No text submitted -- judge based on what they said, or wait for them to type.</p>`;
+    box += `<div class="gs-judge-btns"><button type="button" class="secondary gs-small-btn" id="gsJudgeCorrectBtn">Correct</button><button type="button" class="secondary gs-small-btn" id="gsJudgeWrongBtn">Wrong</button></div>`;
+  } else if (active.turnLocked) {
+    box = active.turnAnswer ? `<p class="gs-locked-answer">"${active.turnAnswer}"</p>` : '';
+    box += `<p class="hint">Locked in. Waiting on host.</p>`;
   } else if (active.stage === 'answering') {
     if (isMyTurnTeam) {
-      box = `<div class="join-row"><input type="text" id="gsAnswerInput" maxlength="200" placeholder="Your team's answer" /><button type="button" class="secondary" id="gsSubmitAnswerBtn">Submit</button></div>`;
+      box = `<div class="join-row"><input type="text" id="gsAnswerInput" maxlength="200" placeholder="Your team's answer" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button type="button" class="secondary" id="gsSubmitAnswerBtn">Submit</button></div>`;
     } else if (active.turnTyping) {
       // Live preview of what the other team is currently typing.
       box = `<p class="gs-locked-answer gs-live-typing">"${active.turnTyping}"</p>`;
@@ -1289,11 +1290,6 @@ function renderAnswerArea(iAmHost, active) {
     // "null" (happens when the host judges without a submitted answer,
     // e.g. a screenshots question judged purely on the picture).
     box = active.turnAnswer ? `<p class="gs-locked-answer">"${active.turnAnswer}"</p>` : '';
-    if (active.turnJudged) {
-      box += `<p class="gs-judge-result ${active.turnJudged}">${active.turnJudged === 'correct' ? 'Correct' : 'Wrong'}</p>`;
-    } else if (iAmHost) {
-      box += `<div class="gs-judge-btns"><button type="button" class="secondary gs-small-btn" id="gsJudgeCorrectBtn">Correct</button><button type="button" class="secondary gs-small-btn" id="gsJudgeWrongBtn">Wrong</button></div>`;
-    }
   }
   return `<div class="gs-answer-block">${box}</div>`;
 }
@@ -1335,7 +1331,7 @@ function renderStealArea(iAmHost, active, viewerKind) {
     // which swaps to the stealing team + their own clock -- no need to
     // duplicate it down here too.
     inner = mine
-      ? `<div class="join-row"><input type="text" id="gsStealInput" maxlength="200" placeholder="Steal answer" /><button type="button" class="secondary" id="gsSubmitStealBtn">Submit</button></div>`
+      ? `<div class="join-row"><input type="text" id="gsStealInput" maxlength="200" placeholder="Steal answer" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /><button type="button" class="secondary" id="gsSubmitStealBtn">Submit</button></div>`
       : `<p class="hint">Waiting on ${teamLabel(active.stealTeam)}'s steal answer...</p>`;
   } else {
     // No "Stole it!"/"Wrong, loses X pts" text once judged -- per request,
@@ -1446,7 +1442,7 @@ function renderActiveCellPanel(iAmHost) {
     `;
   }
 
-  const canClose = active.turnJudged === 'correct' || (active.turnJudged && (!active.stealTeam || active.stealJudged));
+  const canClose = active.turnJudged === 'correct' || (active.turnJudged && (!active.stealTeam || active.stealJudged || active.stealTimedOut));
 
   return `
     <div class="gs-active-cell">

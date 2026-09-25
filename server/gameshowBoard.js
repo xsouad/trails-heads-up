@@ -202,7 +202,12 @@ function openCellInternal(room, cell, scheduleTimeout) {
   if (scheduleTimeout) {
     room._timeoutHandle = setTimeout(() => {
       const cs = room.cellState;
-      if (!cs || cs.cellId !== cell.id || cs.turnLocked || cs.stage !== 'answering') return;
+      // The `cs.turnJudged` check matters now that the host can judge
+      // without a typed submission (an oral answer) -- without it, this
+      // timeout firing after a manual judge would overwrite that judgment
+      // with 'timeout' and re-flip the stage, since turnLocked is still
+      // false in that case (nobody ever typed anything).
+      if (!cs || cs.cellId !== cell.id || cs.turnLocked || cs.turnJudged || cs.stage !== 'answering') return;
       cs.timedOut = true;
       cs.turnJudged = 'timeout';
       // Move past the answering window so the steal option shows up
@@ -303,13 +308,17 @@ function judgeAnswer(room, socketId, correct) {
   // waited on reveal, reveal waited on judging, and the only way out was
   // Cancel Question. Judging now only needs a locked-in answer that hasn't
   // been judged yet, fully independent of whether Reveal has happened.
+  // No longer requires cs.turnLocked either -- some tables answer out loud
+  // instead of typing (especially on phones, where typing is slower), and
+  // the host needs to be able to judge that on the spot without waiting on
+  // a text submission that's never coming.
   if (!cs) return { error: 'No question is open.' };
-  if (!cs.turnLocked) return { error: 'Wait for the team to submit an answer first.' };
   if (cs.timedOut) return { error: 'That team ran out of time. Nothing to judge.' };
   if (cs.turnJudged) return { error: 'Already judged.' };
   const cell = findCell(room, cs.cellId);
   cs.turnJudged = correct ? 'correct' : 'wrong';
   cs.turnJudgedAt = Date.now(); // drives the brief "Correct"/"Wrong" full-screen takeover
+  clearActiveTimer(room); // stop the answer clock now that this is resolved, whether or not text was ever submitted
   if (correct) {
     room.scores[cs.turnTeam] += cell.value;
   } else if (cell.column === 'bonus') {
