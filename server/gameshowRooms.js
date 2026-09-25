@@ -197,6 +197,63 @@ function hostSetRole(room, hostSocketId, targetId, role, opts = {}) {
     return { room };
   }
 
+  // The host picking a SPECIFIC spot (not just "next open one") can name
+  // one that's already taken by someone else -- rather than erroring out
+  // with "someone is already standing there" (the self-service check in
+  // setRole below), swap the two: whoever was there takes the mover's old
+  // spot instead of being bumped out entirely.
+  const target = room.players.get(targetId);
+  if ((role === 'teamA' || role === 'teamB') && opts.slot != null) {
+    const occupant = Array.from(room.players.values())
+      .find(p => p.id !== targetId && p.role === role && p.slot === opts.slot);
+    if (occupant) {
+      if ((target.role === 'teamA' || target.role === 'teamB') && target.slot != null) {
+        occupant.role = target.role;
+        occupant.slot = target.slot;
+        occupant.seat = null;
+      } else {
+        let seat = null;
+        const taken = takenSeats(room);
+        for (let i = 1; i <= MAX_SPECTATOR_SEATS; i++) { if (!taken.has(i)) { seat = i; break; } }
+        occupant.role = seat != null ? 'spectator' : 'unassigned';
+        occupant.seat = seat;
+        occupant.slot = null;
+      }
+      occupant.ready = false;
+      target.role = role;
+      target.slot = opts.slot;
+      target.seat = null;
+      target.ready = false;
+      if (room.hostId === targetId) { room.hostId = null; room.hostClientId = null; }
+      return { room };
+    }
+  }
+  if (role === 'spectator' && opts.seat != null) {
+    const occupant = Array.from(room.players.values())
+      .find(p => p.id !== targetId && p.role === 'spectator' && p.seat === opts.seat);
+    if (occupant) {
+      if (target.role === 'spectator' && target.seat != null) {
+        occupant.seat = target.seat;
+      } else {
+        // Mover wasn't a spectator, so there's no old seat to hand back --
+        // bench the displaced spectator to any other open seat instead.
+        const taken = takenSeats(room);
+        let seat = null;
+        for (let i = 1; i <= MAX_SPECTATOR_SEATS; i++) { if (i !== opts.seat && !taken.has(i)) { seat = i; break; } }
+        occupant.seat = seat;
+      }
+      occupant.role = 'spectator';
+      occupant.slot = null;
+      occupant.ready = false;
+      target.role = 'spectator';
+      target.seat = opts.seat;
+      target.slot = null;
+      target.ready = false;
+      if (room.hostId === targetId) { room.hostId = null; room.hostClientId = null; }
+      return { room };
+    }
+  }
+
   return setRole(room, targetId, role, { ...opts, force: true });
 }
 

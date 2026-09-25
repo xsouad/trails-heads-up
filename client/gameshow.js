@@ -67,7 +67,8 @@ let state = {
   leaderboard: [], // global speed-round leaderboard, shared by every visitor
   cellPreview: null, // { content, column } while the host's "peek at this question" popup is open
   phonePicker: null, // team string while the Phone a Friend spectator picker is open
-  reassignTarget: null // player id while the host's "move this player" picker is open
+  reassignTarget: null, // player id while the host's "move this player" picker is open
+  reassignRolePick: null // role chosen mid-flow, while picking a specific slot/seat within it
 };
 
 // ---------- clap volume / mute (persisted across visits) ----------
@@ -246,13 +247,80 @@ function renderReassignOverlay() {
   const room = state.room;
   if (!room) return;
   const target = room.players.find(p => p.id === state.reassignTarget);
-  if (!target) { state.reassignTarget = null; return; }
+  if (!target) { state.reassignTarget = null; state.reassignRolePick = null; return; }
   const iAmHost = room.hostId === socket.id;
-  if (!iAmHost) { state.reassignTarget = null; return; }
+  if (!iAmHost) { state.reassignTarget = null; state.reassignRolePick = null; return; }
   const host = document.querySelector('.gs-tv-screen') || document.getElementById('gsRoot');
   const overlay = document.createElement('div');
   overlay.id = 'gsReassignOverlay';
   overlay.className = 'gs-preview-overlay';
+
+  const finish = (role, extra) => {
+    socket.emit('gsHostSetRole', { targetId: target.id, role, ...extra }, (res) => {
+      if (!res || !res.ok) showGsNotice((res && res.error) || "Couldn't move that player.");
+    });
+    state.reassignTarget = null;
+    state.reassignRolePick = null;
+    overlay.remove();
+  };
+
+  // Two-step for team/spectator moves: pick the role, then pick the SPECIFIC
+  // slot/seat -- host asked to be able to choose exactly where someone
+  // lands, not just get auto-assigned to whatever's next open.
+  if (state.reassignRolePick === 'teamA' || state.reassignRolePick === 'teamB') {
+    const team = state.reassignRolePick;
+    const taken = {};
+    room.players.forEach(p => { if (p.role === team && p.slot != null) taken[p.slot] = p; });
+    overlay.innerHTML = `
+      <div class="gs-preview-box">
+        <p class="gs-preview-text" style="margin-bottom:10px;">Move ${target.name} to ${teamLabel(team)} -- which spot?</p>
+        <div class="gs-phone-picker-list">
+          ${[0, 1, 2].map(slot => {
+            const occ = taken[slot];
+            const isTarget = occ && occ.id === target.id;
+            const label = isTarget ? `Spot ${slot + 1} (current)` : occ ? `Spot ${slot + 1} (${occ.name})` : `Spot ${slot + 1} (empty)`;
+            return (occ && !isTarget)
+              ? `<button type="button" class="secondary gs-small-btn" data-reassign-slot="${slot}">${label} -- swap in</button>`
+              : `<button type="button" class="secondary gs-small-btn" ${isTarget ? 'disabled' : ''} data-reassign-slot="${slot}">${label}</button>`;
+          }).join('')}
+        </div>
+        <button type="button" class="secondary gs-tiny-btn" id="gsBackReassignBtn" style="margin-top:10px;">Back</button>
+      </div>
+    `;
+    (host || document.body).appendChild(overlay);
+    overlay.querySelectorAll('[data-reassign-slot]').forEach(btn => {
+      btn.addEventListener('click', () => finish(team, { slot: parseInt(btn.dataset.reassignSlot, 10) }));
+    });
+    const backBtn = document.getElementById('gsBackReassignBtn');
+    if (backBtn) backBtn.addEventListener('click', () => { state.reassignRolePick = null; renderReassignOverlay(); });
+    return;
+  }
+  if (state.reassignRolePick === 'spectator') {
+    const takenSeats = new Set();
+    room.players.forEach(p => { if (p.role === 'spectator' && p.seat != null) takenSeats.add(p.seat); });
+    overlay.innerHTML = `
+      <div class="gs-preview-box">
+        <p class="gs-preview-text" style="margin-bottom:10px;">Move ${target.name} to spectator -- which seat?</p>
+        <div class="gs-phone-picker-list" style="max-width:280px; flex-direction:row; flex-wrap:wrap; justify-content:center;">
+          ${Array.from({ length: room.maxSpectatorSeats || 8 }, (_, i) => i + 1).map(seat => {
+            const isCurrent = target.role === 'spectator' && target.seat === seat;
+            const disabled = takenSeats.has(seat) && !isCurrent;
+            return `<button type="button" class="secondary gs-small-btn" style="min-width:44px;" ${disabled || isCurrent ? 'disabled' : ''} data-reassign-seat="${seat}">${seat}${isCurrent ? ' (current)' : ''}</button>`;
+          }).join('')}
+        </div>
+        <button type="button" class="secondary gs-tiny-btn" id="gsBackReassignBtn" style="margin-top:10px;">Back</button>
+      </div>
+    `;
+    (host || document.body).appendChild(overlay);
+    overlay.querySelectorAll('[data-reassign-seat]').forEach(btn => {
+      btn.addEventListener('click', () => finish('spectator', { seat: parseInt(btn.dataset.reassignSeat, 10) }));
+    });
+    const backBtn = document.getElementById('gsBackReassignBtn');
+    if (backBtn) backBtn.addEventListener('click', () => { state.reassignRolePick = null; renderReassignOverlay(); });
+    return;
+  }
+
+  // Step 1: pick the role.
   const roleBtn = (role, label) => target.role === role
     ? `<button type="button" class="secondary gs-small-btn" disabled>${label} (current)</button>`
     : `<button type="button" class="secondary gs-small-btn" data-reassign-role="${role}">${label}</button>`;
@@ -271,15 +339,19 @@ function renderReassignOverlay() {
   (host || document.body).appendChild(overlay);
   overlay.querySelectorAll('[data-reassign-role]').forEach(btn => {
     btn.addEventListener('click', () => {
-      socket.emit('gsHostSetRole', { targetId: target.id, role: btn.dataset.reassignRole }, (res) => {
-        if (!res || !res.ok) showGsNotice((res && res.error) || "Couldn't move that player.");
-      });
-      state.reassignTarget = null;
-      overlay.remove();
+      const role = btn.dataset.reassignRole;
+      if (role === 'teamA' || role === 'teamB' || role === 'spectator') {
+        // These need a second step (which slot/seat) -- host role doesn't
+        // have one, so it finishes immediately below.
+        state.reassignRolePick = role;
+        renderReassignOverlay();
+        return;
+      }
+      finish(role);
     });
   });
   const closeBtn = document.getElementById('gsCloseReassignBtn');
-  if (closeBtn) closeBtn.addEventListener('click', () => { state.reassignTarget = null; overlay.remove(); });
+  if (closeBtn) closeBtn.addEventListener('click', () => { state.reassignTarget = null; state.reassignRolePick = null; overlay.remove(); });
 }
 // The server already tells us WHO clapped (`name`) -- this used to throw
 // that away and just play the sound with zero attribution, which is
@@ -1927,6 +1999,7 @@ function attachHandlers() {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       state.reassignTarget = btn.dataset.reassign;
+      state.reassignRolePick = null;
       renderReassignOverlay();
     });
   });
